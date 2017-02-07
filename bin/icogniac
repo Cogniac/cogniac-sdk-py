@@ -1,0 +1,3 @@
+#!/bin/sh
+ipython --no-banner -i -c='from cogniac.ipython import *'
+
