@@ -45,11 +45,9 @@ def print_detections(detections):
     # remove None values from dict
     detections = [{k: v for k, v in d.iteritems() if v is not None} for d in detections]
 
-    detections.sort(key=lambda x: x['timestamp'])
+    detections.sort(key=lambda x: x['created_at'])
 
     for d in detections:
-        if 'timestamp' in d:
-            d.pop('timestamp')  # cleanup until removed from api
         value = datetime.datetime.fromtimestamp(d['created_at'])
         d['created_at'] = value.strftime('%Y-%m-%d %H:%M:%S')
     print tabulate(detections, headers='keys')
