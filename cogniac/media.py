@@ -146,7 +146,7 @@ class CogniacMedia(object):
                     return md.hexdigest()
                 md.update(block)
 
-        media_id = md5_hexdigest()
+        md5hash = md5_hexdigest()
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def post_data(data):
@@ -159,7 +159,7 @@ class CogniacMedia(object):
         data = {'upload_phase': 'start',
                 'file_size':    filesize,
                 'filename':     filename,
-                'media_id':     media_id}
+                'md5':          md5hash}
 
         rdata = post_data(data)
         upload_session_id = rdata['upload_session_id']
