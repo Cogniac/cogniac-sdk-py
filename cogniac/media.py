@@ -8,6 +8,7 @@ from hashlib import md5
 from retrying import retry
 from common import *
 from os import stat
+import requests
 
 immutable_keys = ['frame', 'video', 'media_id', 'size', 'network_camera_id', 'original_url', 'image_width', 'filename', 'original_landing_url', 'uploaded_by_user', 'media_timestamp', 'media_url', 'status', 'hash', 'external_media_id', 'author_profile_url', 'media_src', 'parent_media_id',  'media_resize_urls', 'license', 'tenant_id', 'created_at', 'author', 'public', 'image_height', 'media_format', 'title']
 
@@ -213,7 +214,7 @@ class CogniacMedia(object):
         if filep is not None:
             stream = True  # user requests output to file so stream potentially large results
 
-        resp = self._cc.session.get(url, stream=stream, timeout=self._cc.timeout)
+        resp = requests.get(url, stream=stream, timeout=self._cc.timeout)
         raise_errors(resp)
 
         if filep is None:  # return response all at once
