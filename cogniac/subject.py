@@ -4,12 +4,12 @@ CogniacSubject Object Client
 Copyright (C) 2016 Cogniac Corporation
 """
 
-import json
 from retrying import retry
 from common import *
 import sys
 
 from media import CogniacMedia
+
 
 ##
 #  CogniacSubject
@@ -170,25 +170,49 @@ class CogniacSubject(object):
     #  capture_media
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def associate_media(self, media, consensus='True', force_feedback=False):
+    def associate_media(self,
+                        media,
+                        focus=None,
+                        consensus='True',
+                        probability=None,
+                        force_feedback=False,
+                        force_random_feedback=False):
         """
-        Associate the media with this subject.
+        Associate the media (with an optional focus within the media) with this subject.
 
         media (String or CogniacMedia)   media object or media_id to associate
-        consensus (bool)                 True if media is associated with subject, False if media is NOT associated with subject.
+        focus (dict)                     Optional Focus of this association within the media
+                                         'frame'   Optional frame within a video media
+                                         'box'     Optional dictionary of bounding box pixel offsets (with keys x0, x1, y0, y1) within the frame.
+        consensus (str)                  'True' if media is associated with subject,
+                                         'False' if media is NOT associated with subject.
+                                         'None' if consenus is unknown.  Required uncal_prob
+        probability (float)              association probability, only valid if consensus = 'None'
         force_feedback (bool)            True to force feedback on the media item in downstream apps
+        force_random_feedback(bool)      True to force feedback on the media item in downstream apps because.
+                                         Set only if this media was randomly selected for feedback.
+                                         This media will be used for the (random) performance assessment.
+
         returns the unique capture_id
         """
+
         if type(media) is CogniacMedia:
             data = {'media_id': media.media_id}
         else:
             data = {'media_id': media}
 
-        data['force_feedback'] = force_feedback
+        if focus is not None:
+            data['focus'] = focus
 
-        assert(consensus in ['True', 'False'])
-        if consensus != 'True':
-            data['consensus'] = 'False'
+        assert(consensus in ['True', 'False', 'None'])
+        data['consensus'] = consensus
+
+        if probability is not None:
+            assert(consensus == 'None')
+            data['uncal_prob'] = probability
+
+        data['force_feedback'] = force_feedback
+        data['force_random_feedback'] = force_random_feedback
 
         url = url_prefix + "/subjects/%s/media" % self.subject_uid
 
@@ -218,6 +242,9 @@ class CogniacSubject(object):
 
         media_id        the media_id
         subject_uid		the subject_uid
+        focus (dict)    Optional Focus of this association within the media
+                           'frame'   Optional frame within a video media
+                           'box'     Optional dictionary of bounding box pixel offsets (with keys x0, x1, y0, y1) within the frame.
         probability		current assessment of the probability in [0,1] that the subject_uid is associated with the media_id
                         1 = definitely associated
                         0 = definitely NOT associated

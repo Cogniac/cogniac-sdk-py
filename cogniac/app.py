@@ -248,6 +248,9 @@ class CogniacApplication(object):
 
         media_id        the media_id
         subject_uid		the subject_uid
+        focus (dict)    Optional Focus of this association within the media
+                           'frame'   Optional frame within a video media
+                           'box'     Optional dictionary of bounding box pixel offsets (with keys x0, x1, y0, y1) within the frame
         probability		current assessment of the probability in [0,1] that the subject_uid is associated with the media_id
                         1 = definitely associated
                         0 = definitely NOT associated
