@@ -187,6 +187,49 @@ class CogniacApplication(object):
         return resp.json()['pending']
 
     ##
+    #  get_feedback
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def get_feedback(self, limit=10):
+        """
+        returns a list of  up to {limit} feedback request messages for the application
+
+        limit (Int):   Maximum number of feedback request messages to return
+        """
+        resp = self._cc.session.get(url_prefix + "/applications/%s/feedback?limit=%d" % (self.application_id, limit), timeout=self._cc.timeout)
+        raise_errors(resp)
+        return resp.json()
+
+    ##
+    #  post_feedback
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def post_feedback(self, subject_uid, media_id, result, app_data_type=None, app_data=None ):
+        """
+        Provides feedback to the application for a given subject-media assocation; returns None.
+
+        subject_uid  (String):         Subject ID of the subject to associate with the media item
+        media_id (String):             Media ID of the media to provide feedback on
+        result (String):               One of 'True', 'False', 'Uncertain'; whether the subject is positively associated with the media
+        app_data_type (String):        (Optional) Type of extra app-specific data for certain app types
+        app_data (Object):             (Optional) Additional, app-specific, subject-media association data
+
+        """
+        feedback_response = {'media_id': media_id,
+                             'subjects':
+                             [
+                                 {'subject_uid':    subject_uid,
+                                  'media_id':       media_id,
+                                  'result':         result,
+                                  'app_data_type':  app_data_type,
+                                  'app_data':       app_data}
+                             ]}
+
+        resp = self._cc.session.post(url_prefix + "/applications/%s/feedback" % self.application_id, json=feedback_response, timeout=self._cc.timeout)
+        raise_errors(resp)
+        return None
+
+    ##
     #  model_name
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
