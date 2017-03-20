@@ -181,7 +181,7 @@ class CogniacApplication(object):
         Return the integer number of feedback requests pending for this application.
         This is useful for controlling the flow of images input into the system to avoid creating too many backlogged feedback requests.
         """
-        resp = self._cc.session.get(url_prefix + "/feedback/pending?application_id=%s" % self.application_id, timeout=self._cc.timeout)
+        resp = self._cc.session.get(url_prefix + "/applications/%s/feedback/pending" % self.application_id, timeout=self._cc.timeout)
         raise_errors(resp)
 
         return resp.json()['pending']
