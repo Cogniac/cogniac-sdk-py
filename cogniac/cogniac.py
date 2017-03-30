@@ -166,6 +166,12 @@ class CogniacConnection(object):
         """
         return CogniacSubject.get_all(self, public_read, public_write)
 
+    def search_subjects(self, ids=[], prefix=None, similar=None, tenant_owned=True, public_read=False, public_write=False, limit=10):
+        """
+        return CogniacSubjects based on given search filters
+        """
+        return CogniacSubject.search(self, ids, prefix, similar, tenant_owned, public_read, public_write, limit)
+
     def get_subject(self, subject_uid):
         """
         return an existing CogniacSubject
