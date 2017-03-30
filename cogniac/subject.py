@@ -115,6 +115,54 @@ class CogniacSubject(object):
         return [CogniacSubject(connection, s) for s in subs]
 
     ##
+    #  search
+    ##
+    @classmethod
+    def search(cls, connection, ids=[], prefix=None, similar=None, tenant_owned=True, public_read=False, public_write=False, limit=10):
+        """
+        search CogniacSubjects for either batch subject ID's, based on prefix, or semantic simlarity
+
+        connnection (CogniacConnection):     Authenticated CogniacConnection object
+        ids (list of strings):               return list of subjects with the given subject_uid's
+        prefix (string):                     return subjects that have a name containing the given string;
+                                             direct prefix matching results in a higher search score
+        similar (string):                    return subjects with a name that is related to the given search term;
+                                             i.e. similar='cat' will return a set containing the subject 'dog'
+        tenant_owned (bool):                 return subjects belonging to this tenant.
+        public_read (bool):                  return subjects that are publicly readable (other tenants can use associated media)
+        public_write (bool):                 return subjects that are publicly writeable (others tenants associate new media)
+        limit (int):                         max number of results to return
+        """
+
+        args = []
+
+        # build the search args
+        args.append('limit=%d' % limit)
+        args.append('tenant_read_write=%s' % str(tenant_owned))
+        if public_read:
+            args.append("public_read=True")
+
+        if public_write:
+            args.append("public_read_write=True")
+
+        # perform only one search at a time
+        # id search, prefix search, or similarity search
+        if len(ids):
+            args.append('ids=%s' % (',').join(ids))
+        elif prefix:
+            args.append('prefix=%s' % prefix)
+        elif similar:
+            args.append('similar=%s' % similar)
+
+        url = url_prefix + "/tenants/%s/subjects?" % connection.tenant.tenant_id
+        url += "&".join(args)
+
+        resp = connection.session.get(url, timeout=connection.timeout)
+        raise_errors(resp)
+        subs = resp.json()['data']
+        return [CogniacSubject(connection, s) for s in subs]
+
+    ##
     #  __init__
     ##
     def __init__(self, connection, subject_dict):
