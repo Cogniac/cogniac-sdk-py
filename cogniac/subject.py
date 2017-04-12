@@ -224,7 +224,9 @@ class CogniacSubject(object):
                         consensus='True',
                         probability=None,
                         force_feedback=False,
-                        force_random_feedback=False):
+                        force_random_feedback=False,
+                        app_data=None,
+                        app_data_type=None):
         """
         Associate the media (with an optional focus within the media) with this subject.
 
@@ -240,6 +242,8 @@ class CogniacSubject(object):
         force_random_feedback(bool)      True to force feedback on the media item in downstream apps because.
                                          Set only if this media was randomly selected for feedback.
                                          This media will be used for the (random) performance assessment.
+        app_data                         Specific app data for this subject-media association
+        app_data_type                    Type of app data for the subject-media association
 
         returns the unique capture_id
         """
@@ -261,6 +265,8 @@ class CogniacSubject(object):
 
         data['force_feedback'] = force_feedback
         data['force_random_feedback'] = force_random_feedback
+        data['app_data_type'] = app_data_type
+        data['app_data'] = app_data
 
         url = url_prefix + "/subjects/%s/media" % self.subject_uid
 
