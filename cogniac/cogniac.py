@@ -222,7 +222,7 @@ class CogniacConnection(object):
         """
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
-        filename (str):                   Local filename of image or video media file
+        filename (str):                   Local filename or http/s URL of image or video media file
         meta_tags ([str]):                Optional list of arbitrary strings to associate with the media
         force_set (str):                  Optionally force the media into the 'training', 'validation' or 'test' sets
         external_media_id (str):          Optional arbitrary external id for this media

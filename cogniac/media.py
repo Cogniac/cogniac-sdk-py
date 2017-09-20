@@ -84,7 +84,7 @@ class CogniacMedia(object):
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
         connnection (CogniacConnection):  Authenticated CogniacConnection object
-        filename (str):                   Local filename of image or video media file
+        filename (str):                   Local filename or http/s URL of image or video media file
         meta_tags ([str]):                Optional list of arbitrary strings to associate with the media
         force_set (str):                  Optionally force the media into the 'training', 'validation' or 'test' sets
         external_media_id (str):          Optional arbitrary external id for this media
@@ -116,13 +116,18 @@ class CogniacMedia(object):
         if title is not None:
             args['title'] = title
 
-        if stat(filename).st_size > 12 * 1024 * 1024:
+        if filename.startswith('http'):
+            args['source_url'] = filename
+        elif stat(filename).st_size > 12 * 1024 * 1024:
             # use the multipart interface for large files
             return CogniacMedia._create_multipart(connection, filename, args)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def upload():
-            files = {'file': open(filename, 'rb')}
+            if filename.startswith('http'):
+                files = None
+            else:
+                files = {'file': open(filename, 'rb')}
             resp = connection.session.post(url_prefix+"/media", data=args, files=files, timeout=connection.timeout)
             raise_errors(resp)
             return resp
