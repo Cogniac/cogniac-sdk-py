@@ -199,6 +199,14 @@ class CogniacMedia(object):
         rdata = post_data(data)
         return CogniacMedia(connection, rdata)
 
+    def delete(self):
+        """
+        delete the media object
+        """
+        resp = self._cc.session.delete(url_prefix + "/media/%s" % self.media_id, timeout=self._cc.timeout)
+        raise_errors(resp)
+        self.__dict__.clear()
+
     def download(self, filep=None, resize=None):
         """
         Download the original or resized media file and return as a string or write to a file.

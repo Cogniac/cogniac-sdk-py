@@ -215,7 +215,37 @@ class CogniacSubject(object):
         return s.encode(sys.stdout.encoding)
 
     ##
-    #  capture_media
+    #  dissassociate_media
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def disassociate_media(self,
+                           media,
+                           focus=None):
+        """
+        Disassociate the media (with an optional focus within the media) with this subject.
+
+        media (String or CogniacMedia)   media object or media_id to associate
+        focus (dict)                     Optional Focus of this association within the media
+                                         'frame'   Optional frame within a video media
+                                         'box'     Optional dictionary of bounding box pixel offsets (with keys x0, x1, y0, y1) within the frame.
+
+        """
+        if type(media) is CogniacMedia:
+            data = {'media_id': media.media_id}
+        else:
+            data = {'media_id': media}
+
+        if focus is not None:
+            data['focus'] = focus
+
+        url = url_prefix + "/subjects/%s/media" % self.subject_uid
+
+        resp = self._cc.session.delete(url, json=data, timeout=self._cc.timeout)
+        raise_errors(resp)
+        return
+
+    ##
+    #  associate_media
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def associate_media(self,
