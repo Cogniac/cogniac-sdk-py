@@ -96,6 +96,7 @@ class CogniacConnection(object):
             url_prefix = os.environ['COG_URL_PREFIX']
 
         self.url_prefix = url_prefix
+        print "Connecting to Cogniac system at %s" % url_prefix
 
         if tenant_id is None:
             try:
