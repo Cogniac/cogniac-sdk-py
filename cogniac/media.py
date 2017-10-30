@@ -33,7 +33,7 @@ class CogniacMedia(object):
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         media_id (String):                   The media_id of the Cogniac Media item to return
         """
-        resp = connection.session.get(url_prefix + "/media/%s" % media_id, timeout=connection.timeout)
+        resp = connection.session.get(connection.url_prefix + "/media/%s" % media_id, timeout=connection.timeout)
         raise_errors(resp)
 
         return CogniacMedia(connection, resp.json())
@@ -59,7 +59,7 @@ class CogniacMedia(object):
             raise AttributeError("%s is immutable" % name)
         if name in mutable_keys:
             data = {name: value}
-            resp = self._cc.session.post(url_prefix + "/media/%s" % self.media_id, json=data, timeout=self._cc.timeout)
+            resp = self._cc.session.post(self._cc.url_prefix + "/media/%s" % self.media_id, json=data, timeout=self._cc.timeout)
             raise_errors(resp)
             for k, v in resp.json().items():
                 super(CogniacMedia, self).__setattr__(k, v)
@@ -128,7 +128,7 @@ class CogniacMedia(object):
                 files = None
             else:
                 files = {'file': open(filename, 'rb')}
-            resp = connection.session.post(url_prefix+"/media", data=args, files=files, timeout=connection.timeout)
+            resp = connection.session.post(connection.url_prefix + "/media", data=args, files=files, timeout=connection.timeout)
             raise_errors(resp)
             return resp
 
@@ -156,7 +156,7 @@ class CogniacMedia(object):
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def post_data(data):
-            resp = connection.session.post(url_prefix + "/media/resumable", json=data, timeout=connection.timeout)
+            resp = connection.session.post(connection.url_prefix + "/media/resumable", json=data, timeout=connection.timeout)
             raise_errors(resp)
             return resp.json()
 
@@ -179,7 +179,7 @@ class CogniacMedia(object):
                     'video_file_chunk_no': chunk_no}
 
             files = {'file': chunk}
-            resp = connection.session.post(url_prefix + "/media/resumable", data=data, files=files, timeout=connection.timeout)
+            resp = connection.session.post(connection.url_prefix + "/media/resumable", data=data, files=files, timeout=connection.timeout)
             raise_errors(resp)
             return resp.json()
 
@@ -203,7 +203,7 @@ class CogniacMedia(object):
         """
         delete the media object
         """
-        resp = self._cc.session.delete(url_prefix + "/media/%s" % self.media_id, timeout=self._cc.timeout)
+        resp = self._cc.session.delete(self._cc.url_prefix + "/media/%s" % self.media_id, timeout=self._cc.timeout)
         raise_errors(resp)
         self.__dict__.clear()
 
@@ -239,7 +239,6 @@ class CogniacMedia(object):
                 filep.write(chunk)
         filep.close()
 
-
     ##
     #  detections
     ##
@@ -259,11 +258,10 @@ class CogniacMedia(object):
         app_data_type     Optional type of extra app-specific data
         app_data          Optional extra app-specific data
         """
-        url = url_prefix + "/media/%s/detections" % (self.media_id)
+        url = self._cc.url_prefix + "/media/%s/detections" % (self.media_id)
         resp = self._cc.session.get(url, timeout=self._cc.timeout)
         raise_errors(resp)
         return resp.json()['detections']
-
 
     ##
     #  subjects
@@ -296,7 +294,7 @@ class CogniacMedia(object):
                          Some application types only support 'True' or None.
                          }
         """
-        url = url_prefix + "/media/%s/subjects" % (self.media_id)
+        url = self._cc.url_prefix + "/media/%s/subjects" % (self.media_id)
         resp = self._cc.session.get(url, timeout=self._cc.timeout)
         raise_errors(resp)
         return resp.json()['data']

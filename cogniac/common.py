@@ -7,9 +7,6 @@ Copyright (C) 2016 Cogniac Corporation
 from requests.exceptions import ConnectionError
 
 
-url_prefix = "https://api.cogniac.io/1"
-
-
 class CredentialError(Exception):
     """Invalid Username/Password Credentials"""
 
@@ -20,6 +17,7 @@ class ServerError(Exception):
 
 class ClientError(Exception):
     """Error with the call parameters (e.g. 4xx)"""
+
 
 def server_error(exception):
     """Return True if we should retry (in this case when it's an ServerError, False otherwise"""

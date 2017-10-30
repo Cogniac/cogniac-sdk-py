@@ -64,7 +64,7 @@ class CogniacSubject(object):
         if description:
             data['description'] = description
 
-        resp = connection.session.post(url_prefix + "/subjects", json=data, timeout=connection.timeout)
+        resp = connection.session.post(connection.url_prefix + "/subjects", json=data, timeout=connection.timeout)
         raise_errors(resp)
 
         return CogniacSubject(connection, resp.json())
@@ -83,7 +83,7 @@ class CogniacSubject(object):
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         subject_id (String):                 The subject_id of the Cogniac Subject to return
         """
-        resp = connection.session.get(url_prefix + "/subjects/%s" % subject_uid, timeout=connection.timeout)
+        resp = connection.session.get(connection.url_prefix + "/subjects/%s" % subject_uid, timeout=connection.timeout)
         raise_errors(resp)
         return CogniacSubject(connection, resp.json())
 
@@ -106,7 +106,7 @@ class CogniacSubject(object):
         if public_write:
             args.append("public_read_write=True")
 
-        url = url_prefix + "/tenants/%s/subjects?" % connection.tenant.tenant_id
+        url = connection.url_prefix + "/tenants/%s/subjects?" % connection.tenant.tenant_id
         url += "&".join(args)
 
         resp = connection.session.get(url, timeout=connection.timeout)
@@ -161,7 +161,7 @@ class CogniacSubject(object):
         elif name:
             args.append('name=%s' % name)
 
-        url = url_prefix + "/tenants/%s/subjects?" % connection.tenant.tenant_id
+        url = connection.url_prefix + "/tenants/%s/subjects?" % connection.tenant.tenant_id
         url += "&".join(args)
 
         resp = connection.session.get(url, timeout=connection.timeout)
@@ -193,7 +193,7 @@ class CogniacSubject(object):
         """
         Delete the subject.
         """
-        resp = self._cc.session.delete(url_prefix + "/subjects/%s" % self.subject_uid, timeout=self._cc.timeout)
+        resp = self._cc.session.delete(self._cc.url_prefix + "/subjects/%s" % self.subject_uid, timeout=self._cc.timeout)
         raise_errors(resp)
         for k in self._sub_keys:
             delattr(self, k)
@@ -206,7 +206,7 @@ class CogniacSubject(object):
             raise AttributeError("%s is immutable" % name)
         if name in ['name', 'description', 'public_read', 'public_write']:
             data = {name: value}
-            resp = self._cc.session.post(url_prefix + "/subjects/%s" % self.subject_uid, json=data, timeout=self._cc.timeout)
+            resp = self._cc.session.post(self._cc.url_prefix + "/subjects/%s" % self.subject_uid, json=data, timeout=self._cc.timeout)
             raise_errors(resp)
             for k, v in resp.json().items():
                 super(CogniacSubject, self).__setattr__(k, v)
@@ -245,7 +245,7 @@ class CogniacSubject(object):
         if focus is not None:
             data['focus'] = focus
 
-        url = url_prefix + "/subjects/%s/media" % self.subject_uid
+        url = self._cc.url_prefix + "/subjects/%s/media" % self.subject_uid
 
         resp = self._cc.session.delete(url, json=data, timeout=self._cc.timeout)
         raise_errors(resp)
@@ -305,7 +305,7 @@ class CogniacSubject(object):
         data['app_data_type'] = app_data_type
         data['app_data'] = app_data
 
-        url = url_prefix + "/subjects/%s/media" % self.subject_uid
+        url = self._cc.url_prefix + "/subjects/%s/media" % self.subject_uid
 
         resp = self._cc.session.post(url, json=data, timeout=self._cc.timeout)
         raise_errors(resp)
@@ -375,7 +375,7 @@ class CogniacSubject(object):
         if abridged_media:
             args.append('abridged_media=True')
 
-        url = url_prefix + "/subjects/%s/media?" % self.subject_uid
+        url = self._cc.url_prefix + "/subjects/%s/media?" % self.subject_uid
         url += "&".join(args)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)

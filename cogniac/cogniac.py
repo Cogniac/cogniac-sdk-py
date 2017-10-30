@@ -39,9 +39,9 @@ class CogniacConnection(object):
 
     @classmethod
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def get_all_authorized_tenants(cls, username=None, password=None):
+    def get_all_authorized_tenants(cls, username=None, password=None, url_prefix="https://api.cogniac.io/1"):
         """
-        return the list of valid tenants for the specified user credentials
+        return the list of valid tenants for the specified user credentials and url_prefix
         """
         if username is None and password is None:
             # credentials not specified, use environment variables if found
@@ -55,7 +55,7 @@ class CogniacConnection(object):
         raise_errors(resp)
         return resp.json()
 
-    def __init__(self, username=None, password=None, tenant_id=None, timeout=20):
+    def __init__(self, username=None, password=None, tenant_id=None, timeout=20, url_prefix="https://api.cogniac.io/1"):
         """
         Create an authenticated CogniacConnection with the following credentials:
 
@@ -73,9 +73,17 @@ class CogniacConnection(object):
                                       then use the contents of the COG_TENANT environment variable
                                       will be used as the tenant.
 
+        url_prefix (String):          Cogniac API url prefix.
+                                      Defaults to "https://api.cogniac.io/1" for the Cogniac cloud system.
+                                      If you are accessing an 'on-prem' version of the Cogniac system,
+                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/1'
+                                      or a custom DNS prefix assigned by your internal IT.)
+                                      The url_prefix can alternatively be set via the COG_URL_PREFIX environment variable.
+
         If a user is a member of multiple tenants the user can retrieve his list of associated
         tenants via the CogniacConnection.get_all_authorized_tenants() classmethod.
         """
+
         if username is None and password is None:
             # credentials not specified, use environment variables if found
             try:
@@ -84,11 +92,16 @@ class CogniacConnection(object):
             except:
                 raise Exception("No Cogniac Credentials. Specify username and password or set COG_USER and COG_PASS environment variables.")
 
+        if 'COG_URL_PREFIX' in os.environ:
+            url_prefix = os.environ['COG_URL_PREFIX']
+
+        self.url_prefix = url_prefix
+
         if tenant_id is None:
             try:
                 tenant_id = os.environ['COG_TENANT']
             except:
-                tenants = CogniacConnection.get_all_authorized_tenants(username, password)['tenants']
+                tenants = CogniacConnection.get_all_authorized_tenants(username, password, url_prefix)['tenants']
                 if len(tenants) > 1:
                     print "\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:"
                     for tenant in tenants:
