@@ -137,4 +137,12 @@ or to run ipython with extra magic commands:
         %media_subjects <media_id>
 
 
+cogupload
+
+     A utility for robust parallel upload of media to the Cogniac system. Currently this is suitable for uploading to an 'input' subject since it does not set the consensus flag.
+
+     usage: cogupload <subject_uid> <directory_name>
+
+
+
 Please email us at support@cogniac.co with your feedback and thoughts about this library.
