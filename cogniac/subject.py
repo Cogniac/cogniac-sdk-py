@@ -258,7 +258,7 @@ class CogniacSubject(object):
     def associate_media(self,
                         media,
                         focus=None,
-                        consensus='True',
+                        consensus='None',
                         probability=None,
                         force_feedback=False,
                         force_random_feedback=False,
@@ -295,6 +295,9 @@ class CogniacSubject(object):
 
         assert(consensus in ['True', 'False', 'None'])
         data['consensus'] = consensus
+
+        if consensus is 'None' and probability is None:
+            data['uncal_prob'] = .99
 
         if probability is not None:
             assert(consensus == 'None')
@@ -343,7 +346,7 @@ class CogniacSubject(object):
         timestamp		time of last update
         app_data_type	optional app data type if applicable
         app_data        optional app data if applicable
-        consensus		'True', 'False', or 'Uncertain', or None
+        consensus		'True', 'False', or , or None
                         'True' if there is consensus that the subject is associated with the media
                             (Media will be used as a positive training example of the subject)
                         'False' if there is consensus that the subject is not associated w/the media
@@ -363,7 +366,7 @@ class CogniacSubject(object):
         if probability_upper is not None:
             args.append("probability_upper=%f" % probability_upper)
         if consensus is not None:
-            assert(consensus in ['True', 'False', 'Uncertain'])
+            assert(consensus in ['True', 'False'])
             args.append("consensus=%s" % consensus)
         if reverse:
             args.append('reverse=True')
