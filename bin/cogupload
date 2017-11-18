@@ -6,7 +6,7 @@ A utility for robust parallel upload of media to Cogniac system.
 
 usage:
 
-cogupload <subject_uid> <directory_name>
+cogupload <subject_uid> <directory_name> [-r]
 
 Currently this is suitable for uploading to an 'input' subject since it does not set the consensus flag.
 
@@ -24,11 +24,12 @@ from multiprocessing.pool import ThreadPool
 from threading import Lock
 from time import time
 
-default_filetypes = ['bmp', 'jpg', 'avi', 'png', 'mp4']
+default_filetypes = ['bmp', 'jpg', 'avi', 'png', 'mp4', 'jpeg', 'mov']
 
 
 def usage():
-    print "\nusage: cogupload <subject_uid> <directory>\n"
+    print "\nusage: cogupload <subject_uid> <directory> [-r]\n"
+    print "         -r:   recursive upload all media files under <directory>"
     sys.exit(1)
 
 
@@ -59,9 +60,11 @@ output_lock = Lock()
 
 
 def upload_and_associate(fn):
-    if not os.path.isfile(fn) or fn[-3:].lower() not in default_filetypes:
+    if not os.path.isfile(fn) or fn.split('.')[-1].lower() not in default_filetypes:
+        output_lock.acquire()
         print "skip", fn
-        return
+        output_lock.release()
+        return 0
 
     sz = os.stat(fn).st_size
 
@@ -83,7 +86,12 @@ def upload_and_associate(fn):
     return sz
 
 
-files = [directory + '/' + fn for fn in os.listdir(directory)]
+if '-r' in sys.argv:
+    files = []
+    for root, subdirs, fnl in os.walk(directory):
+        files.extend([root+'/'+fn for fn in fnl])
+else:
+    files = [directory + '/' + fn for fn in os.listdir(directory)]
 
 pool = ThreadPool(24)
 
