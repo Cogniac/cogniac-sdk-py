@@ -259,6 +259,13 @@ class CogniacConnection(object):
                                    author,
                                    title)
 
+    def get_version(self):
+        url = self.url_prefix + "/version"
+        resp = self.session.get(url)
+        raise_errors(resp)
+        return resp.json()
+
+
 if __name__ == "__main__":
     c = CogniacConnection()
     tenant = c.tenant()
