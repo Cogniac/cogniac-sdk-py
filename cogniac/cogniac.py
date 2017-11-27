@@ -259,8 +259,16 @@ class CogniacConnection(object):
                                    author,
                                    title)
 
-    def get_version(self):
-        url = self.url_prefix + "/version"
+    def get_version(self, auth=False):
+        """
+        get api version info
+        auth (bool):  use authenticated endpoint for benchmark purposes
+        returns json version info
+        """
+        if auth:
+            url = self.url_prefix + "/authversion"
+        else:
+            url = self.url_prefix + "/version"
         resp = self.session.get(url)
         raise_errors(resp)
         return resp.json()
