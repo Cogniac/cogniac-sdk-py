@@ -276,7 +276,8 @@ class CogniacApplication(object):
     ##
     def detections(self, start=None, end=None, reverse=True, probability_lower=None, probability_upper=None,  limit=None, consensus_none=False, only_user=False, only_model=False, abridged_media=True):
         """
-        yield application output assertions (model predictions and/or user feedback) sorted by associated timestamp
+        Yield application output assertions (model predictions and/or user feedback) sorted by timestamp.
+
 
         start (float)          filter by last update timestamp > start (seconds since epoch)
         end (float)            filter by last update timestamp < end   (seconds since epoch)
@@ -291,8 +292,8 @@ class CogniacApplication(object):
         only_model (bool);     If True, only return model prediction assertions, not feedback assertions from users
         abridged_media (bool)  return full media items if False (slower), otherwise return just media_id's for each media_item
 
-        Returns (yield) association dictionary with the following fields:
 
+        Returns (yield) association dictionary with the following fields:
         
         media(dict):  { system media dictionary}
 
