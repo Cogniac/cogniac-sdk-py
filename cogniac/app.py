@@ -270,3 +270,87 @@ class CogniacApplication(object):
         fp.close()
         return modelname
 
+
+    ##
+    #  detections
+    ##
+    def detections(self, start=None, end=None, reverse=True, probability_lower=None, probability_upper=None,  limit=None, consensus_none=False, only_user=False, only_model=False, abridged_media=True):
+        """
+        yield application output assertions (model predictions and/or user feedback) sorted by associated timestamp
+
+        start (float)          filter by last update timestamp > start (seconds since epoch)
+        end (float)            filter by last update timestamp < end   (seconds since epoch)
+        reverse (bool)         reverse the sorting order: sort high to low
+        probability_lower:     filter by probability > probability_lower
+        probability_upper:     filter by probability < probability_upper
+        limit (int)            yield maximum of limit results
+        consensus_none (bool): only return items that have not reached consensus.
+                               This is useful for alternate feedback interfaces where it is 
+                               undesirable to display items that have already reached consensus
+        only_user (bool):      If True, only return feedback assertions from users, not model predictions
+        only_model (bool);     If True, only return model prediction assertions, not feedback assertions from users
+        abridged_media (bool)  return full media items if False (slower), otherwise return just media_id's for each media_item
+
+        Returns (yield) association dictionary with the following fields:
+
+        
+        media(dict):  { system media dictionary}
+
+        focus(dict):  { system focus context (box, segment, etc) dictionary}
+
+        updated_at(float):  epoch timstamp of model prediction or user feedback
+        
+        detections : list of dictionaries as follows: 
+             detection_id:     internal detection_id
+             user_id:          a user_id if this was from a user
+             model_id:         a model_id if this was from an app w/model
+             uncal_prob:       the raw uncalibrated user or model confidence (if any)
+             timestamp:        the time of this detection
+             prev_prob:        subject-media probability before this detection (if any)
+             probability:      the resulting probability after this detection
+             app_data_type     Optional type of extra app-specific data
+             app_data          Optional extra app-specific data        
+
+        """
+        args = []
+        if start is not None:
+            args.append("start=%f" % start)
+        if end is not None:
+            args.append("end=%f" % end)
+        if probability_lower is not None:
+            args.append("probability_lower=%f" % probability_lower)
+        if probability_upper is not None:
+            args.append("probability_upper=%f" % probability_upper)
+        if reverse:
+            args.append('reverse=True')
+        if limit:
+            assert(limit > 0)
+            args.append('limit=%d' % min(limit, 100))  # api support max limit of 100
+        if consensus_none:
+            args.append("consensus_none=True")
+        if only_user:
+            args.append("only_user=True")
+        if only_model:
+            args.append("only_model=True")
+        if abridged_media:
+            args.append('abridged_media=True')
+
+        url = self._cc.url_prefix + "/applications/%s/detections?" % self.application_id
+        url += "&".join(args)
+
+        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        def get_next(url):
+            resp = self._cc.session.get(url, timeout=self._cc.timeout)
+            raise_errors(resp)
+            return resp.json()
+
+        count = 0
+        while url:
+            resp = get_next(url)
+            for det in resp['data']:
+                yield det
+                count += 1
+                if limit and count == limit:
+                    return
+            url = resp['paging'].get('next')
+        
