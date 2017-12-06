@@ -327,7 +327,7 @@ class CogniacSubject(object):
         reverse (bool)         reverse the sorting order: sort high to low
         probability_lower:     filter by probability > probability_lower
         probability_upper:     filter by probability < probability_upper
-        consensus (string):    filter by consensus label: "True", "False", or "Uncertain"
+        consensus (string):    filter by consensus label: "True", "False"
         sort_probability(bool) Sort by probability instead of last update timestamp
         limit (int)            yield maximum of limit results
         abridged_media (bool)  return full media items if False (slower), otherwise return just media_id's for each media_item
@@ -340,10 +340,10 @@ class CogniacSubject(object):
                            'frame'   Optional frame within a video media
                            'box'     Optional dictionary of bounding box pixel offsets (with keys x0, x1, y0, y1) within the frame.
         probability		current assessment of the probability in [0,1] that the subject_uid is associated with the media_id
-                        1 = definitely associated
-                        0 = definitely NOT associated
-                        0.5 ~= uncertain association
-        timestamp		time of last update
+                        1 = subject definitely associated with media+focus
+                        0 = subject definitely NOT associated with media+focus
+                        0.5 ~= uncertain association between subject and media+focus
+        timestamp	time of last update to subject media association
         app_data_type	optional app data type if applicable
         app_data        optional app data if applicable
         consensus		'True', 'False', or , or None
@@ -351,7 +351,6 @@ class CogniacSubject(object):
                             (Media will be used as a positive training example of the subject)
                         'False' if there is consensus that the subject is not associated w/the media
                             (Media will be used as a negative training example of the subject.)
-                        'Uncertain' if there is consensus that the association between the media and subject is ambiguous
                          None if if there is not enough evidence to reach consensus
                          Some application types only support 'True' or None.
         """

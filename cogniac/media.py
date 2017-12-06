@@ -284,12 +284,11 @@ class CogniacMedia(object):
         timestamp		time of last update
         app_data_type	optional app data type if applicable
         app_data        optional app data if applicable
-        consensus		'True', 'False', or 'Uncertain', or None
+        consensus		'True', 'False', or None
                         'True' if there is consensus that the subject is associated with the media
                             (Media will be used as a positive training example of the subject)
                         'False' if there is consensus that the subject is not associated w/the media
                             (Media will be used as a negative training example of the subject.)
-                        'Uncertain' if there is consensus that the association between the media and subject is ambiguous
                          None if if there is not enough evidence to reach consensus
                          Some application types only support 'True' or None.
                          }
