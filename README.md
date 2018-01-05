@@ -51,7 +51,7 @@ common Cogniac objects such as applications, subjects, and media:
         return CogniacMedia object for an existing media item
         
     create_media
-        create a new cogniac media item
+        create a new Cogniac media item
 
     get_tenant
         return the currently authenticated CogniacTenant
@@ -61,9 +61,9 @@ CogniacApplication
 
     An object representing an Application in the Cogniac System.
     
-    Applications are the main locus of activity within the Cogniac System.
+    Applications are the main focus of activity within the Cogniac System.
 
-    This classes manages applications within the Cogniac System via the
+    This class manages applications within the Cogniac System via the
     Cogniac public API application endpoints.
 
     Create a new application with
@@ -84,7 +84,7 @@ CogniacApplication
     
     Subjects are a central organizational mechanism in the Cogniac system.
     A subject is any user-defined concept that is relevant to images or video.
-    More generally a subject can represent any logical grouping of images of video.
+    More generally a subject can represent any logical grouping of images or video.
 
     Most Cogniac applications work by taking input media from user-defined subjects
     and outputing those media to other user-defined subjects based on the content
