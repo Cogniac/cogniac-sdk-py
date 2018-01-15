@@ -13,7 +13,7 @@ import requests
 from retrying import retry
 from requests.auth import HTTPBasicAuth
 
-from common import *
+from common import server_error, raise_errors
 
 from app     import CogniacApplication
 from subject import CogniacSubject
@@ -167,24 +167,32 @@ class CogniacConnection(object):
         output_subjects ([CogniacSubjects]): List of CogniacSubjects outputs for this application
         """
         return CogniacApplication.create(self,
-                                         name,
-                                         application_type,
-                                         description,
-                                         active,
-                                         input_subjects,
-                                         output_subjects)
+                                         name=name,
+                                         application_type=application_type,
+                                         description=description,
+                                         active=active,
+                                         input_subjects=input_subjects,
+                                         output_subjects=output_subjects)
 
     def get_all_subjects(self, public_read=False, public_write=False):
         """
         return CogniacSubjects for all subjects belonging to the currently authenticated tenant
         """
-        return CogniacSubject.get_all(self, public_read, public_write)
+        return CogniacSubject.get_all(self, public_read=public_read, public_write=public_write)
 
-    def search_subjects(self, ids=[], prefix=None, similar=None, tenant_owned=True, public_read=False, public_write=False, limit=10):
+    def search_subjects(self, ids=[], prefix=None, similar=None, name=None, tenant_owned=True, public_read=False, public_write=False, limit=10):
         """
         return CogniacSubjects based on given search filters
         """
-        return CogniacSubject.search(self, ids, prefix, similar, tenant_owned, public_read, public_write, limit)
+        return CogniacSubject.search(self,
+                                     ids=ids,
+                                     prefix=prefix,
+                                     similar=similar,
+                                     name=name,
+                                     tenant_owned=tenant_owned,
+                                     public_read=public_read,
+                                     public_write=public_write,
+                                     limit=limit)
 
     def get_subject(self, subject_uid):
         """
@@ -208,10 +216,10 @@ class CogniacConnection(object):
         public_write(Bool):                  Other tenants can access and associate media with this subject.
         """
         return CogniacSubject.create(self,
-                                     name,
-                                     description,
-                                     public_read,
-                                     public_write)
+                                     name=name,
+                                     description=description,
+                                     public_read=public_read,
+                                     public_write=public_write)
 
     def get_media(self, media_id):
         """
@@ -248,16 +256,16 @@ class CogniacConnection(object):
         title (str):                      Optional media title
         """
         return CogniacMedia.create(self,
-                                   filename,
-                                   meta_tags,
-                                   force_set,
-                                   external_media_id,
-                                   original_url,
-                                   original_landing_url,
-                                   license,
-                                   author_profile_url,
-                                   author,
-                                   title)
+                                   filename=filename,
+                                   meta_tags=meta_tags,
+                                   force_set=force_set,
+                                   external_media_id=external_media_id,
+                                   original_url=original_url,
+                                   original_landing_url=original_landing_url,
+                                   license=license,
+                                   author_profile_url=author_profile_url,
+                                   author=author,
+                                   title=title)
 
     def get_version(self, auth=False):
         """
