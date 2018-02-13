@@ -38,6 +38,36 @@ class CogniacMedia(object):
 
         return CogniacMedia(connection, resp.json())
 
+    @classmethod
+    def search(cls, connection, md5=None, filename=None, external_media_id=None):
+        """
+        Search for a CogniacMedia item in current tenant by md5, filename, or external_media_id.
+
+        connnection (CogniacConnection):     Authenticated CogniacConnection object        
+        md5 (String):                        MD5 of media item
+        filename (String):                   Original filename of media item
+        external_media_id (String):          Customer specified unique ID
+
+        Only one of md5, filename, or external_media_id must be specified
+
+        returns list of CogniacMedia objects that match the query parameters
+        """
+        
+        if md5 is not None:
+            assert((filename is None) & (external_media_id is None))            
+            query = "md5=%s" % md5
+        elif filename is not None:
+            assert((md5 is None) & (external_media_id is None))                        
+            query = "filename=%s" % filename
+        else:
+            assert((md5 is None) & (filename is None))
+            query = "external_media_id=%s" % external_media_id
+
+        resp = connection.session.get(connection.url_prefix + "/media/all/search?%s" % query, timeout=connection.timeout)
+        raise_errors(resp)
+        
+        return [CogniacMedia(connection, m) for m in resp.json()['data']]
+    
     def __init__(self, connection, media_dict):
         """
         create a CogniacMedia

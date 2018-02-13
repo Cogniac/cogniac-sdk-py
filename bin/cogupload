@@ -41,7 +41,7 @@ except:
 
 
 print "Authenticating..."
-cc = cogniac.CogniacConnection(timeout=45)
+cc = cogniac.CogniacConnection(timeout=60)
 print cc.tenant
 
 try:
