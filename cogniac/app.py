@@ -40,7 +40,8 @@ class CogniacApplication(object):
                description=None,
                active=True,
                input_subjects=None,
-               output_subjects=None):
+               output_subjects=None,
+               app_managers=None):
         """
         Create a new CogniacApplication
 
@@ -51,6 +52,7 @@ class CogniacApplication(object):
         active (Boolean):                    Application operational state
         input_subjects ([CogniacSubjects]):  List of CogniacSubjects inputs to this application
         output_subjects ([CogniacSubjects]): List of CogniacSubjects outputs for this application
+        app_managers ([String]):             List of email addresses authorized to be Application Managers
         """
         data = dict(name=name, active=active, type=application_type)
 
@@ -66,6 +68,9 @@ class CogniacApplication(object):
                 data['output_subjects'] = output_subjects
             else:
                 data['output_subjects'] = [s.subject_uid for s in output_subjects]
+
+        if app_managers is not None:
+            data['app_managers'] = app_managers
 
         resp = connection.session.post(connection.url_prefix + "/applications", json=data, timeout=connection.timeout)
         raise_errors(resp)
@@ -141,7 +146,7 @@ class CogniacApplication(object):
     def __setattr__(self, name, value):
         if name in ['application_id', 'created_at', 'created_by', 'modified_at', 'modified_by']:
             raise AttributeError("%s is immutable" % name)
-        if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects']:
+        if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects', 'app_managers']:
             data = {name: value}
             resp = self._cc.session.post(self._cc.url_prefix + "/applications/%s" % self.application_id, json=data,  timeout=self._cc.timeout)
             raise_errors(resp)
