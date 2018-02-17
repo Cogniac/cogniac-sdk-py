@@ -105,8 +105,9 @@ class CogniacConnection(object):
                 tenants = CogniacConnection.get_all_authorized_tenants(username, password, url_prefix)['tenants']
                 if len(tenants) > 1:
                     print "\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:"
+                    tenants.sort(key=lambda x:x['name'])
                     for tenant in tenants:
-                        print "%20s (%s)    export COG_TENANT='%s'" % (tenant['name'], tenant['tenant_id'], tenant['tenant_id'])
+                        print "%24s (%s)    export COG_TENANT='%s'" % (tenant['name'], tenant['tenant_id'], tenant['tenant_id'])
                     print
                     raise Exception("Unspecified tenant")
                 tenant_id = tenants[0]['tenant_id']
