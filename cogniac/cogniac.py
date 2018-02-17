@@ -156,7 +156,8 @@ class CogniacConnection(object):
                            description=None,
                            active=True,
                            input_subjects=None,
-                           output_subjects=None):
+                           output_subjects=None,
+                           app_managers=None):
         """
         Create a new CogniacApplication
 
@@ -173,7 +174,8 @@ class CogniacConnection(object):
                                          description=description,
                                          active=active,
                                          input_subjects=input_subjects,
-                                         output_subjects=output_subjects)
+                                         output_subjects=output_subjects,
+                                         app_managers=app_managers)
 
     def get_all_subjects(self, public_read=False, public_write=False):
         """
