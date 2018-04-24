@@ -109,7 +109,8 @@ class CogniacMedia(object):
                license=None,
                author_profile_url=None,
                author=None,
-               title=None):
+               title=None,
+               media_timestamp=None):
         """
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
@@ -124,6 +125,7 @@ class CogniacMedia(object):
         author_profile_url (str):         Optional media author url
         author (str):                     Optional author name
         title (str):                      Optional media title
+        media_timestamp (float):          Optional actual timestamp of media creation/occurance time
         """
 
         args = dict()
@@ -145,6 +147,8 @@ class CogniacMedia(object):
             args['author'] = author
         if title is not None:
             args['title'] = title
+        if media_timestamp is not None:
+            args['media_timestamp'] = media_timestamp
 
         if filename.startswith('http'):
             args['source_url'] = filename

@@ -249,7 +249,8 @@ class CogniacConnection(object):
                      license=None,
                      author_profile_url=None,
                      author=None,
-                     title=None):
+                     title=None,
+                     media_timestamp=None):
         """
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
@@ -263,6 +264,7 @@ class CogniacConnection(object):
         author_profile_url (str):         Optional media author url
         author (str):                     Optional author name
         title (str):                      Optional media title
+        media_timestamp (float):          Optional actual timestamp of media creation/occurance time
         """
         return CogniacMedia.create(self,
                                    filename=filename,
@@ -274,7 +276,8 @@ class CogniacConnection(object):
                                    license=license,
                                    author_profile_url=author_profile_url,
                                    author=author,
-                                   title=title)
+                                   title=title,
+                                   media_timestamp=media_timestamp)
 
     def get_version(self, auth=False):
         """
