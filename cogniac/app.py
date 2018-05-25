@@ -91,7 +91,8 @@ class CogniacApplication(object):
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         application_id (String):             The application_id of the Cogniac application to return
         """
-        resp = connection.session.get(connection.url_prefix + "/applications/%s" % application_id, timeout=connection.timeout)
+        resp = connection.session.get(connection.url_prefix + "/applications/%s" % application_id,
+                                      timeout=connection.timeout)
         raise_errors(resp)
         return CogniacApplication(connection, resp.json())
 
@@ -105,7 +106,8 @@ class CogniacApplication(object):
 
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         """
-        resp = connection.session.get(connection.url_prefix + '/tenants/%s/applications' % connection.tenant.tenant_id, timeout=connection.timeout)
+        resp = connection.session.get(connection.url_prefix + '/tenants/%s/applications' % connection.tenant.tenant_id,
+                                      timeout=connection.timeout)
         raise_errors(resp)
         apps = resp.json()['data']
         return [CogniacApplication(connection, appd) for appd in apps]
@@ -135,7 +137,8 @@ class CogniacApplication(object):
         Delete the application.
         This will delete existing models but will not delete associated subjects or media.
         """
-        resp = self._cc.session.delete(self._cc.url_prefix + "/applications/%s" % self.application_id, timeout=self._cc.timeout)
+        resp = self._cc.session.delete(self._cc.url_prefix + "/applications/%s" % self.application_id,
+                                       timeout=self._cc.timeout)
         raise_errors(resp)
         for k in self._app_keys:
             delattr(self, k)
@@ -146,9 +149,11 @@ class CogniacApplication(object):
     def __setattr__(self, name, value):
         if name in ['application_id', 'created_at', 'created_by', 'modified_at', 'modified_by']:
             raise AttributeError("%s is immutable" % name)
-        if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects', 'app_managers']:
+        if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects', 'app_managers',
+                    'detection_post_urls', 'detection_threshols']:
             data = {name: value}
-            resp = self._cc.session.post(self._cc.url_prefix + "/applications/%s" % self.application_id, json=data,  timeout=self._cc.timeout)
+            resp = self._cc.session.post(self._cc.url_prefix + "/applications/%s" % self.application_id, json=data,
+                                         timeout=self._cc.timeout)
             raise_errors(resp)
             for k, v in resp.json().items():
                 super(CogniacApplication, self).__setattr__(k, v)
@@ -186,7 +191,8 @@ class CogniacApplication(object):
         Return the integer number of feedback requests pending for this application.
         This is useful for controlling the flow of images input into the system to avoid creating too many backlogged feedback requests.
         """
-        resp = self._cc.session.get(self._cc.url_prefix + "/applications/%s/feedback/pending" % self.application_id, timeout=self._cc.timeout)
+        resp = self._cc.session.get(self._cc.url_prefix + "/applications/%s/feedback/pending" % self.application_id,
+                                    timeout=self._cc.timeout)
         raise_errors(resp)
 
         return resp.json()['pending']
@@ -230,7 +236,8 @@ class CogniacApplication(object):
         feedback_response = {'media_id': media_id,
                              'subjects': subjects}
 
-        resp = self._cc.session.post(self._cc.url_prefix + "/applications/%s/feedback" % self.application_id, json=feedback_response, timeout=self._cc.timeout)
+        resp = self._cc.session.post(self._cc.url_prefix + "/applications/%s/feedback" % self.application_id,
+                                     json=feedback_response, timeout=self._cc.timeout)
         raise_errors(resp)
         return None
 
@@ -242,7 +249,8 @@ class CogniacApplication(object):
         """
         return the modelname for the current best model for this application
         """
-        resp = self._cc.session.get(self._cc.url_prefix + "/applications/%s/ccp" % self.application_id, timeout=self._cc.timeout)
+        resp = self._cc.session.get(self._cc.url_prefix + "/applications/%s/ccp" % self.application_id,
+                                    timeout=self._cc.timeout)
 
         raise_errors(resp)
         resp = resp.json()
@@ -260,7 +268,8 @@ class CogniacApplication(object):
         Download the current active model for this application to a file in the current working directory and
         return the local filename which will be the same as the model name.
         """
-        resp = self._cc.session.get(self._cc.url_prefix + "/applications/%s/ccp" % self.application_id, timeout=self._cc.timeout)
+        resp = self._cc.session.get(self._cc.url_prefix + "/applications/%s/ccp" % self.application_id,
+                                    timeout=self._cc.timeout)
         raise_errors(resp)
 
         resp = resp.json()
