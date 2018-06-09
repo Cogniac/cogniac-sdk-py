@@ -263,7 +263,8 @@ class CogniacSubject(object):
                         force_feedback=False,
                         force_random_feedback=False,
                         app_data=None,
-                        app_data_type=None):
+                        app_data_type=None,
+                        enable_wait_result=False):
         """
         Associate the media (with an optional focus within the media) with this subject.
 
@@ -281,6 +282,9 @@ class CogniacSubject(object):
                                          This media will be used for the (random) performance assessment.
         app_data                         Specific app data for this subject-media association
         app_data_type                    Type of app data for the subject-media association
+        enable_wait_result(bool)         When True: enable 'synchronous' result interfaces whereby subsequent
+                                         GET /media/<media_id>/detections?wait_capture_id=<capture_id> endpoints block until
+                                         the full results of the application pipeline resulting from this input association are available
 
         returns the unique capture_id
         """
@@ -302,6 +306,9 @@ class CogniacSubject(object):
         if probability is not None:
             assert(consensus == 'None')
             data['uncal_prob'] = probability
+
+        if enable_wait_result:
+            data['enable_wait_result'] = True
 
         data['force_feedback'] = force_feedback
         data['force_random_feedback'] = force_random_feedback

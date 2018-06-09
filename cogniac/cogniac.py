@@ -238,7 +238,7 @@ class CogniacConnection(object):
         return list of CogniacMedia within tenant based on specified md5, filename, or external_media_id
         """
         return CogniacMedia.search(self, md5, filename, external_media_id)
-    
+
     def create_media(self,
                      filename,
                      meta_tags=None,

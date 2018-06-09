@@ -277,9 +277,14 @@ class CogniacMedia(object):
     #  detections
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def detections(self):
+    def detections(self, wait_capture_id=None):
         """
         return a list of detection dictionaries as follows for the specified media_id and this subject
+        wait_capture_id (str):    capture_id from previous subject associate_media call that had enable_wait_result=True
+                                  This operation with block and return all applications detections resulting from capture_id
+                                  when available.
+
+        Returns:
 
         detection_id:     internal detection_id
         user_id:          a user_id if this was from a user
@@ -292,7 +297,12 @@ class CogniacMedia(object):
         app_data_type     Optional type of extra app-specific data
         app_data          Optional extra app-specific data
         """
+
         url = self._cc.url_prefix + "/media/%s/detections" % (self.media_id)
+
+        if wait_capture_id is not None:
+            url += "?wait_capture_id=%s" % wait_capture_id
+
         resp = self._cc.session.get(url, timeout=self._cc.timeout)
         raise_errors(resp)
         return resp.json()['detections']
