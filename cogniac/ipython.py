@@ -49,6 +49,8 @@ def print_detections(detections):
     detections.sort(key=lambda x: x['created_at'])
 
     for d in detections:
+        if 'activation' in d:
+            del d['activation']
         value = datetime.datetime.fromtimestamp(d['created_at'])
         d['created_at'] = value.strftime('%Y-%m-%d %H:%M:%S')
     print tabulate(detections, headers='keys')
