@@ -52,7 +52,7 @@ class CogniacSubject(object):
         Create a CogniacSubject
 
         connnection (CogniacConnection):     Authenticated CogniacConnection object
-        name (String):                       Name of new application
+        name (String):                       Name of new subject
         description (String):                Optional description of the subject
         public_read(Bool):                   Subject media is accessible to other tenants and can be input into other tenant's apps.
         public_write(Bool):                  Other tenants can access and associate media with this subject.
