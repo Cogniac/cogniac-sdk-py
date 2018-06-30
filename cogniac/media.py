@@ -10,7 +10,7 @@ from common import *
 from os import stat
 import requests
 
-immutable_keys = ['frame', 'video', 'media_id', 'size', 'network_camera_id', 'original_url', 'image_width', 'filename', 'original_landing_url', 'uploaded_by_user', 'media_timestamp', 'media_url', 'status', 'hash', 'external_media_id', 'author_profile_url', 'media_src', 'parent_media_id',  'media_resize_urls', 'license', 'tenant_id', 'created_at', 'author', 'public', 'image_height', 'media_format', 'title']
+immutable_keys = ['frame', 'video', 'media_id', 'size', 'network_camera_id', 'original_url', 'image_width', 'filename', 'original_landing_url', 'uploaded_by_user', 'media_timestamp', 'media_url', 'status', 'hash', 'external_media_id', 'author_profile_url', 'media_src', 'parent_media_id',  'media_resize_urls', 'license', 'tenant_id', 'created_at', 'author', 'public', 'image_height', 'media_format', 'title', 'domain_unit']
 
 mutable_keys =['force_set', 'meta_tags']
 
@@ -96,7 +96,6 @@ class CogniacMedia(object):
             return
         super(CogniacMedia, self).__setattr__(name, value)
 
-
     @classmethod
     def create(cls,
                connection,
@@ -110,7 +109,8 @@ class CogniacMedia(object):
                author_profile_url=None,
                author=None,
                title=None,
-               media_timestamp=None):
+               media_timestamp=None,
+               domain_unit=None):
         """
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
@@ -126,6 +126,10 @@ class CogniacMedia(object):
         author (str):                     Optional author name
         title (str):                      Optional media title
         media_timestamp (float):          Optional actual timestamp of media creation/occurance time
+        domain_unit (str):                Optional domain id (e.g. serial number) for set assignment grouping.
+                                          Media with the same domain_unit will always be assigned to the same
+                                          training or validation set. Set this to avoid overfitting when you have
+                                          multiple images of the same thing or almost the same thing.
         """
 
         args = dict()
@@ -149,6 +153,8 @@ class CogniacMedia(object):
             args['title'] = title
         if media_timestamp is not None:
             args['media_timestamp'] = media_timestamp
+        if domain_unit is not None:
+            args['domain_unit'] = domain_unit
 
         if filename.startswith('http'):
             args['source_url'] = filename

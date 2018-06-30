@@ -250,7 +250,8 @@ class CogniacConnection(object):
                      author_profile_url=None,
                      author=None,
                      title=None,
-                     media_timestamp=None):
+                     media_timestamp=None,
+                     domain_unit=None):
         """
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
@@ -265,6 +266,10 @@ class CogniacConnection(object):
         author (str):                     Optional author name
         title (str):                      Optional media title
         media_timestamp (float):          Optional actual timestamp of media creation/occurance time
+        domain_unit (str):                Optional domain id (e.g. serial number) for set assignment grouping.
+                                          Media with the same domain_unit will always be assigned to the same
+                                          training or validation set. Set this to avoid overfitting when you have
+                                          multiple images of the same thing or almost the same thing.
         """
         return CogniacMedia.create(self,
                                    filename=filename,
@@ -277,7 +282,8 @@ class CogniacConnection(object):
                                    author_profile_url=author_profile_url,
                                    author=author,
                                    title=title,
-                                   media_timestamp=media_timestamp)
+                                   media_timestamp=media_timestamp,
+                                   domain_unit=domain_unit)
 
     def get_version(self, auth=False):
         """
