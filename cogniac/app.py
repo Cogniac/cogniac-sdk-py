@@ -276,7 +276,8 @@ class CogniacApplication(object):
         url = resp['best_model_ccp_url']
         modelname = url.split('/')[-1]
 
-        resp = self._cc.session.get(url, timeout=self._cc.timeout)
+        resp = self._cc.session.get(self._cc.url_prefix + "/applications/%s/ccppkg" % self.application_id,
+                                    json={"ccp_filename": modelname}, timeout=self._cc.timeout)
         raise_errors(resp)
 
         fp = open(modelname, "w")
