@@ -376,6 +376,8 @@ class CogniacSubject(object):
             args.append("consensus=%s" % consensus)
         if reverse:
             args.append('reverse=True')
+        else:
+            args.append('reverse=False')
         if sort_probability:
             args.append("sort=probability")
         if limit:
