@@ -19,6 +19,10 @@ class ClientError(Exception):
     """Error with the call parameters (e.g. 4xx)"""
 
 
+def credential_error(exception):
+    return isinstance(exception, CredentialError)
+
+
 def server_error(exception):
     """Return True if we should retry (in this case when it's an ServerError, False otherwise"""
     return isinstance(exception, ServerError) or isinstance(exception, ConnectionError)

@@ -33,8 +33,7 @@ class CogniacMedia(object):
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         media_id (String):                   The media_id of the Cogniac Media item to return
         """
-        resp = connection.session.get(connection.url_prefix + "/media/%s" % media_id, timeout=connection.timeout)
-        raise_errors(resp)
+        resp = connection._get("/media/%s" % media_id)
 
         return CogniacMedia(connection, resp.json())
 
@@ -63,8 +62,7 @@ class CogniacMedia(object):
             assert((md5 is None) & (filename is None))
             query = "external_media_id=%s" % external_media_id
 
-        resp = connection.session.get(connection.url_prefix + "/media/all/search?%s" % query, timeout=connection.timeout)
-        raise_errors(resp)
+        resp = connection._get("/media/all/search?%s" % query)
         
         return [CogniacMedia(connection, m) for m in resp.json()['data']]
     
@@ -89,8 +87,7 @@ class CogniacMedia(object):
             raise AttributeError("%s is immutable" % name)
         if name in mutable_keys:
             data = {name: value}
-            resp = self._cc.session.post(self._cc.url_prefix + "/media/%s" % self.media_id, json=data, timeout=self._cc.timeout)
-            raise_errors(resp)
+            resp = self._cc._post("/media/%s" % self.media_id, json=data)
             for k, v in resp.json().items():
                 super(CogniacMedia, self).__setattr__(k, v)
             return
@@ -168,8 +165,7 @@ class CogniacMedia(object):
                 files = None
             else:
                 files = {'file': open(filename, 'rb')}
-            resp = connection.session.post(connection.url_prefix + "/media", data=args, files=files, timeout=connection.timeout)
-            raise_errors(resp)
+            resp = connection._post("/media", data=args, files=files)
             return resp
 
         resp = upload()
@@ -196,8 +192,7 @@ class CogniacMedia(object):
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def post_data(data):
-            resp = connection.session.post(connection.url_prefix + "/media/resumable", json=data, timeout=connection.timeout)
-            raise_errors(resp)
+            resp = connection._post("/media/resumable", json=data)
             return resp.json()
 
         filesize = stat(filename).st_size
@@ -219,8 +214,7 @@ class CogniacMedia(object):
                     'video_file_chunk_no': chunk_no}
 
             files = {'file': chunk}
-            resp = connection.session.post(connection.url_prefix + "/media/resumable", data=data, files=files, timeout=connection.timeout)
-            raise_errors(resp)
+            resp = connection._post("/media/resumable", data=data, files=files)
             return resp.json()
 
         mfp = open(filename, 'r')
@@ -243,11 +237,11 @@ class CogniacMedia(object):
         """
         delete the media object
         """
-        resp = self._cc.session.delete(self._cc.url_prefix + "/media/%s" % self.media_id, timeout=self._cc.timeout)
-        raise_errors(resp)
+        self._cc._delete("/media/%s" % self.media_id)
         self.__dict__.clear()
 
-    def download(self, filep=None, resize=None):
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def download(self, filep=None, resize=None, timeout=60):
         """
         Download the original or resized media file and return as a string or write to a file.
 
@@ -257,6 +251,8 @@ class CogniacMedia(object):
         resize:  resize size in pixels (currently 454, 750, or 1334)
                  if resize is None: return original media, not resized media
                  resize is only applicable to still images, not video media.
+
+        timeout: timeout in seconds
         """
         url = self.media_url
         if resize is not None and self.resize_urls is not None:
@@ -267,7 +263,7 @@ class CogniacMedia(object):
         if filep is not None:
             stream = True  # user requests output to file so stream potentially large results
 
-        resp = requests.get(url, stream=stream, timeout=self._cc.timeout)
+        resp = requests.get(url, stream=stream, timeout=timeout)
         raise_errors(resp)
 
         if filep is None:  # return response all at once
@@ -304,13 +300,12 @@ class CogniacMedia(object):
         app_data          Optional extra app-specific data
         """
 
-        url = self._cc.url_prefix + "/media/%s/detections" % (self.media_id)
+        url = "/media/%s/detections" % (self.media_id)
 
         if wait_capture_id is not None:
             url += "?wait_capture_id=%s" % wait_capture_id
 
-        resp = self._cc.session.get(url, timeout=self._cc.timeout)
-        raise_errors(resp)
+        resp = self._cc._get(url)
         return resp.json()['detections']
 
     ##
@@ -343,7 +338,5 @@ class CogniacMedia(object):
                          Some application types only support 'True' or None.
                          }
         """
-        url = self._cc.url_prefix + "/media/%s/subjects" % (self.media_id)
-        resp = self._cc.session.get(url, timeout=self._cc.timeout)
-        raise_errors(resp)
+        resp = self._cc._get("/media/%s/subjects" % (self.media_id))
         return resp.json()['data']
