@@ -7,13 +7,12 @@ Copyright (C) 2016 Cogniac Corporation.
 """
 
 import os
-from hashlib import md5
 
 import requests
 from retrying import retry
 from requests.auth import HTTPBasicAuth
 
-from common import server_error, raise_errors
+from common import server_error, raise_errors, CredentialError, credential_error
 
 from app     import CogniacApplication
 from subject import CogniacSubject
@@ -55,7 +54,7 @@ class CogniacConnection(object):
         raise_errors(resp)
         return resp.json()
 
-    def __init__(self, username=None, password=None, tenant_id=None, timeout=20, url_prefix="https://api.cogniac.io/1"):
+    def __init__(self, username=None, password=None, tenant_id=None, timeout=60, url_prefix="https://api.cogniac.io/1"):
         """
         Create an authenticated CogniacConnection with the following credentials:
 
@@ -96,6 +95,8 @@ class CogniacConnection(object):
             url_prefix = os.environ['COG_URL_PREFIX']
 
         self.url_prefix = url_prefix
+        self.timeout = timeout
+
         print "Connecting to Cogniac system at %s" % url_prefix
 
         if tenant_id is None:
@@ -105,30 +106,78 @@ class CogniacConnection(object):
                 tenants = CogniacConnection.get_all_authorized_tenants(username, password, url_prefix)['tenants']
                 if len(tenants) > 1:
                     print "\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:"
-                    tenants.sort(key=lambda x:x['name'])
+                    tenants.sort(key=lambda x: x['name'])
                     for tenant in tenants:
                         print "%24s (%s)    export COG_TENANT='%s'" % (tenant['name'], tenant['tenant_id'], tenant['tenant_id'])
                     print
                     raise Exception("Unspecified tenant")
                 tenant_id = tenants[0]['tenant_id']
 
-        self.timeout = timeout
-        self.session = requests.Session()
+        self.username = username
+        self.password = password
+        self.tenant_id = tenant_id
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-        def authenticate(username, password, tenant_id):
-            #  Authenticate to the cogniac system using a username and password.
-            #  Save the http Authorization headers that can be used for subsequent http requests to the cogniac API.
-            tenant_data = {"tenant_id": tenant_id}
-            resp = requests.get(url_prefix + "/oauth/token", params=tenant_data, auth=HTTPBasicAuth(username, password), timeout=self.timeout)
-            raise_errors(resp)
-
-            token = resp.json()
-            headers = {"Authorization": "Bearer %s" % token['access_token']}
-            self.session.headers.update(headers)
-
-        authenticate(username, password, tenant_id)
+        # get and store auth headers
+        self.__authenticate()
         self.tenant = CogniacTenant.get(self)
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def __authenticate(self):
+        #  Authenticate to the cogniac system using a username and password.
+        #  Save the http Authorization headers that can be used for subsequent http requests to the cogniac API.
+        tenant_data = {"tenant_id": self.tenant_id}
+        resp = requests.get(self.url_prefix + "/oauth/token", params=tenant_data, auth=HTTPBasicAuth(self.username, self.password), timeout=self.timeout)
+        raise_errors(resp)
+
+        token = resp.json()
+        headers = {"Authorization": "Bearer %s" % token['access_token']}
+        self.session = requests.Session()
+        self.session.headers.update(headers)
+
+    @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
+    def _get(self, url, timeout=None, **kwargs):
+        """
+        wrap requests session to re-authenticate on credential expiration
+        """
+        if timeout is None:
+            timeout = self.timeout
+        try:
+            resp = self.session.get(self.url_prefix + url, timeout=timeout, **kwargs)
+        except CredentialError:
+            self.__authenticate()
+            raise
+        raise_errors(resp)
+        return resp
+
+    @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
+    def _post(self, url, timeout=None, **kwargs):
+        """
+        wrap requests session to re-authenticate on credential expiration
+        """
+        if timeout is None:
+            timeout = self.timeout
+        try:
+            resp = self.session.post(self.url_prefix + url, timeout=timeout, **kwargs)
+        except CredentialError:
+            self.__authenticate()
+            raise
+        raise_errors(resp)
+        return resp
+
+    @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
+    def _delete(self, url, timeout, **kwargs):
+        """
+        wrap requests session to re-authenticate on credential expiration
+        """
+        if timeout is None:
+            timeout = self.timeout
+        try:
+            resp = self.session.delete(self.url_prefix + url, timeout=timeout, **kwargs)
+        except CredentialError:
+            self.__authenticate()
+            raise
+        raise_errors(resp)
+        return resp
 
     def get_tenant(self):
         """
@@ -295,7 +344,7 @@ class CogniacConnection(object):
             url = self.url_prefix + "/authversion"
         else:
             url = self.url_prefix + "/version"
-        resp = self.session.get(url)
+        resp = self._get(url)
         raise_errors(resp)
         return resp.json()
 
