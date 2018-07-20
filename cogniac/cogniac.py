@@ -139,10 +139,12 @@ class CogniacConnection(object):
         """
         wrap requests session to re-authenticate on credential expiration
         """
+        if url[:8] != "https://":
+            url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
         try:
-            resp = self.session.get(self.url_prefix + url, timeout=timeout, **kwargs)
+            resp = self.session.get(url, timeout=timeout, **kwargs)
         except CredentialError:
             self.__authenticate()
             raise
@@ -154,10 +156,12 @@ class CogniacConnection(object):
         """
         wrap requests session to re-authenticate on credential expiration
         """
+        if url[:8] != "https://":
+            url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
         try:
-            resp = self.session.post(self.url_prefix + url, timeout=timeout, **kwargs)
+            resp = self.session.post(url, timeout=timeout, **kwargs)
         except CredentialError:
             self.__authenticate()
             raise
@@ -169,10 +173,12 @@ class CogniacConnection(object):
         """
         wrap requests session to re-authenticate on credential expiration
         """
+        if url[:8] != "https://":
+            url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
         try:
-            resp = self.session.delete(self.url_prefix + url, timeout=timeout, **kwargs)
+            resp = self.session.delete(url, timeout=timeout, **kwargs)
         except CredentialError:
             self.__authenticate()
             raise
