@@ -7,21 +7,28 @@ The main entry point is the CogniacConnection object which is created as follows
 CogniacConnection(username, password, tenant_id)
 
         Create an authenticated CogniacConnection with the following credentials:
-
+        
         username (String):            The Cogniac account username (usually an email address).
                                       If username is None, then use the contents of the
                                       COG_USER environment variable as the username.
-
+                                      
         password (String):            The associated Cogniac account password.
                                       If password is None, then use the contents of the
                                       COG_PASS environment variable as the username.
-
-        tenant_id (String):           tenant_id with which to assume credentials.
+                                      
+        tenant_id (String):           Cogniac tenant_id with which to assume credentials.
                                       This is only required if the user is a member of multiple tenants.
-                                      If tenant_id is None, and the user is a member of multiple tenant
+                                      If tenant_id is None, and the user is a member of multiple tenants
                                       then use the contents of the COG_TENANT environment variable
-                                      as the tenant_id.
-
+                                      will be used as the tenant.
+                                      
+        url_prefix (String):          Cogniac API url prefix.
+                                      Defaults to "https://api.cogniac.io/1" for the Cogniac cloud system.
+                                      If you are accessing an 'on-prem' version of the Cogniac system,
+                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/1'
+                                      or a custom DNS prefix assigned by your internal IT.)
+                                      The url_prefix can alternatively be set via the COG_URL_PREFIX environment variable.
+                                      
         If a user is a member of multiple tenants the user can retrieve his list of associated
         tenants via the CogniacConnection.get_all_authorized_tenants() classmethod.
 
