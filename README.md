@@ -25,9 +25,11 @@ CogniacConnection(username, password, tenant_id)
         url_prefix (String):          Cogniac API url prefix.
                                       Defaults to "https://api.cogniac.io/1" for the Cogniac cloud system.
                                       If you are accessing an 'on-prem' version of the Cogniac system,
-                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/1'
-                                      or a custom DNS prefix assigned by your internal IT.)
-                                      The url_prefix can alternatively be set via the COG_URL_PREFIX environment variable.
+                                      please set this accordingly 
+                                      (e.g. 'https://your_company_name.local.cogniac.io/1' or a custom 
+                                      DNS prefix assigned by your internal IT.)
+                                      The url_prefix can alternatively be set via the 
+                                      COG_URL_PREFIX environment variable.
                                       
         If a user is a member of multiple tenants the user can retrieve his list of associated
         tenants via the CogniacConnection.get_all_authorized_tenants() classmethod.
