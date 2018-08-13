@@ -169,7 +169,7 @@ class CogniacConnection(object):
         return resp
 
     @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
-    def _delete(self, url, timeout, **kwargs):
+    def _delete(self, url, timeout=None, **kwargs):
         """
         wrap requests session to re-authenticate on credential expiration
         """
