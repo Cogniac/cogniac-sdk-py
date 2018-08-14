@@ -145,10 +145,10 @@ class CogniacConnection(object):
             timeout = self.timeout
         try:
             resp = self.session.get(url, timeout=timeout, **kwargs)
+            raise_errors(resp)
         except CredentialError:
             self.__authenticate()
             raise
-        raise_errors(resp)
         return resp
 
     @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
@@ -162,10 +162,10 @@ class CogniacConnection(object):
             timeout = self.timeout
         try:
             resp = self.session.post(url, timeout=timeout, **kwargs)
+            raise_errors(resp)
         except CredentialError:
             self.__authenticate()
             raise
-        raise_errors(resp)
         return resp
 
     @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
@@ -179,10 +179,10 @@ class CogniacConnection(object):
             timeout = self.timeout
         try:
             resp = self.session.delete(url, timeout=timeout, **kwargs)
+            raise_errors(resp)
         except CredentialError:
             self.__authenticate()
             raise
-        raise_errors(resp)
         return resp
 
     def get_tenant(self):
