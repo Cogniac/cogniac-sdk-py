@@ -255,7 +255,7 @@ class CogniacApplication(object):
 
         resp = self._cc._get("/applications/%s/ccppkg" % self.application_id, json={"ccp_filename": modelname})
 
-        fp = open(modelname, "w")
+        fp = open(modelname, "wb")
         fp.write(resp.content)
         fp.close()
         return modelname

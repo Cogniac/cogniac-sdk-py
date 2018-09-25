@@ -181,7 +181,7 @@ class CogniacMedia(object):
             return the md5 hexdigest of a potentially very large file
             """
             md = md5()
-            fp = open(filename)
+            fp = open(filename, 'rb')
             while True:
                 block = fp.read(8*1024*1024)
                 if not block:
@@ -217,7 +217,7 @@ class CogniacMedia(object):
             resp = connection._post("/media/resumable", data=data, files=files)
             return resp.json()
 
-        mfp = open(filename, 'r')
+        mfp = open(filename, 'rb')
         idx = 1
         while True:
             chunk = mfp.read(chunk_size)
