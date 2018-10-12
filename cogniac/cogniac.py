@@ -126,7 +126,7 @@ class CogniacConnection(object):
         #  Authenticate to the cogniac system using a username and password.
         #  Save the http Authorization headers that can be used for subsequent http requests to the cogniac API.
         tenant_data = {"tenant_id": self.tenant_id}
-        resp = requests.get(self.url_prefix + "/oauth/token", params=tenant_data, auth=HTTPBasicAuth(self.username, self.password), timeout=self.timeout)
+        resp = requests.get(self.url_prefix + "/token", params=tenant_data, auth=HTTPBasicAuth(self.username, self.password), timeout=self.timeout)
         raise_errors(resp)
 
         token = resp.json()
