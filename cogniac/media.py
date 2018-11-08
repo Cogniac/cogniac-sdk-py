@@ -263,7 +263,10 @@ class CogniacMedia(object):
         if filep is not None:
             stream = True  # user requests output to file so stream potentially large results
 
-        resp = requests.get(url, stream=stream, timeout=timeout)
+        if 'cogniac-media' in url:
+            resp = requests.get(url, stream=stream, timeout=timeout)
+        else:
+            resp = self._cc._get(url, stream=stream, timeout=timeout)
         raise_errors(resp)
 
         if filep is None:  # return response all at once
