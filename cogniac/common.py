@@ -9,14 +9,23 @@ from requests.exceptions import ConnectionError
 
 class CredentialError(Exception):
     """Invalid Username/Password Credentials"""
+    status_code = 401
 
 
 class ServerError(Exception):
-    """Unknown API Error"""
+    """Unknown server-side error. Operation can be retried."""
 
 
 class ClientError(Exception):
-    """Error with the call parameters (e.g. 4xx)"""
+    """Error with the client-supplied parameters.
+    Operation should not be retried with the same parameters."""
+    status_code = 400
+
+    def __init__(self, message, status_code=None):
+        Exception.__init__(self)
+        self.message = message
+        if status_code is not None:
+            self.status_code = status_code
 
 
 def credential_error(exception):
@@ -42,4 +51,4 @@ def raise_errors(response):
 
     if response.status_code >= 400:
         msg = "ClientError (%d): %s" % (response.status_code, response.content)
-        raise ClientError(msg)
+        raise ClientError(msg, response.status_code)

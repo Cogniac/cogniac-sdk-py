@@ -139,7 +139,7 @@ class CogniacConnection(object):
         """
         wrap requests session to re-authenticate on credential expiration
         """
-        if url[:8] != "https://":
+        if not url.startswith("http"):
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
