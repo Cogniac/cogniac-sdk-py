@@ -241,23 +241,16 @@ class CogniacMedia(object):
         self.__dict__.clear()
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def download(self, filep=None, resize=None, timeout=60):
+    def download(self, filep=None, timeout=60):
         """
         Download the original or resized media file and return as a string or write to a file.
 
         filep:   open file object to store downloaded media
                  If filep is None: return the media as a string
 
-        resize:  resize size in pixels (currently 454, 750, or 1334)
-                 if resize is None: return original media, not resized media
-                 resize is only applicable to still images, not video media.
-
         timeout: timeout in seconds
         """
         url = self.media_url
-        if resize is not None and self.resize_urls is not None:
-            if resize in self.resize_urls:
-                url = self.resize_urls[resize]
 
         stream = False
         if filep is not None:
