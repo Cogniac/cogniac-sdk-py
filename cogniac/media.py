@@ -243,7 +243,7 @@ class CogniacMedia(object):
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def download(self, filep=None, timeout=60):
         """
-        Download the original or resized media file and return as a string or write to a file.
+        Download the media file and return as a string or write to a file.
 
         filep:   open file object to store downloaded media
                  If filep is None: return the media as a string
