@@ -27,6 +27,9 @@ class ClientError(Exception):
         if status_code is not None:
             self.status_code = status_code
 
+    def __str__(self):
+        return self.message
+
 
 def credential_error(exception):
     return isinstance(exception, CredentialError)

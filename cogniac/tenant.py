@@ -9,7 +9,9 @@ import json
 from retrying import retry
 from common import *
 
-immutable_fields = ['aws_region', 'created_at', 'created_by', 'modified_at', 'modified_by', 'tenant_type', 'tenant_id']
+immutable_fields = ['region', 'created_at', 'created_by', 'modified_at', 'modified_by', 'tenant_id']
+
+mutable_keys = ['name', 'description', 'azure_sas_tokens']
 
 ##
 #   CogniacTenant
@@ -20,9 +22,10 @@ class CogniacTenant(object):
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def get(cls, connection):
         resp = connection._get("/tenants/current")
-        return CogniacTenant(json.loads(resp.content))
+        return CogniacTenant(connection, json.loads(resp.content))
 
-    def __init__(self, tenant_dict):
+    def __init__(self, connection, tenant_dict):
+        self._cc = connection
         for k, v in tenant_dict.items():
             super(CogniacTenant, self).__setattr__(k, v)
 
@@ -35,5 +38,10 @@ class CogniacTenant(object):
     def __setattr__(self, name, value):
         if name in immutable_fields:
             raise AttributeError("%s is immutable" % name)
-        if name in ['name', 'description']:
-            raise AttributeError("sdk does not support editing tenant objects")
+        if name in mutable_keys:
+            data = {name: value}
+            resp = self._cc._post("/tenants/%s" % self.tenant_id, json=data)
+            for k, v in resp.json().items():
+                super(CogniacTenant, self).__setattr__(k, v)
+            return
+        super(CogniacTenant, self).__setattr__(name, value)
