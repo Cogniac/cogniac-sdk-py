@@ -54,17 +54,27 @@ class CogniacConnection(object):
         raise_errors(resp)
         return resp.json()
 
-    def __init__(self, username=None, password=None, tenant_id=None, timeout=60, url_prefix="https://api.cogniac.io/1"):
+    def __init__(self,
+                 username=None,
+                 password=None,
+                 api_key=None,
+                 tenant_id=None,
+                 timeout=60,
+                 url_prefix="https://api.cogniac.io/1"):
         """
         Create an authenticated CogniacConnection with the following credentials:
 
         username (String):            The Cogniac account username (usually an email address).
-                                      If username is None, then use the contents of the
-                                      COG_USER environment variable as the username.
+                                      The username can also be supplied via the COG_USER 
+                                      environment variable.
 
         password (String):            The associated Cogniac account password.
-                                      If password is None, then use the contents of the
-                                      COG_PASS environment variable as the username.
+                                      The password can also be supplied via the COG_PASS
+                                      environment variable.                                      
+
+        api_key (String):             A Cogniac-issued API key that can be used as a substitute for
+                                      a username+password.  The api_key can also be supplied via the
+                                      COG_API_KEY environment variable.
 
         tenant_id (String):           Cogniac tenant_id with which to assume credentials.
                                       This is only required if the user is a member of multiple tenants.
@@ -82,8 +92,15 @@ class CogniacConnection(object):
         If a user is a member of multiple tenants the user can retrieve his list of associated
         tenants via the CogniacConnection.get_all_authorized_tenants() classmethod.
         """
-
-        if username is None and password is None:
+        self.api_key = None
+        if api_key is not None:
+            self.api_key = api_key
+        elif 'COG_API_KEY' in os.environ:
+            self.api_key = os.environ['COG_API_KEY']
+        elif username is not None and password is not None:
+            self.username = username
+            self.password = password
+        else:
             # credentials not specified, use environment variables if found
             try:
                 username = os.environ['COG_USER']
@@ -103,18 +120,24 @@ class CogniacConnection(object):
             try:
                 tenant_id = os.environ['COG_TENANT']
             except:
+                if self.api_key:
+                    print "tenant_id must be explicitly specified when using api_key"
+                    raise Exception("Unspecified tenabnt")
+
+                # get list of user's tenants
                 tenants = CogniacConnection.get_all_authorized_tenants(username, password, url_prefix)['tenants']
-                if len(tenants) > 1:
+                if len(tenants) == 1:
+                    # only one choice -- automatically use that
+                    tenant_id = tenants[0]['tenant_id']                                        
+                else:
+                    # try to be helpful and provider interactive user with a list of valid tenants                    
                     print "\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:"
                     tenants.sort(key=lambda x: x['name'])
                     for tenant in tenants:
                         print "%24s (%s)    export COG_TENANT='%s'" % (tenant['name'], tenant['tenant_id'], tenant['tenant_id'])
                     print
                     raise Exception("Unspecified tenant")
-                tenant_id = tenants[0]['tenant_id']
 
-        self.username = username
-        self.password = password
         self.tenant_id = tenant_id
 
         # get and store auth headers
@@ -123,10 +146,21 @@ class CogniacConnection(object):
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __authenticate(self):
-        #  Authenticate to the cogniac system using a username and password.
+        #  Authenticate to the cogniac system using a username and password or an API KEY
         #  Save the http Authorization headers that can be used for subsequent http requests to the cogniac API.
         tenant_data = {"tenant_id": self.tenant_id}
-        resp = requests.get(self.url_prefix + "/token", params=tenant_data, auth=HTTPBasicAuth(self.username, self.password), timeout=self.timeout)
+        if self.api_key:
+            # trade API KEY for user+tenant token
+            resp = requests.get(self.url_prefix + "/token",
+                                params=tenant_data,
+                                headers={"Authorization": "Key %s" % self.api_key},
+                                timeout=self.timeout)
+        else:
+            # trade username/password for user+tenant token
+            resp = requests.get(self.url_prefix + "/token",
+                                params=tenant_data,
+                                auth=HTTPBasicAuth(self.username, self.password),
+                                timeout=self.timeout)
         raise_errors(resp)
 
         token = resp.json()
