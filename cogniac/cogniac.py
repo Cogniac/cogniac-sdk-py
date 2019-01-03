@@ -105,6 +105,8 @@ class CogniacConnection(object):
             try:
                 username = os.environ['COG_USER']
                 password = os.environ['COG_PASS']
+                self.username = username
+                self.password = password
             except:
                 raise Exception("No Cogniac Credentials. Specify username and password or set COG_USER, COG_PASS or COG_API_TOKEN environment variables.")
 
