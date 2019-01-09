@@ -41,13 +41,14 @@ The main entry point is the CogniacConnection object which is created as follows
         If a user is a member of multiple tenants the user can retrieve his list of associated
         tenants via the CogniacConnection.get_all_authorized_tenants() classmethod.
 
-CogniacCOnnection Environment Variables:
+Environment Variables:
 
     The CogniacConnection can be configured using the following environment variables:
 
-    COG_USER               Cogniac system username
+    COG_USER               Cogniac system username (usually an email address)
     COG_PASS               Cogniac user password
-    COG_API_KEY            Cogniac system API Key associated with an invidiaul Cogniac system user
+    COG_API_KEY            Cogniac system API Key associated with an individual Cogniac system user
+                           (Alternative to username/password)
     COG_TENANT             Cogniac system tenant_id
     COG_URL_PREFIX         Cogniac system API end-point of the form "https://FQDN/API_VERSION"
 
