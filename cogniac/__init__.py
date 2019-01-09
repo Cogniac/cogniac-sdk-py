@@ -6,23 +6,40 @@ Copyright (C) 2016 Cogniac Corporation.
 This client library provides access to most of the common functionality of the Cogniac public API.
 
 
-CogniacConnection(username, password, tenant_id)
+CogniacConnection(username=None,
+                  password=None,
+                  api_key=None,
+                  tenant_id=None,
+                  timeout=60,
+                  url_prefix="https://api.cogniac.io/1")
 
         Create an authenticated CogniacConnection with the following credentials:
+
 
         username (String):            The Cogniac account username (usually an email address).
                                       If username is None, then use the contents of the
                                       COG_USER environment variable as the username.
 
         password (String):            The associated Cogniac account password.
-                                      If password is None, then use the contents of the
-                                      COG_PASS environment variable as the username.
+                                      The password can also be supplied via the COG_PASS
+                                      environment variable.
 
-        tenant_id (String):           tenant_id with which to assume credentials.
+        api_key (String):             A Cogniac-issued API key that can be used as a substitute for
+                                      a username+password.  The api_key can also be supplied via the
+                                      COG_API_KEY environment variable.
+
+        tenant_id (String):           Cogniac tenant_id with which to assume credentials.
                                       This is only required if the user is a member of multiple tenants.
-                                      If tenant_id is None, and the user is a member of multiple tenant
+                                      If tenant_id is None, and the user is a member of multiple tenants
                                       then use the contents of the COG_TENANT environment variable
-                                      as the tenant_id.
+                                      will be used as the tenant.
+
+        url_prefix (String):          Cogniac API url prefix.
+                                      Defaults to "https://api.cogniac.io/1" for the Cogniac cloud system.
+                                      If you are accessing an 'on-prem' version of the Cogniac system,
+                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/1'
+                                      or a custom DNS prefix assigned by your internal IT.)
+                                      The url_prefix can alternatively be set via the COG_URL_PREFIX environment variable.
 
         If a user is a member of multiple tenants the user can retrieve his list of associated
         tenants via the CogniacConnection.get_all_authorized_tenants() classmethod.
@@ -30,7 +47,7 @@ CogniacConnection(username, password, tenant_id)
 
 CogniacConnection has a number of helper functions for working with Cogniac
 common Cogniac objects such as applications, subjects, and media:
-        
+
     get_all_applications
         return CogniacApplications for all applications belonging to the currently authenticated tenant
 
@@ -45,13 +62,13 @@ common Cogniac objects such as applications, subjects, and media:
 
     get_subject
         return an existing CogniacSubject
-        
+
     create_subject
         Create a CogniacSubject
 
     get_media
         return CogniacMedia object for an existing media item
-        
+
     create_media
         create a new cogniac media item
 
@@ -61,7 +78,7 @@ common Cogniac objects such as applications, subjects, and media:
 
 CogniacApplication
     An object representing an Application in the Cogniac System.
-    
+
     Applications are the main locus of activity within the Cogniac System.
 
     This classes manages applications within the Cogniac System via the
@@ -81,7 +98,7 @@ CogniacApplication
 
  CogniacSubject
     An object representing a Subject in the Cogniac System.
-    
+
     Subjects are a central organizational mechanism in the Cogniac system.
     A subject is any user-defined concept that is relevant to images or video.
     More generally a subject can represent any logical grouping of images of video.

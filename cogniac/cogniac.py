@@ -65,12 +65,12 @@ class CogniacConnection(object):
         Create an authenticated CogniacConnection with the following credentials:
 
         username (String):            The Cogniac account username (usually an email address).
-                                      The username can also be supplied via the COG_USER 
+                                      The username can also be supplied via the COG_USER
                                       environment variable.
 
         password (String):            The associated Cogniac account password.
                                       The password can also be supplied via the COG_PASS
-                                      environment variable.                                      
+                                      environment variable.
 
         api_key (String):             A Cogniac-issued API key that can be used as a substitute for
                                       a username+password.  The api_key can also be supplied via the
