@@ -108,7 +108,7 @@ class CogniacConnection(object):
                 self.username = username
                 self.password = password
             except:
-                raise Exception("No Cogniac Credentials. Specify username and password or set COG_USER, COG_PASS or COG_API_TOKEN environment variables.")
+                raise Exception("No Cogniac Credentials. Specify username and password or set COG_USER, COG_PASS or COG_API_KEY environment variables.")
 
         if 'COG_URL_PREFIX' in os.environ:
             url_prefix = os.environ['COG_URL_PREFIX']
