@@ -13,6 +13,12 @@ immutable_fields = ['region', 'created_at', 'created_by', 'modified_at', 'modifi
 
 mutable_keys = ['name', 'description', 'azure_sas_tokens']
 
+TENANT_ADMIN_ROLE = "tenant_admin"
+TENANT_USER_ROLE = "tenant_user"
+TENANT_REVIEWER_ROLE = "tenant_viewer"
+TENANT_BILLING_ROLE = "tenant_billing"
+
+
 ##
 #   CogniacTenant
 ##
@@ -45,3 +51,15 @@ class CogniacTenant(object):
                 super(CogniacTenant, self).__setattr__(k, v)
             return
         super(CogniacTenant, self).__setattr__(name, value)
+
+    def users(self):
+        resp = self._cc._get("/tenants/%s/users" % self.tenant_id)
+        return resp.json()['data']
+
+    def set_user_role(self, user_email, role):
+        users = self.users()
+        users = [u for u in self.users() if u['email'] == user_email]
+        if not users:
+            raise Exception("unknown user_email %s" % user_email)
+        data = {'user_id': users[0]['user_id'], 'role': role}
+        self._cc._post("/tenants/%s/users/role" % self.tenant_id, json=data)
