@@ -6,10 +6,8 @@ from tabulate import tabulate
 import datetime
 import os
 
-cc = None
-S = None
-
-
+__builtins__['cc'] = None
+__builtins__['S'] = None
 
 
 def print_tenants(tenants):
@@ -45,12 +43,12 @@ def authenticate(tenant_id):
     store CogniacConnection in cc object
     load all Cogniac Subjects into S object
     """
-    global cc
-    global S
     cc = cogniac.CogniacConnection(tenant_id=tenant_id)
+    __builtins__['cc'] = cc  # workaround ipython silliness
     print cc.tenant
     print "Adding all subjects to S"
     S = Subjects()
+    __builtins__['S'] = S
     print "Type S.<tab> to autocomplete subjects"
 print "added ipython magic %authenticate"
 
