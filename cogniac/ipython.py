@@ -9,12 +9,7 @@ import os
 cc = None
 S = None
 
-try:
-    username = os.environ['COG_USER']
-    password = os.environ['COG_PASS']
-except:
-    print "No Cogniac Credentials. Specify username and password or set COG_USER and COG_PASS environment variables."
-    os._exit(1)
+
 
 
 def print_tenants(tenants):
@@ -29,7 +24,8 @@ def print_tenants(tenants):
 def tenants(line):
     tenants = cogniac.CogniacConnection.get_all_authorized_tenants(username, password)['tenants']
     print_tenants(tenants)
-print "added %tenants ipython magic command"
+
+print "added ipython magic %tenants"
 
 
 class Subjects(object):
@@ -51,13 +47,12 @@ def authenticate(tenant_id):
     """
     global cc
     global S
-    print "Authenticating..."
     cc = cogniac.CogniacConnection(tenant_id=tenant_id)
     print cc.tenant
     print "Adding all subjects to S"
     S = Subjects()
     print "Type S.<tab> to autocomplete subjects"
-print "added %authenticate ipython magic command"
+print "added ipython magic %authenticate"
 
 
 def print_detections(detections):
@@ -83,7 +78,7 @@ def media_detections(media_id):
         print "media_id %s not found" % media_id
         return
     print_detections(media.detections())
-print "added %media_detections ipython magic command"
+print "added ipython magic %media_detections"
 
 
 def print_subjects(media_subjects):
@@ -108,10 +103,25 @@ def media_subjects(media_id):
         return
 
     print_subjects(media.subjects())
-print "added %media_subjects ipython magic command"
+print "added ipython magic %media_subjects"
+
+
+try:
+    username = os.environ['COG_USER']
+    password = os.environ['COG_PASS']
+    print "found environment credentials for %s" % username
+except:
+    print "No Cogniac Credentials. Specify username and password or set COG_USER and COG_PASS environment variables."
+    os._exit(1)
 
 
 if 'COG_TENANT' in os.environ:
-    authenticate(os.environ['COG_TENANT'])
+    tenant_id = os.environ['COG_TENANT']
+    print "found COG_TENANT %s" % tenant_id
+    authenticate(tenant_id)
 else:
-    tenants("")
+    tenant_list = cogniac.CogniacConnection.get_all_authorized_tenants(username, password)['tenants']
+    if len(tenant_list) == 1:
+        authenticate(tenant_list[0]['tenant_id'])
+    else:
+        print_tenants(tenant_list)
