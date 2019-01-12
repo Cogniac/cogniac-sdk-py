@@ -6,6 +6,9 @@ from tabulate import tabulate
 import datetime
 import os
 
+cc = None
+S = None
+
 try:
     username = os.environ['COG_USER']
     password = os.environ['COG_PASS']
@@ -13,21 +16,20 @@ except:
     print "No Cogniac Credentials. Specify username and password or set COG_USER and COG_PASS environment variables."
     os._exit(1)
 
-try:
-    tenant_id = os.environ['COG_TENANT']
-except:
+
+def print_tenants(tenants):
+    tenants.sort(key=lambda x: x['name'])
+    data = [['tenant_id', 'name']]
+    for tenant in tenants:
+        data.append([tenant['tenant_id'], tenant['name']])
+    print tabulate(data, headers='firstrow')
+
+
+@register_line_magic
+def tenants(line):
     tenants = cogniac.CogniacConnection.get_all_authorized_tenants(username, password)['tenants']
-    if len(tenants) > 1:
-        print "\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:"
-        tenants.sort(key=lambda x:x['name'])        
-        for tenant in tenants:
-            print "%24s (%s)    export COG_TENANT='%s'" % (tenant['name'], tenant['tenant_id'], tenant['tenant_id'])
-    os._exit(1)
-
-print "Authenticating..."
-cc = cogniac.CogniacConnection()
-
-print cc.tenant
+    print_tenants(tenants)
+print "added %tenants ipython magic command"
 
 
 class Subjects(object):
@@ -38,9 +40,25 @@ class Subjects(object):
             self.__setattr__(key, subject)
             count += 1
         print 'added', count, 'subjects'
-print "Adding all subjects to S"
-S = Subjects()
-print "Type S.<tab> to autocomplete subjects"
+
+
+@register_line_magic
+def authenticate(tenant_id):
+    """
+    authenticate to the specified tenant_id
+    store CogniacConnection in cc object
+    load all Cogniac Subjects into S object
+    """
+    global cc
+    global S
+    print "Authenticating..."
+    cc = cogniac.CogniacConnection(tenant_id=tenant_id)
+    print cc.tenant
+    print "Adding all subjects to S"
+    S = Subjects()
+    print "Type S.<tab> to autocomplete subjects"
+print "added %authenticate ipython magic command"
+
 
 def print_detections(detections):
     # remove None values from dict
@@ -65,6 +83,7 @@ def media_detections(media_id):
         print "media_id %s not found" % media_id
         return
     print_detections(media.detections())
+print "added %media_detections ipython magic command"
 
 
 def print_subjects(media_subjects):
@@ -89,7 +108,10 @@ def media_subjects(media_id):
         return
 
     print_subjects(media.subjects())
+print "added %media_subjects ipython magic command"
 
-print "added %media_subjects and %media_detections ipython magic commands"
 
-
+if 'COG_TENANT' in os.environ:
+    authenticate(os.environ['COG_TENANT'])
+else:
+    tenants("")
