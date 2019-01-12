@@ -104,6 +104,23 @@ def media_subjects(media_id):
 print "added ipython magic %media_subjects"
 
 
+@register_line_magic
+def users(line):
+    def user_to_list(u):
+        try:
+            last = datetime.datetime.fromtimestamp(float(u['last_auth']))
+            last = last.strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            last = ""
+        return [u['given_name'] + " " + u['surname'], u['email'], u['role'], last, u['user_id']]
+    print "Users for tenant %s (%s)" %  (cc.tenant.name, cc.tenant.tenant_id)
+    users = cc.tenant.users()
+    users.sort(key=lambda x: x['last_auth'])
+    data = [['name', 'email', 'tenant_role', 'last_auth', 'user_id']]
+    for user in users:
+        data.append(user_to_list(user))
+    print tabulate(data, headers='firstrow')
+
 try:
     username = os.environ['COG_USER']
     password = os.environ['COG_PASS']
