@@ -7,12 +7,33 @@ Copyright (C) 2016 Cogniac Corporation
 from hashlib import md5
 from retrying import retry
 from common import *
-from os import stat
+from os import stat, path
 import requests
+import platform
+
+platform_system = platform.system()
 
 immutable_keys = ['frame', 'video', 'media_id', 'size', 'network_camera_id', 'original_url', 'image_width', 'filename', 'original_landing_url', 'uploaded_by_user', 'media_timestamp', 'media_url', 'status', 'hash', 'external_media_id', 'author_profile_url', 'media_src', 'parent_media_id',  'media_resize_urls', 'license', 'tenant_id', 'created_at', 'author', 'public', 'image_height', 'media_format', 'title', 'domain_unit']
 
 mutable_keys =['force_set', 'meta_tags']
+
+
+def file_creation_time(path_to_file):
+    """
+    Try to get the date that a file was created, falling back to when it was
+    last modified if that isn't possible.
+    See http://stackoverflow.com/a/39501288/1709587 for explanation.
+    """
+    if platform_system == 'Windows':
+        return path.getctime(path_to_file)
+    else:
+        fstat = stat(path_to_file)
+        try:
+            return fstat.st_birthtime
+        except AttributeError:
+            # We're probably on Linux. No easy way to get creation dates here,
+            # so we'll settle for when its content was last modified.
+            return fstat.st_mtime
 
 ##
 #  CogniacMedia
@@ -155,9 +176,14 @@ class CogniacMedia(object):
 
         if filename.startswith('http'):
             args['source_url'] = filename
-        elif stat(filename).st_size > 12 * 1024 * 1024:
-            # use the multipart interface for large files
-            return CogniacMedia._create_multipart(connection, filename, args)
+        else:  # local filename
+            fstat = stat(filename)
+            if 'media_timestamp' not in args:
+                # set the unspecified media timestamp to the earliest file time we have
+                args['media_timestamp'] = file_creation_time(filename)
+            if stat(filename).st_size > 12 * 1024 * 1024:
+                # use the multipart interface for large files
+                return CogniacMedia._create_multipart(connection, filename, args)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def upload():
