@@ -63,3 +63,19 @@ class CogniacTenant(object):
             raise Exception("unknown user_email %s" % user_email)
         data = {'user_id': users[0]['user_id'], 'role': role}
         self._cc._post("/tenants/%s/users/role" % self.tenant_id, json=data)
+
+    def add_user(self, user_email, role='tenant_user'):
+        users = self.users()
+        users = [u for u in self.users() if u['email'] == user_email]
+        if not users:
+            raise Exception("unknown user_email %s" % user_email)
+        data = {'user_id': users[0]['user_id'], 'role': role}
+        self._cc._post("/tenants/%s/users" % self.tenant_id, json=data)
+
+    def delete_user(self, user_email):
+        users = self.users()
+        users = [u for u in self.users() if u['email'] == user_email]
+        if not users:
+            raise Exception("unknown user_email %s" % user_email)
+        data = {'user_id': users[0]['user_id']}
+        self._cc._delete("/tenants/%s/users" % self.tenant_id, json=data)
