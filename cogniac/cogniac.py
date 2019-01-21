@@ -17,6 +17,7 @@ from common import server_error, raise_errors, CredentialError, credential_error
 from app     import CogniacApplication
 from subject import CogniacSubject
 from tenant  import CogniacTenant
+from user    import CogniacUser
 from media   import CogniacMedia
 
 
@@ -130,9 +131,9 @@ class CogniacConnection(object):
                 tenants = CogniacConnection.get_all_authorized_tenants(username, password, url_prefix)['tenants']
                 if len(tenants) == 1:
                     # only one choice -- automatically use that
-                    tenant_id = tenants[0]['tenant_id']                                        
+                    tenant_id = tenants[0]['tenant_id']
                 else:
-                    # try to be helpful and provider interactive user with a list of valid tenants                    
+                    # try to be helpful and provider interactive user with a list of valid tenants
                     print "\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:"
                     tenants.sort(key=lambda x: x['name'])
                     for tenant in tenants:
@@ -144,7 +145,11 @@ class CogniacConnection(object):
 
         # get and store auth headers
         self.__authenticate()
+
+        # get tenant and user objects associated with this connection
         self.tenant = CogniacTenant.get(self)
+        self.user = CogniacUser.get(self)
+
         if self.tenant.region is not None:
             # use tenant object's specified region preference
             print "Using API endpoint from Tenant:", self.tenant.region
