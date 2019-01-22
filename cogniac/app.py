@@ -243,15 +243,18 @@ class CogniacApplication(object):
     #  download_model
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def download_model(self):
+    def download_model(self, model_id=None):
         """
         Download the current active model for this application to a file in the current working directory and
         return the local filename which will be the same as the model name.
         """
-        resp = self._cc._get("/applications/%s/ccp" % self.application_id)
-        resp = resp.json()
-        url = resp['best_model_ccp_url']
-        modelname = url.split('/')[-1]
+        if model_id is None:
+            resp = self._cc._get("/applications/%s/ccp" % self.application_id)
+            resp = resp.json()
+            url = resp['best_model_ccp_url']
+            modelname = url.split('/')[-1]
+        else:
+            modelname = model_id.split('/')[-1]
 
         resp = self._cc._get("/applications/%s/ccppkg" % self.application_id, json={"ccp_filename": modelname})
 
