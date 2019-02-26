@@ -333,11 +333,11 @@ class CogniacConnection(object):
         """
         return CogniacMedia.get(self, media_id)
 
-    def search_media(self, md5=None, filename=None, external_media_id=None):
+    def search_media(self, md5=None, filename=None, external_media_id=None, domain_unit=None):
         """
         return list of CogniacMedia within tenant based on specified md5, filename, or external_media_id
         """
-        return CogniacMedia.search(self, md5, filename, external_media_id)
+        return CogniacMedia.search(self, md5, filename, external_media_id, domain_unit)
 
     def create_media(self,
                      filename,

@@ -59,7 +59,7 @@ class CogniacMedia(object):
         return CogniacMedia(connection, resp.json())
 
     @classmethod
-    def search(cls, connection, md5=None, filename=None, external_media_id=None):
+    def search(cls, connection, md5=None, filename=None, external_media_id=None, domain_unit=None):
         """
         Search for a CogniacMedia item in current tenant by md5, filename, or external_media_id.
 
@@ -74,15 +74,17 @@ class CogniacMedia(object):
         """
         
         if md5 is not None:
-            assert((filename is None) & (external_media_id is None))            
+            assert((filename is None) & (external_media_id is None) & (domain_unit is None))            
             query = "md5=%s" % md5
         elif filename is not None:
-            assert((md5 is None) & (external_media_id is None))                        
+            assert((md5 is None) & (external_media_id is None) & (domain_unit is None))                        
             query = "filename=%s" % filename
-        else:
-            assert((md5 is None) & (filename is None))
+        elif external_media_id is not None:
+            assert((md5 is None) & (filename is None) & (domain_unit is None))
             query = "external_media_id=%s" % external_media_id
-
+        else:
+            assert((md5 is None) & (filename is None) & (external_media_id is None))
+            query = "domain_unit=%s" % domain_unit
         resp = connection._get("/media/all/search?%s" % query)
         
         return [CogniacMedia(connection, m) for m in resp.json()['data']]
