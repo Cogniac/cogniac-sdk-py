@@ -96,11 +96,11 @@ class CogniacConnection(object):
         self.api_key = None
         if api_key is not None:
             self.api_key = api_key
-        elif 'COG_API_KEY' in os.environ:
-            self.api_key = os.environ['COG_API_KEY']
         elif username is not None and password is not None:
             self.username = username
             self.password = password
+        elif 'COG_API_KEY' in os.environ:
+            self.api_key = os.environ['COG_API_KEY']            
         else:
             # credentials not specified, use environment variables if found
             try:
