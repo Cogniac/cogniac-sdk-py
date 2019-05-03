@@ -79,3 +79,20 @@ class CogniacTenant(object):
             raise Exception("unknown user_email %s" % user_email)
         data = {'user_id': users[0]['user_id']}
         self._cc._delete("/tenants/%s/users" % self.tenant_id, json=data)
+
+    def usage(self, start, end, period='15min'):
+
+        assert(period in ['15min', 'hour', 'day'])
+        
+        url = "/usage/summary?period=%s&start=%d&end=%d" % (period, start, end)
+
+        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        def get_next(url):
+            resp = self._cc._get(url)
+            return resp.json()
+
+        while url:
+            resp = get_next(url)
+            for record in resp['data']:
+                yield record
+            url = resp['paging'].get('next')
