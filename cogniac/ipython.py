@@ -151,25 +151,28 @@ def tenant_usage_convert_for_display(ur):
 @register_line_magic
 def usage(line):
 
-    timerange_str, period = "day", "hour"
-    try:
+    if line in time_range.timeframes:
+        timerange_str = line
+        period = None
+    elif ' ' in line:
         timerange_str, period = line.split(' ')
-    except:
-        pass
+    else:
+        timerange_str, period  = "day", "hour"
 
-    print timerange_str, period 
     start_time, end_time = time_range.start_end_times(timerange_str)
-    print cc.tenant.tenant_id
-    print cc.tenant.name
-    print datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
-    print datetime.fromtimestamp(end_time).strftime('%Y-%m-%d %H:%M:%S')
+    print 'tenant id:\t', cc.tenant.tenant_id
+    print 'tenant name:\t', cc.tenant.name
+    print 'report start\t', datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
+    print 'report end\t', datetime.fromtimestamp(end_time).strftime('%Y-%m-%d %H:%M:%S')
     print
-    
+
     if not period:
         if end_time - start_time >= (60*60*24*7):
             period = "day"
         elif end_time - start_time >= (60*60*6):
             period = 'hour'
+        else:
+            period = '15min'
 
     usage = list(cc.tenant.usage(start_time, end_time, period=period))
     for ur in usage:
