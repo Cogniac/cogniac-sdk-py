@@ -3,8 +3,9 @@ from IPython.core.magic import (register_line_magic, register_cell_magic,
 
 import cogniac
 from tabulate import tabulate
-import datetime
+from datetime import datetime
 import os
+import time_range
 
 __builtins__['cc'] = None
 __builtins__['S'] = None
@@ -62,7 +63,7 @@ def print_detections(detections):
     for d in detections:
         if 'activation' in d:
             del d['activation']
-        value = datetime.datetime.fromtimestamp(d['created_at'])
+        value = datetime.fromtimestamp(d['created_at'])
         d['created_at'] = value.strftime('%Y-%m-%d %H:%M:%S')
     print tabulate(detections, headers='keys')
 
@@ -86,7 +87,7 @@ def print_subjects(media_subjects):
     for s in subjects:
         if 'timestamp' in s:
             del s['timestamp']
-        value = datetime.datetime.fromtimestamp(s['updated_at'])
+        value = datetime.fromtimestamp(s['updated_at'])
         s['updated_at'] = value.strftime('%Y-%m-%d %H:%M:%S')
     print tabulate(subjects, headers='keys')
 
@@ -108,7 +109,7 @@ print "added ipython magic %media_subjects"
 def users(line):
     def user_to_list(u):
         try:
-            last = datetime.datetime.fromtimestamp(float(u['last_auth']))
+            last = datetime.fromtimestamp(float(u['last_auth']))
             last = last.strftime('%Y-%m-%d %H:%M:%S')
         except:
             last = ""
@@ -120,6 +121,65 @@ def users(line):
     for user in users:
         data.append(user_to_list(user))
     print tabulate(data, headers='firstrow')
+
+
+
+@register_line_magic
+def timeranges(line):
+    """
+    print list of valid timeframe selector strings, their corresponding current values, and description
+    """
+    time_range.help()
+print "added ipython magic %timeranges"
+
+
+def tenant_usage_convert_for_display(ur):
+    value = datetime.fromtimestamp(ur['start_time'])
+    ur['start_time'] = value.strftime('%Y-%m-%d %H:%M:%S')
+    value = datetime.fromtimestamp(ur['end_time'])
+    ur['end_time'] = value.strftime('%Y-%m-%d %H:%M:%S')
+    ur['app_count'] = len(ur['active_model_apps'])
+    gb = float(ur.get('media_bytes', 0)) / 1e9
+    if gb < 1000:
+        ur['media_GB'] = round(gb, 1)
+    else:
+        ur['media_GB'] = round(gb, 0)
+    if 'media_count' not in ur:
+        ur['media_count'] = 0
+
+
+@register_line_magic
+def usage(line):
+
+    timerange_str, period = "day", "hour"
+    try:
+        timerange_str, period = line.split(' ')
+    except:
+        pass
+
+    print timerange_str, period 
+    start_time, end_time = time_range.start_end_times(timerange_str)
+    print cc.tenant.tenant_id
+    print cc.tenant.name
+    print datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
+    print datetime.fromtimestamp(end_time).strftime('%Y-%m-%d %H:%M:%S')
+    print
+    
+    if not period:
+        if end_time - start_time >= (60*60*24*7):
+            period = "day"
+        elif end_time - start_time >= (60*60*6):
+            period = 'hour'
+
+    usage = list(cc.tenant.usage(start_time, end_time, period=period))
+    for ur in usage:
+        tenant_usage_convert_for_display(ur)
+
+    tenant_headers = ['start_time', 'end_time', 'amu', 'model_outputs', 'user_feedback', 'other_outputs', 'app_count', 'media_count', 'media_GB']
+
+    data = [tenant_headers] + [[d.get(h) for h in tenant_headers] for d in usage]
+    print tabulate(data, headers='firstrow')
+print "added ipython magic %usage"
 
 try:
     username = os.environ['COG_USER']
