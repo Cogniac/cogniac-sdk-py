@@ -7,7 +7,7 @@ Copyright (C) 2016 Cogniac Corporation.
 """
 
 import os
-
+import logging
 import requests
 from retrying import retry
 from requests.auth import HTTPBasicAuth
@@ -19,6 +19,8 @@ from subject import CogniacSubject
 from tenant  import CogniacTenant
 from user    import CogniacUser
 from media   import CogniacMedia
+
+logger = logging.getLogger(__name__)
 
 
 ###
@@ -117,7 +119,7 @@ class CogniacConnection(object):
         self.url_prefix = url_prefix
         self.timeout = timeout
 
-        print "Connecting to Cogniac system at %s" % url_prefix
+        logger.info("Connecting to Cogniac system at %s" % url_prefix)
 
         if tenant_id is None:
             try:
