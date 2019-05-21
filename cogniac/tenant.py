@@ -9,13 +9,10 @@ import json
 from retrying import retry
 from common import *
 
-immutable_fields = ['region', 'created_at', 'created_by', 'modified_at', 'modified_by', 'tenant_id']
-
-mutable_keys = ['name', 'description', 'azure_sas_tokens']
 
 TENANT_ADMIN_ROLE = "tenant_admin"
 TENANT_USER_ROLE = "tenant_user"
-TENANT_REVIEWER_ROLE = "tenant_viewer"
+TENANT_VIEWER_ROLE = "tenant_viewer"
 TENANT_BILLING_ROLE = "tenant_billing"
 
 
@@ -31,6 +28,7 @@ class CogniacTenant(object):
         return CogniacTenant(connection, json.loads(resp.content))
 
     def __init__(self, connection, tenant_dict):
+        super(CogniacTenant, self).__setattr__('_tenant_keys', tenant_dict.keys())
         self._cc = connection
         for k, v in tenant_dict.items():
             super(CogniacTenant, self).__setattr__(k, v)
@@ -42,15 +40,13 @@ class CogniacTenant(object):
         return "%s (%s)" % (self.name, self.tenant_id)
 
     def __setattr__(self, name, value):
-        if name in immutable_fields:
-            raise AttributeError("%s is immutable" % name)
-        if name in mutable_keys:
-            data = {name: value}
-            resp = self._cc._post("/tenants/%s" % self.tenant_id, json=data)
-            for k, v in resp.json().items():
-                super(CogniacTenant, self).__setattr__(k, v)
+        if name not in self._tenant_keys:
+            super(CogniacTenant, self).__setattr__(name, value)
             return
-        super(CogniacTenant, self).__setattr__(name, value)
+        data = {name: value}
+        resp = self._cc._post("/tenants/%s" % self.tenant_id, json=data)
+        for k, v in resp.json().items():
+            super(CogniacTenant, self).__setattr__(k, v)
 
     def users(self):
         resp = self._cc._get("/tenants/%s/users" % self.tenant_id)
@@ -83,7 +79,7 @@ class CogniacTenant(object):
     def usage(self, start, end, period='15min'):
 
         assert(period in ['15min', 'hour', 'day'])
-        
+
         url = "/usage/summary?period=%s&start=%d&end=%d" % (period, start, end)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
