@@ -345,3 +345,22 @@ class CogniacApplication(object):
                 if limit and count == limit:
                     return
             url = resp['paging'].get('next')
+
+
+    def usage(self, start, end, period='15min'):
+
+        assert(period in ['15min', 'hour', 'day'])
+
+        url = "/usage/summary/app/%s?period=%s&start=%d&end=%d" % (self.application_id, period, start, end)
+
+        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        def get_next(url):
+            resp = self._cc._get(url)
+            return resp.json()
+
+        while url:
+            resp = get_next(url)
+            for record in resp['data']:
+                yield record
+            url = resp['paging'].get('next')
+
