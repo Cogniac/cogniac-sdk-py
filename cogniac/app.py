@@ -347,13 +347,20 @@ class CogniacApplication(object):
             url = resp['paging'].get('next')
 
 
-    def usage(self, start, end, period='15min'):
+    def accumulate_usage(self, start, end):
+        url = "/usage/app/%s?start=%d&end=%d&accumulate=True" % (self.application_id, start, end)
+        resp = self._cc._get(url)
+        data = resp.json()['data']
+        return data[0] if len(data) else None
 
-        assert(period in ['15min', 'hour', 'day'])
+    def usage(self, start, end, accumulate=False):
 
-        url = "/usage/app/%s?period=%s&start=%d&end=%d" % (self.application_id, period, start, end)
+        url = "/usage/app/%s?start=%d&end=%d" % (self.application_id, start, end)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        if accumulate:
+            url += "&accumulate=True"
+
+        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=5, retry_on_exception=server_error)
         def get_next(url):
             resp = self._cc._get(url)
             return resp.json()
@@ -363,4 +370,3 @@ class CogniacApplication(object):
             for record in resp['data']:
                 yield record
             url = resp['paging'].get('next')
-
