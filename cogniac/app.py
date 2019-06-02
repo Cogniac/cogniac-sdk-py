@@ -345,3 +345,29 @@ class CogniacApplication(object):
                 if limit and count == limit:
                     return
             url = resp['paging'].get('next')
+
+    def accumulate_usage(self, start, end):
+        """
+        return single cummulative app usage record for start to end epoch times
+        """
+        url = "/usage/app/%s?start=%d&end=%d&accumulate=True" % (self.application_id, start, end)
+        resp = self._cc._get(url)
+        data = resp.json()['data']
+        return data[0] if len(data) else None
+
+    def usage(self, start, end):
+        """
+        yield sparse app usage records in order between start and end epoch times
+        """
+        url = "/usage/app/%s?start=%d&end=%d" % (self.application_id, start, end)
+
+        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=5, retry_on_exception=server_error)
+        def get_next(url):
+            resp = self._cc._get(url)
+            return resp.json()
+
+        while url:
+            resp = get_next(url)
+            for record in resp['data']:
+                yield record
+            url = resp['paging'].get('next')
