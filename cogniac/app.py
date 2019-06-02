@@ -351,7 +351,7 @@ class CogniacApplication(object):
 
         assert(period in ['15min', 'hour', 'day'])
 
-        url = "/usage/summary/app/%s?period=%s&start=%d&end=%d" % (self.application_id, period, start, end)
+        url = "/usage/app/%s?period=%s&start=%d&end=%d" % (self.application_id, period, start, end)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def get_next(url):
