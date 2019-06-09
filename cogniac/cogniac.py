@@ -45,6 +45,12 @@ class CogniacConnection(object):
         """
         return the list of valid tenants for the specified user credentials and url_prefix
         """
+        if 'COG_API_KEY' in os.environ:
+            resp = requests.get(url_prefix + "/users/current/tenants",
+                                headers={"Authorization": "Key %s" % os.environ['COG_API_KEY']})
+            raise_errors(resp)
+            return resp.json()
+
         if username is None and password is None:
             # credentials not specified, use environment variables if found
             try:
