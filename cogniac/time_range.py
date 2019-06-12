@@ -3,8 +3,7 @@ helper functions for dealing with time ranges
 
 Copyright (C) 2018 Cogniac Corporation
 """
-
-from time import time
+import time
 import datetime
 
 
@@ -57,7 +56,7 @@ def start_end_times(timeframe_str):
     "previous-day"
 
     """
-    time_end = time()   # query filter end time
+    time_end = time.time()   # query filter end time
     dt_now = datetime.datetime.now()
 
     if timeframe_str == 'minute':
@@ -79,28 +78,28 @@ def start_end_times(timeframe_str):
             start_year -= 1
         dt_start = datetime.datetime(start_year, last_month, 1)
         dt_end = datetime.datetime(dt_now.year, dt_now.month, 1)
-        time_start = float(dt_start.strftime('%s'))
-        time_end = float(dt_end.strftime('%s'))
+        time_start = time.mktime(dt_start.timetuple())
+        time_end = time.mktime(dt_end.timetuple())
     elif timeframe_str == 'halfmonth':
         dt_start = datetime.datetime(dt_now.year, dt_now.month, 1)
         dt_end = datetime.datetime(dt_now.year, dt_now.month, 16)
-        time_start = float(dt_start.strftime('%s'))
-        time_end = float(dt_end.strftime('%s'))
+        time_start = time.mktime(dt_start.timetuple())
+        time_end = time.mktime(dt_end.timetuple())
     elif timeframe_str == 'today' or timeframe_str == "current-day":
         dt_start = datetime.datetime(dt_now.year, dt_now.month, dt_now.day, 0, 0, 0)
         dt_end = dt_now
-        time_start = float(dt_start.strftime('%s'))
-        time_end = float(dt_end.strftime('%s'))
+        time_start = time.mktime(dt_start.timetuple())
+        time_end = time.mktime(dt_end.timetuple())
     elif timeframe_str == "current-month":
         dt_start = datetime.datetime(dt_now.year, dt_now.month, 1, 0, 0, 0)
         dt_end = dt_now
-        time_start = float(dt_start.strftime('%s'))
-        time_end = float(dt_end.strftime('%s'))
+        time_start = time.mktime(dt_start.timetuple())
+        time_end = time.mktime(dt_end.timetuple())
     elif timeframe_str == 'yesterday' or timeframe_str == "previous-day":
         dt_start = datetime.date.today() - datetime.timedelta(days=1)
         dt_end = datetime.date.today()
-        time_start = float(dt_start.strftime('%s'))
-        time_end = float(dt_end.strftime('%s'))
+        time_start = time.mktime(dt_start.timetuple())
+        time_end = time.mktime(dt_end.timetuple())
     else:
         raise UnknownTimeframe(timeframe_str)
 
