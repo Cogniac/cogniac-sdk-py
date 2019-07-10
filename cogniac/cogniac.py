@@ -158,10 +158,10 @@ class CogniacConnection(object):
         self.tenant = CogniacTenant.get(self)
         self.user = CogniacUser.get(self)
 
-        if self.tenant.region is not None:
-            # use tenant object's specified region preference
-            print "Using API endpoint from Tenant:", self.tenant.region
-            self.url_prefix = 'https://' + self.tenant.region + '/1'
+        #if self.tenant.region is not None:
+        #    # use tenant object's specified region preference
+        #   print "Using API endpoint from Tenant:", self.tenant.region
+        #    self.url_prefix = 'https://' + self.tenant.region + '/1'
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __authenticate(self):
@@ -406,6 +406,16 @@ class CogniacConnection(object):
         resp = self._get(url)
         raise_errors(resp)
         return resp.json()
+
+    def create_ops_review(self, review_unit, review_items=None):
+        data = dict(review_unit=review_unit, review_items=review_items)
+        print "\ncalling post", data
+        resp = self._post("/ops/review", json=data)
+        print resp.json()
+
+    def get_ops_review(self):
+        resp = self._get("/ops/review")
+        print resp.json()
 
 
 if __name__ == "__main__":
