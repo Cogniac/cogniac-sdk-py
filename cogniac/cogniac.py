@@ -407,16 +407,6 @@ class CogniacConnection(object):
         raise_errors(resp)
         return resp.json()
 
-    def create_ops_review(self, review_unit, review_items=None):
-        data = dict(review_unit=review_unit, review_items=review_items)
-        print "\ncalling post", data
-        resp = self._post("/ops/review", json=data)
-        print resp.json()
-
-    def get_ops_review(self):
-        resp = self._get("/ops/review")
-        print resp.json()
-
 
 if __name__ == "__main__":
     c = CogniacConnection()
