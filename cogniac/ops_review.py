@@ -63,6 +63,21 @@ class CogniacOpsReview(object):
         return CogniacOpsReview(connection, resp.json())
 
     ##
+    #  get pending
+    ##
+    @classmethod
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def get_pending(cls,
+                    connection):
+        """
+        return an existing CogniacOpsReview
+
+        connnection (CogniacConnection): Authenticated CogniacConnection object
+        """
+        resp = connection._get("/ops/review/pending")
+        return resp.json()['pending']
+
+    ##
     #  update with result
     ##
     @classmethod
