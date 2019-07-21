@@ -44,7 +44,7 @@ class CogniacOpsReview(object):
         if review_items:
             data['review_items'] = review_items
 
-        resp = connection._post("/opsReview", json=data)
+        resp = connection._post("/ops/review", json=data)
         return CogniacOpsReview(connection, resp.json())
 
     ##
