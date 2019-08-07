@@ -109,7 +109,8 @@ class CogniacOpsReview(object):
                reverse=True,
                limit=None):
         """
-        search CogniacOpsReviews in 3 ways: by media_id, domain_unit or time period, exactly one way should be specified.
+        search CogniacOpsReviewResults in 3 ways:
+        by media_id, domain_unit or time period, exactly one way should be specified.
 
         connnection (CogniacConnection): Authenticated CogniacConnection object
 
@@ -135,9 +136,9 @@ class CogniacOpsReview(object):
         else:
             data['reverse'] = reverse
             if time_start:
-                data['time_start'] = time_start
+                data['start'] = time_start
             if time_end:
-                data['time_end'] = time_end
+                data['end'] = time_end
             if limit:
                 data['limit'] = limit
 
