@@ -158,10 +158,10 @@ class CogniacConnection(object):
         self.tenant = CogniacTenant.get(self)
         self.user = CogniacUser.get(self)
 
-        #if self.tenant.region is not None:
-        #    # use tenant object's specified region preference
-        #   print "Using API endpoint from Tenant:", self.tenant.region
-        #    self.url_prefix = 'https://' + self.tenant.region + '/1'
+        if self.tenant.region is not None:
+            # use tenant object's specified region preference
+            print "Using API endpoint from Tenant:", self.tenant.region
+            self.url_prefix = 'https://' + self.tenant.region + '/1'
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __authenticate(self):

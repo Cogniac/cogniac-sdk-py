@@ -16,7 +16,7 @@ class CogniacOpsReview(object):
     """
     CogniacOpsReview
 
-    Record results of any external inspections that are happening outside the system.
+    Record results of user judgement using cogniac view tool
     Serves as a system of record for those results as well as a point of comparison against results within the Cogniac system.
     """
 
@@ -30,19 +30,26 @@ class CogniacOpsReview(object):
                review_items,
                review_unit=None):
         """
-        Create a CogniacOpsReview
+        Add an item to operations review queue:
 
         connnection (CogniacConnection): Authenticated CogniacConnection object
-        result_type (String):            User defined name for the results, e.g. 'operator_ok_ng'
-        result (String):                 User defined json string for the result, e.g. result='ok' or result='ng'
-        media_id(String):                Media_id associated with the result if inspection is done on per media basis
-        domain_unit(String):             Domain_unit associated with the result if inspection is done on per part basis
+        review_items: list of
+            media_id: required
+            detection_ids: optional list of processing records leading to this review
+            detections: optional list of detections to highlight for user
+                            subject_uid
+                            probability
+                            app_data_type
+                            app_data
+
+        review_unit: optional str, user specified identifier associated with the review of this
+        media or group of media.  Often a “domain_unit” would be a
+        natural choice	for this id but it is not required to be a domain
+        unit. The only use for this field is for subsequent searching.
         """
-        data = {}
+        data = {'review_items': review_items}
         if review_unit:
             data['review_unit'] = review_unit
-        if review_items:
-            data['review_items'] = review_items
 
         resp = connection._post("/ops/review", json=data)
         return CogniacOpsReview(connection, resp.json())
@@ -55,9 +62,13 @@ class CogniacOpsReview(object):
     def get(cls,
             connection):
         """
-        return an existing CogniacOpsReview
-
+        get single item from operations review queue
         connnection (CogniacConnection): Authenticated CogniacConnection object
+
+        return:
+            review_id, cogniac supplied unique ID,
+            review_items
+            review_unit if any
         """
         resp = connection._get("/ops/review")
         return CogniacOpsReview(connection, resp.json())
@@ -70,8 +81,7 @@ class CogniacOpsReview(object):
     def get_pending(cls,
                     connection):
         """
-        return an existing CogniacOpsReview
-
+        return number of pending items in operations review queue
         connnection (CogniacConnection): Authenticated CogniacConnection object
         """
         resp = connection._get("/ops/review/pending")
@@ -87,10 +97,13 @@ class CogniacOpsReview(object):
                       review_id,
                       result):
         """
-        return an existing CogniacOpsReview
+        Report user judgement as result back to cogniac system for the given review_id
 
         connnection (CogniacConnection): Authenticated CogniacConnection object
+        review_id (str): cogniac supplied unique ID, required.
+        result (str): required user input, 'OK' or 'NG'
         """
+
         data = dict(review_id=review_id, result=result)
         resp = connection._post("/ops/results", json=data)
         return CogniacOpsReview(connection, resp.json())
@@ -109,19 +122,15 @@ class CogniacOpsReview(object):
                reverse=True,
                limit=None):
         """
-        search CogniacOpsReviewResults in 3 ways:
-        by media_id, domain_unit or time period, exactly one way should be specified.
+        search CogniacOpsReviewResults by time period
+        filtered by media_id, review_unit, result
 
         connnection (CogniacConnection): Authenticated CogniacConnection object
-
-        media_id (String):               media_id to be looked up
-        domain_unit(String):             domain_unit to be looked up
 
         time_start(Float):               start time of the search period
         time_end(Float):                 end time of the search period
         reverse(Bool):                   order of returning results based on timestamp
         limit (int):                      max number of results to return
-
         """
 
         # build the search args
@@ -168,7 +177,7 @@ class CogniacOpsReview(object):
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def delete(self):
         """
-        Delete the external result.
+        Delete the op review result.
         """
         resp = self._cc._delete("/ops/review/%s" % self.review_id)
 
