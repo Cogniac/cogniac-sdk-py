@@ -136,3 +136,4 @@ from media import CogniacMedia
 from common import CredentialError, ServerError, ClientError
 from user import CogniacUser
 from external_results import CogniacExternalResult
+from ops_review import CogniacOpsReview
