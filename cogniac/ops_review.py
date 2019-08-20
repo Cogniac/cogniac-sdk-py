@@ -159,17 +159,17 @@ class CogniacOpsReview(object):
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def get_next(url):
             resp = connection._get(url)
-            return resp.json()
+            return [CogniacOpsReview(connection, s) for s in resp.json()['data']], resp.json()['paging']
 
         count = 0
         while url:
-            resp = get_next(url)
-            for det in resp['data']:
-                yield det
+            reviews, paging = get_next(url)
+            for review in reviews:
+                yield review
                 count += 1
                 if limit and count == limit:
                     return
-            url = resp['paging'].get('next')
+            url = paging.get('next')
 
     ##
     #  __init__
