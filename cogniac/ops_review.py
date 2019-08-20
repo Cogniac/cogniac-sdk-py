@@ -117,8 +117,8 @@ class CogniacOpsReview(object):
                review_unit=None,
                media_id=None,
                result=None,
-               time_start=None,
-               time_end=None,
+               start=None,
+               end=None,
                reverse=True,
                limit=None):
         """
@@ -127,34 +127,49 @@ class CogniacOpsReview(object):
 
         connnection (CogniacConnection): Authenticated CogniacConnection object
 
-        time_start(Float):               start time of the search period
-        time_end(Float):                 end time of the search period
+        start(Float):               start time of the search period
+        end(Float):                 end time of the search period
         reverse(Bool):                   order of returning results based on timestamp
         limit (int):                      max number of results to return
         """
 
         # build the search args
         # perform only one search at a time
-        data = {}
-        if media_id:
-            data['media_id'] = media_id
-        elif review_unit:
-            data['review_unit'] = review_unit
-        elif result:
-            data['result'] = result
-        else:
-            data['reverse'] = reverse
-            if time_start:
-                data['start'] = time_start
-            if time_end:
-                data['end'] = time_end
-            if limit:
-                data['limit'] = limit
+        args = []
+        if start is not None:
+            args.append("start=%f" % start)
+        if end is not None:
+            args.append("end=%f" % end)
 
-        resp = connection._get("/ops/results", json=data)
-        print resp.json()
-        subs = resp.json()['data']
-        return [CogniacOpsReview(connection, s) for s in subs]
+        if reverse:
+            args.append('reverse=True')
+        if limit:
+            assert(limit > 0)
+            args.append('limit=%d' % min(limit, 100))  # api support max limit of 100
+
+        if media_id is not None:
+            args.append("media_id=%s" % media_id)
+        if review_unit is not None:
+            args.append("review_unit=%s" % review_unit)
+        if result is not None:
+            args.append("result=%s" % result)
+        url = "/ops/results?"
+        url += "&".join(args)
+
+        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        def get_next(url):
+            resp = connection._get(url)
+            return resp.json()
+
+        count = 0
+        while url:
+            resp = get_next(url)
+            for det in resp['data']:
+                yield det
+                count += 1
+                if limit and count == limit:
+                    return
+            url = resp['paging'].get('next')
 
     ##
     #  __init__
