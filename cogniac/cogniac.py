@@ -11,6 +11,8 @@ import logging
 import requests
 from retrying import retry
 from requests.auth import HTTPBasicAuth
+from requests.packages.urllib3 import Retry
+from requests.adapters import HTTPAdapter
 
 from common import server_error, raise_errors, CredentialError, credential_error
 
@@ -185,6 +187,13 @@ class CogniacConnection(object):
         token = resp.json()
         headers = {"Authorization": "Bearer %s" % token['access_token']}
         self.session = requests.Session()
+        # configure session with appropriate retries
+        self.session.mount('https://', HTTPAdapter(max_retries=Retry(connect=5,
+                                                                     read=5,
+                                                                     status=5,
+                                                                     redirect=2,
+                                                                     backoff_factor=.001,
+                                                                     status_forcelist=(500, 502, 503, 504))))
         self.session.headers.update(headers)
 
     @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
