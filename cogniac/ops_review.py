@@ -43,7 +43,7 @@ class CogniacOpsReview(object):
                             app_data
 
         review_unit: optional str, user specified identifier associated with the review of this
-        media or group of media.  Often a “domain_unit” would be a
+        media or group of media.  Often a domain_unit would be a
         natural choice	for this id but it is not required to be a domain
         unit. The only use for this field is for subsequent searching.
         """
@@ -116,6 +116,7 @@ class CogniacOpsReview(object):
                connection,
                review_unit=None,
                media_id=None,
+               external_media_id=None,
                result=None,
                start=None,
                end=None,
@@ -149,6 +150,8 @@ class CogniacOpsReview(object):
 
         if media_id is not None:
             args.append("media_id=%s" % media_id)
+        if external_media_id is not None:
+            args.append("external_media_id=%s" % external_media_id)
         if review_unit is not None:
             args.append("review_unit=%s" % review_unit)
         if result is not None:
