@@ -22,6 +22,8 @@ from tenant  import CogniacTenant
 from user    import CogniacUser
 from media   import CogniacMedia
 
+from network_camera import CogniacNetworkCamera
+
 logger = logging.getLogger(__name__)
 
 
@@ -415,6 +417,20 @@ class CogniacConnection(object):
         resp = self._get(url)
         raise_errors(resp)
         return resp.json()
+
+    def get_all_cameras(self):
+        """
+        return CogniacNetworkCameras for all netcams belonging to the currently authenticated tenant
+        """
+        return CogniacNetworkCamera.get_all(self)
+
+    def get_camera(self, network_camera_id):
+        """
+        return an existing CogniacNetworkCamera
+
+        network_camera_id (String):  The id of the Cogniac network camera to return
+        """
+        return CogniacNetworkCamera.get(self, network_camera_id)
 
 
 if __name__ == "__main__":
