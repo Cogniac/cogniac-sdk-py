@@ -288,6 +288,8 @@ class CogniacMedia(object):
 
         if filep is None:  # return response all at once
             return resp.content
+        else:
+            filep.seek(0)  # in case of retries
 
         # write response out to file
         for chunk in resp.iter_content(chunk_size=512 * 1024):
