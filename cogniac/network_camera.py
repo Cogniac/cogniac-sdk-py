@@ -8,7 +8,7 @@ from retrying import retry
 import sys
 from common import server_error
 
-camera_model_keys = ['last_pose_change_timestamp', 'last_model_change_timestamp',
+camera_model_keys = ['last_pose_change_timestamp',
                      'resolution_h_px', 'resolution_v_px',
                      'pixel_h_um', 'pixel_v_um',
                      'focal_length_h_mm', 'focal_length_v_mm',
@@ -104,7 +104,6 @@ class CogniacNetworkCamera(object):
                lon=None,
                hae=None,
                last_pose_change_timestamp=None,
-               last_model_change_timestamp=None,
                resolution_h_px=None,
                resolution_v_px=None,
                pixel_h_um=None,
@@ -154,8 +153,6 @@ class CogniacNetworkCamera(object):
         # pose/model related
         if last_pose_change_timestamp is not None:
             data['last_pose_change_timestamp'] = last_pose_change_timestamp
-        if last_model_change_timestamp is not None:
-            data['last_model_change_timestamp'] = last_model_change_timestamp
 
         if resolution_h_px is not None:
             data['resolution_h_px'] = resolution_h_px
