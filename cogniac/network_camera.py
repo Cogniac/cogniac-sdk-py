@@ -110,11 +110,11 @@ class CogniacNetworkCamera(object):
                pixel_v_um=None,
                focal_length_h_mm=None,
                focal_length_v_mm=None,
-               skew=0,
+               skew=None,
                ch_px=None,
                cv_px=None,
-               radial_distortion_coefficients=[0., 0., 0., 0., 0., 0.],
-               tangential_distortion_coefficients=[0., 0., 0., 0., 0., 0.],
+               radial_distortion_coefficients=None,
+               tangential_distortion_coefficients=None,
                pitch=None,
                yaw=None,
                roll=None,
@@ -165,18 +165,18 @@ class CogniacNetworkCamera(object):
         if focal_length_h_mm is not None:
             data['focal_length_h_mm'] = focal_length_h_mm
         if focal_length_v_mm is not None:
-            data['focal_length_h_mm'] = focal_length_v_mm
+            data['focal_length_v_mm'] = focal_length_v_mm
 
-        if skew is not 0:
+        if skew is not None:
             data['skew'] = skew
         if ch_px is not None:
             data['ch_px'] = ch_px
         if cv_px is not None:
             data['cv_px'] = cv_px
 
-        if radial_distortion_coefficients != [0., 0., 0., 0., 0., 0.]:
+        if radial_distortion_coefficients is not None:
             data['radial_distortion_coefficients'] = radial_distortion_coefficients
-        if tangential_distortion_coefficients != [0., 0., 0., 0., 0., 0.]:
+        if tangential_distortion_coefficients is not None:
             data['tangential_distortion_coefficients'] = tangential_distortion_coefficients
         if pitch is not None:
             data['pitch'] = pitch
