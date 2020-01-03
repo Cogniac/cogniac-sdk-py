@@ -129,6 +129,7 @@ CogniacTenant
 """
 
 from cogniac import CogniacConnection
+from .gateway import CogniacGateway
 from app import CogniacApplication
 from tenant import CogniacTenant
 from subject import CogniacSubject
