@@ -130,12 +130,12 @@ CogniacTenant
 
 from cogniac import CogniacConnection
 from .gateway import CogniacGateway
-from app import CogniacApplication
-from tenant import CogniacTenant
-from subject import CogniacSubject
-from media import CogniacMedia
-from common import CredentialError, ServerError, ClientError
-from user import CogniacUser
-from external_results import CogniacExternalResult
-from ops_review import CogniacOpsReview
-from network_camera import CogniacNetworkCamera
+from .app import CogniacApplication
+from .tenant import CogniacTenant
+from .subject import CogniacSubject
+from .media import CogniacMedia
+from .common import CredentialError, ServerError, ClientError
+from .user import CogniacUser
+from .external_results import CogniacExternalResult
+from .ops_review import CogniacOpsReview
+from .network_camera import CogniacNetworkCamera
