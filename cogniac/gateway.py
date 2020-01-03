@@ -24,18 +24,20 @@ class CogniacGateway(object):
     CogniacGateway
 
     Connect to a Cogniac EdgeFlow gateway and maintain session state.
-
-    CogniacGateway provides helper functions for uploading CogniacMedia to an
-    EdgeFlow gateway for processing.
+    
+    Class definition for an object that stores information about a physical
+    Cogniac gateway device (i.e., EdgeFlow) and methods that provide a client
+    interface for programmatically managing and requesting work to be done
+    on the gateway.
+    
+    A CogniacGateway object's methods can be used to trigger media capture
+    (e.g., triggering cameras to save images to a gateway) and ingesting
+    media from another host on the same network.
     """
 
     def __init__(self, timeout=60, url_prefix=None):
         """
-        Initialize an client object to store information for connecting to a 
-        Cogniac gateway (i.e., EdgeFlow) with methods for requesting and 
-        managing processing tasks to be done on the gateway (e.g., upload and 
-        process and image). These processing task methods issue HTTP 
-        requests to a gateway to carry out a task.
+        Initialize a CogniacGateway object.
         
         url_prefix (String):          URL prefix for a Cogniac EdgeFlow device.
         """
