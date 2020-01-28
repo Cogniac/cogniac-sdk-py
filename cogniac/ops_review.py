@@ -95,7 +95,8 @@ class CogniacOpsReview(object):
     def create_result(cls,
                       connection,
                       review_id,
-                      result):
+                      result,
+                      comment=None):
         """
         Report user judgement as result back to cogniac system for the given review_id
 
@@ -105,6 +106,8 @@ class CogniacOpsReview(object):
         """
 
         data = dict(review_id=review_id, result=result)
+        if comment:
+            data['comment'] = comment
         resp = connection._post("/ops/results", json=data)
         return CogniacOpsReview(connection, resp.json())
 
