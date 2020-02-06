@@ -1,5 +1,5 @@
 """
-CogniacGateway Object Client
+CogniacEdgeFlow Object Client
 
 Copyright (C) 2016 Cogniac Corporation
 """
@@ -19,25 +19,24 @@ from media import file_creation_time
 
 logger = logging.getLogger(__name__)
 
-class CogniacGateway(object):
+class CogniacEdgeFlow(object):
     """
-    CogniacGateway
+    CogniacEdgeFlow
 
-    Connect to a Cogniac EdgeFlow gateway and maintain session state.
+    Connect to a Cogniac EdgeFlow and maintain session state.
     
     Class definition for an object that stores information about a physical
-    Cogniac gateway device (i.e., EdgeFlow) and methods that provide a client
-    interface for programmatically managing and requesting work to be done
-    on the gateway.
+    Cogniac EdgeFlow and methods that provide a client interface for 
+    programmatically managing and requesting work to be done on the EdgeFlow.
     
-    A CogniacGateway object's methods can be used to trigger media capture
-    (e.g., triggering cameras to save images to a gateway) and ingesting
+    A CogniacEdgeFlow object's methods can be used to trigger media capture
+    (e.g., triggering cameras to save images to a EdgeFlow) and ingesting
     media from another host on the same network.
     """
 
     def __init__(self, timeout=60, url_prefix=None):
         """
-        Initialize a CogniacGateway object.
+        Initialize a CogniacEdgeFlow object.
         
         url_prefix (String):          URL prefix for a Cogniac EdgeFlow device.
         """
@@ -101,9 +100,9 @@ class CogniacGateway(object):
                       domain_unit=None,
                       post_url=None):
         """
-        Uploads a media file object to an EdgeFlow gateway device.
+        Uploads a media file object to an EdgeFlow device.
 
-        connnection (CogniacGateway):     CogniacGateway object
+        connnection (CogniacEdgeFlow):    CogniacEdgeFlow object
         subject_uid		                  A subject's unique identifier.
         filename (str):                   Local filename or http/s URL of image or video media file
         external_media_id (str):          Optional arbitrary external id for this media

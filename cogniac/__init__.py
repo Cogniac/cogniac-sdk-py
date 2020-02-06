@@ -76,9 +76,9 @@ common Cogniac objects such as applications, subjects, and media:
         return the currently authenticated CogniacTenant
 
 
-CogniacGateway(url_prefix, timeout=60)
+CogniacEdgeFlow(url_prefix, timeout=60)
 
-        Create a client connection to a gateway device (i.e., EdgeFlow):
+        Create a client connection to an EdgeFlow:
 
 
         url_prefix (String):          Cogniac API url prefix.
@@ -138,7 +138,7 @@ CogniacTenant
 """
 
 from cogniac import CogniacConnection
-from .gateway import CogniacGateway
+from .edgeflow import CogniacEdgeFlow
 from .app import CogniacApplication
 from .tenant import CogniacTenant
 from .subject import CogniacSubject
