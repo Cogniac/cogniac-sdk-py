@@ -76,10 +76,11 @@ common Cogniac objects such as applications, subjects, and media:
         return the currently authenticated CogniacTenant
 
 
-CogniacEdgeFlow(url_prefix, timeout=60)
+CogniacEdgeFlow(edgeflow_id, url_prefix, timeout=60)
 
         Create a client connection to an EdgeFlow:
 
+        edgeflow_id (String):         EdgeFlow ID of an EdgeFlow host.
 
         url_prefix (String):          Cogniac API url prefix.
                                       The url_prefix can alternatively be set via the COG_GW_URL_PREFIX environment variable.

@@ -34,7 +34,7 @@ class CogniacEdgeFlow(object):
     media from another host on the same network.
     """
 
-    def __init__(self, timeout=60, url_prefix=None):
+    def __init__(self, edgeflow_id, timeout=60, url_prefix=None):
         """
         Initialize a CogniacEdgeFlow object.
         
@@ -46,6 +46,7 @@ class CogniacEdgeFlow(object):
         if not url_prefix:
             raise Exception("No EdgeFlow URL prefix was specified.")
 
+        self.edgeflow_id = edgeflow_id
         self.url_prefix = url_prefix
         self.timeout = timeout
 
@@ -90,6 +91,54 @@ class CogniacEdgeFlow(object):
             timeout = self.timeout
         resp = self.session.post(url, timeout=timeout, **kwargs)
         raise_errors(resp)
+        return resp
+
+    def flush_upload_queue(self, start_time=None, stop_time=None):
+        args = dict()
+        if start_time is not None:
+            args['start_time'] = start_time
+        if stop_time is not None:
+            args['stop_time'] = stop_time
+        resp = self._post(
+            "{}/gateways/{}/events/flush_upload_queue".format(
+                core_url_prefix,
+                self.edgeflow_id), data=args)
+        return resp
+
+    def factory_reset(self):
+        core_url_prefix = 'https://api.cogniac.io/1'
+        resp = self._post(
+            "{}/gateways/{}/events/factory_reset".format(
+                core_url_prefix,
+                self.edgeflow_id))
+        return resp
+
+    def upgrade(self, software_version):
+        args = dict()
+        if software_version is not None:
+            args['software_version'] = software_version
+        core_url_prefix = 'https://api.cogniac.io/1'
+        resp = self._post(
+            "{}/gateways/{}/events/upgrade".format(
+                core_url_prefix,
+                self.edgeflow_id), data=args)
+        return resp
+
+    def restart(self):
+        core_url_prefix = 'https://api.cogniac.io/1'
+        resp = self._post("{}/gateways/{}/events/restart".format(
+            core_url_prefix,
+            self.edgeflow_id))
+        return resp
+
+    def reboot(self, time=None):
+        args = dict()
+        if time is not None:
+            args['time'] = time
+        core_url_prefix = 'https://api.cogniac.io/1'
+        resp = self._post("{}/gateways/{}/events/reboot".format(
+            core_url_prefix,
+            self.edgeflow_id), data=args)
         return resp
 
     def process_media(self,
