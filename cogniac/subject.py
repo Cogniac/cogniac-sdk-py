@@ -46,6 +46,7 @@ class CogniacSubject(object):
                connection,
                name,
                description=None,
+               external_id=None,
                public_read=False,
                public_write=False):
         """
@@ -54,6 +55,7 @@ class CogniacSubject(object):
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         name (String):                       Name of new subject
         description (String):                Optional description of the subject
+        external_id (String):                Optional user supplied id for the subject
         public_read(Bool):                   Subject media is accessible to other tenants and can be input into other tenant's apps.
         public_write(Bool):                  Other tenants can access and associate media with this subject.
         """
@@ -63,6 +65,8 @@ class CogniacSubject(object):
         data = dict(name=name, public_read=public_read, public_write=public_write)
         if description:
             data['description'] = description
+        if external_id:
+            data['external_id'] = external_id
 
         resp = connection._post("/subjects", json=data)
 
