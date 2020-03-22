@@ -137,7 +137,7 @@ class CogniacConnection(object):
             except:
                 if self.api_key:
                     print "tenant_id must be explicitly specified when using api_key"
-                    raise Exception("Unspecified tenabnt")
+                    raise Exception("Unspecified tenant")
 
                 # get list of user's tenants
                 tenants = CogniacConnection.get_all_authorized_tenants(username, password, url_prefix)['tenants']
