@@ -1,5 +1,5 @@
 """
-CogniacGateway Object Client
+CogniacEdgeFlow Object Client
 
 Copyright (C) 2016 Cogniac Corporation
 """
@@ -19,25 +19,24 @@ from media import file_creation_time
 
 logger = logging.getLogger(__name__)
 
-class CogniacGateway(object):
+class CogniacEdgeFlow(object):
     """
-    CogniacGateway
+    CogniacEdgeFlow
 
-    Connect to a Cogniac EdgeFlow gateway and maintain session state.
+    Connect to a Cogniac EdgeFlow and maintain session state.
     
     Class definition for an object that stores information about a physical
-    Cogniac gateway device (i.e., EdgeFlow) and methods that provide a client
-    interface for programmatically managing and requesting work to be done
-    on the gateway.
+    Cogniac EdgeFlow and methods that provide a client interface for 
+    programmatically managing and requesting work to be done on the EdgeFlow.
     
-    A CogniacGateway object's methods can be used to trigger media capture
-    (e.g., triggering cameras to save images to a gateway) and ingesting
+    A CogniacEdgeFlow object's methods can be used to trigger media capture
+    (e.g., triggering cameras to save images to a EdgeFlow) and ingesting
     media from another host on the same network.
     """
 
-    def __init__(self, timeout=60, url_prefix=None):
+    def __init__(self, edgeflow_id, timeout=60, url_prefix=None):
         """
-        Initialize a CogniacGateway object.
+        Initialize a CogniacEdgeFlow object.
         
         url_prefix (String):          URL prefix for a Cogniac EdgeFlow device.
         """
@@ -47,6 +46,7 @@ class CogniacGateway(object):
         if not url_prefix:
             raise Exception("No EdgeFlow URL prefix was specified.")
 
+        self.edgeflow_id = edgeflow_id
         self.url_prefix = url_prefix
         self.timeout = timeout
 
@@ -93,6 +93,54 @@ class CogniacGateway(object):
         raise_errors(resp)
         return resp
 
+    def flush_upload_queue(self, start_time=None, stop_time=None):
+        args = dict()
+        if start_time is not None:
+            args['start_time'] = start_time
+        if stop_time is not None:
+            args['stop_time'] = stop_time
+        resp = self._post(
+            "{}/gateways/{}/events/flush_upload_queue".format(
+                core_url_prefix,
+                self.edgeflow_id), data=args)
+        return resp
+
+    def factory_reset(self):
+        core_url_prefix = 'https://api.cogniac.io/1'
+        resp = self._post(
+            "{}/gateways/{}/events/factory_reset".format(
+                core_url_prefix,
+                self.edgeflow_id))
+        return resp
+
+    def upgrade(self, software_version):
+        args = dict()
+        if software_version is not None:
+            args['software_version'] = software_version
+        core_url_prefix = 'https://api.cogniac.io/1'
+        resp = self._post(
+            "{}/gateways/{}/events/upgrade".format(
+                core_url_prefix,
+                self.edgeflow_id), data=args)
+        return resp
+
+    def restart(self):
+        core_url_prefix = 'https://api.cogniac.io/1'
+        resp = self._post("{}/gateways/{}/events/restart".format(
+            core_url_prefix,
+            self.edgeflow_id))
+        return resp
+
+    def reboot(self, time=None):
+        args = dict()
+        if time is not None:
+            args['time'] = time
+        core_url_prefix = 'https://api.cogniac.io/1'
+        resp = self._post("{}/gateways/{}/events/reboot".format(
+            core_url_prefix,
+            self.edgeflow_id), data=args)
+        return resp
+
     def process_media(self,
                       subject_uid,
                       filename,
@@ -101,9 +149,9 @@ class CogniacGateway(object):
                       domain_unit=None,
                       post_url=None):
         """
-        Uploads a media file object to an EdgeFlow gateway device.
+        Uploads a media file object to an EdgeFlow device.
 
-        connnection (CogniacGateway):     CogniacGateway object
+        connnection (CogniacEdgeFlow):    CogniacEdgeFlow object
         subject_uid		                  A subject's unique identifier.
         filename (str):                   Local filename or http/s URL of image or video media file
         external_media_id (str):          Optional arbitrary external id for this media
