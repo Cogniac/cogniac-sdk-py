@@ -370,7 +370,9 @@ class CogniacConnection(object):
                      author=None,
                      title=None,
                      media_timestamp=None,
-                     domain_unit=None):
+                     domain_unit=None,
+                     trigger_id=None,
+                     sequence_ix=None):
         """
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
@@ -402,7 +404,9 @@ class CogniacConnection(object):
                                    author=author,
                                    title=title,
                                    media_timestamp=media_timestamp,
-                                   domain_unit=domain_unit)
+                                   domain_unit=domain_unit,
+                                   trigger_id=trigger_id,
+                                   sequence_ix=sequence_ix)
 
     def get_version(self, auth=False):
         """

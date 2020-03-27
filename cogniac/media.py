@@ -130,7 +130,9 @@ class CogniacMedia(object):
                author=None,
                title=None,
                media_timestamp=None,
-               domain_unit=None):
+               domain_unit=None,
+               trigger_id=None,
+               sequence_ix=None):
         """
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
@@ -175,6 +177,10 @@ class CogniacMedia(object):
             args['media_timestamp'] = media_timestamp
         if domain_unit is not None:
             args['domain_unit'] = domain_unit
+        if trigger_id is not None:
+            args['trigger_id'] = trigger_id
+        if sequence_ix is not None:
+            args['sequence_ix'] = sequence_ix
 
         if filename.startswith('http'):
             args['source_url'] = filename
