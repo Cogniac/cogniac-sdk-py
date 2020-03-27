@@ -327,6 +327,7 @@ class CogniacConnection(object):
     def create_subject(self,
                        name,
                        description=None,
+                       external_id=None,
                        public_read=False,
                        public_write=False):
         """
@@ -340,6 +341,7 @@ class CogniacConnection(object):
         return CogniacSubject.create(self,
                                      name=name,
                                      description=description,
+                                     external_id=external_id,
                                      public_read=public_read,
                                      public_write=public_write)
 
