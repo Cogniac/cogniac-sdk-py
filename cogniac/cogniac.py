@@ -445,14 +445,14 @@ class CogniacConnection(object):
         """
         return CogniacGateway.get_all(self)
 
-    def get_gateway(self, gateway_id=None, url_prefix=None):
+    def get_gateway(self, gateway_id, url_prefix=None):
         """
         return an existing CogniacGateway 
 
         gateway_id (String):  The id of the Cogniac Gateway to return
         url_prefix (String):  The local URL prefix of a Gateway
         """
-        return CogniacGateway.get(self,
+        return CogniacGateway.get(connection=self,
                                   gateway_id=gateway_id,
                                   url_prefix=url_prefix)
 

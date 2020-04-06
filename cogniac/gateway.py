@@ -5,6 +5,7 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 import os
+import sys
 import logging
 import requests
 from retrying import retry
@@ -18,8 +19,6 @@ from media import file_creation_time
 
 
 logger = logging.getLogger(__name__)
-
-# TODO: CogniacGatewayConnection
 
 class CogniacGateway(object):
     """
@@ -59,16 +58,16 @@ class CogniacGateway(object):
             gateway_id=None,
             url_prefix=None):
         """
-        get single network camera
+        get single gateway
         connnection (CogniacConnection): Authenticated CogniacConnection object
         gateway_id (String): the unique identifier of a Gateway object
         returns CogniacGateway object
         """
         gateway_dict = None
         if connection and gateway_id:
-            resp = connection._get("/gateways/%s" % gateway_id)
-            gateway_dict = resp.json()
-        return CogniacGateway(connection=connection, url_prefix=url_prefix, gateway_dict=gateway_dict)
+            resp = connection._get("/gateways/{}".format(gateway_id))
+            gateway = resp.json()
+        return CogniacGateway(connection=connection, url_prefix=url_prefix, gateway_dict=gateway)
 
     ##
     #  get_all
@@ -82,7 +81,7 @@ class CogniacGateway(object):
         """
         resp = connection._get('/tenants/%s/gateways' % connection.tenant.tenant_id)
         gateways = resp.json()['data']
-        return [CogniacGateway(connection, gateway) for gateway in gateways]
+        return [CogniacGateway(connection=connection, gateway_dict=gateway) for gateway in gateways]
 
     def __init__(self, connection=None, gateway_dict=None, timeout=60, url_prefix=None):
         """
@@ -90,6 +89,10 @@ class CogniacGateway(object):
         
         url_prefix (String):          URL prefix for a Cogniac EdgeFlow device.
         """
+        if not gateway_dict:
+            gateway_dict = {}
+        super(CogniacGateway, self).__setattr__('_gateway_keys', gateway_dict.keys())
+
         if 'COG_GW_URL_PREFIX' in os.environ:
             url_prefix = os.environ['COG_GW_URL_PREFIX']
 
@@ -100,6 +103,7 @@ class CogniacGateway(object):
             raise Exception("Missing gateway object.")
 
         self._cc = connection
+
         if self._cc:
             self._gateway_keys = gateway_dict.keys()
             for k, v in gateway_dict.items():
@@ -118,6 +122,14 @@ class CogniacGateway(object):
         resp = self._cc._post("/gateways/%s" % self.tenant_id, json=data)
         for k, v in resp.json().items():
             super(CogniacGateway, self).__setattr__(k, v)
+
+    def __str__(self):
+        s = "%s (%s)" % (self.name, self.gateway_id)
+        return s.encode(sys.stdout.encoding)
+
+    def __repr__(self):
+        s = "%s (%s)" % (self.name, self.gateway_id)
+        return s.encode(sys.stdout.encoding)
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __initialize(self):
@@ -166,7 +178,7 @@ class CogniacGateway(object):
     #
     # -------------------------------------------------------------------------
 
-    def get_api_version(self):
+    def get_version(self):
         resp = self._get("/version")
         return resp.json()
 
@@ -222,10 +234,6 @@ class CogniacGateway(object):
 
         resp = upload()
         return resp.json()
-        
-    # TODO: configure network interfaces
-    # TODO: get network interfaces
-    # TODO: status endpoints
 
     # -------------------------------------------------------------------------
     #
@@ -233,26 +241,64 @@ class CogniacGateway(object):
     #
     # -------------------------------------------------------------------------
 
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def flush_upload_queue(self, start_time=None, stop_time=None):
         args = dict()
         if start_time is not None:
             args['start_time'] = start_time
         if stop_time is not None:
             args['stop_time'] = stop_time
-        resp = self._cc._post("/gateways/%s/events/flush_upload_queue" % (self.gateway_id), data=args)
+        resp = self._cc._post("/gateways/%s/event/flush_upload_queue" % (self.gateway_id), data=args)
 
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def factory_reset(self):
-        resp = self._cc._post("/gateways/%s/events/factory_reset" % (self.gateway_id))
+        resp = self._cc._post("/gateways/%s/event/factory_reset" % (self.gateway_id))
 
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def upgrade(self, software_version):
         args = dict()
         if software_version is not None:
             args['software_version'] = software_version
-        resp = self._cc._post("/gateways/%s/events/upgrade" % (self.gateway_id), data=args)
+        resp = self._cc._post("/gateways/%s/event/upgrade" % (self.gateway_id), data=args)
 
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def reboot(self):
-        resp = self._cc._post("/gateways/%s/events/reboot" % (self.gateway_id))
+        resp = self._cc._post("/gateways/%s/event/reboot" % (self.gateway_id))
+
+    def status(self, subsystem_name=None, start=None, end=None, reverse=True, limit=None):
+        """
+        Yield gateway status, optionally only for a particular subsytem, sorted by timestamp.
+
+        start (float)          filter by last update timestamp > start (seconds since epoch)
+        end (float)            filter by last update timestamp < end   (seconds since epoch)
+        reverse (bool)         reverse the sorting order: sort high to low
+        limit (int)            yield maximum of limit results
+        """
+        args = []
+        if start is not None:
+            args.append("start=%f" % start)
+        if end is not None:
+            args.append("end=%f" % end)
+        if reverse:
+            args.append('reverse=True')
+        if limit:
+            assert(limit > 0)
+            args.append('limit=%d' % min(limit, 100))  # api support max limit of 100
+
+        if subsystem_name:
+            url = "/gateways/%s/status/%s?" % self.gateway_id, subsystem_name
+        else:
+            url = "/gateways/%s/status?" % self.gateway_id
+        del args['subsystem_name']
+        url += "&".join(args)
+
+        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        def get_next(url):
+            resp = self._cc._get(url)
+            return resp.json()
+
+        count = 0
+        while url:
+            resp = get_next(url)
+            for data in resp['data']:
+                yield data
+                count += 1
+                if limit and count == limit:
+                    return
+            url = resp['paging'].get('next')
