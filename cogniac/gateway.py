@@ -166,6 +166,10 @@ class CogniacGateway(object):
     #
     # -------------------------------------------------------------------------
 
+    def get_api_version(self):
+        resp = self._get("/version")
+        return resp.json()
+
     def process_media(self,
                       subject_uid,
                       filename,
