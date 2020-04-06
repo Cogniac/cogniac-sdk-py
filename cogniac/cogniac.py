@@ -21,6 +21,7 @@ from subject import CogniacSubject
 from tenant  import CogniacTenant
 from user    import CogniacUser
 from media   import CogniacMedia
+from gateway import CogniacGateway
 
 from network_camera import CogniacNetworkCamera
 
@@ -437,6 +438,23 @@ class CogniacConnection(object):
         network_camera_id (String):  The id of the Cogniac network camera to return
         """
         return CogniacNetworkCamera.get(self, network_camera_id)
+
+    def get_all_gateways(self):
+        """
+        return CogniacGateway for all netcams belonging to the currently authenticated tenant
+        """
+        return CogniacGateway.get_all(self)
+
+    def get_gateway(self, gateway_id=None, url_prefix=None):
+        """
+        return an existing CogniacGateway 
+
+        gateway_id (String):  The id of the Cogniac Gateway to return
+        url_prefix (String):  The local URL prefix of a Gateway
+        """
+        return CogniacGateway.get(self,
+                                  gateway_id=gateway_id,
+                                  url_prefix=url_prefix)
 
 
 if __name__ == "__main__":

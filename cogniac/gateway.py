@@ -19,9 +19,23 @@ from media import file_creation_time
 
 logger = logging.getLogger(__name__)
 
+# TODO: CogniacGatewayConnection
+
 class CogniacGateway(object):
     """
     CogniacGateway
+
+    connnection (CogniacConnection):     Authenticated CogniacConnection object.
+
+                                         If unspecified, CloudCore functions will not be available.
+
+    url_prefix (String):                 Cogniac Gateway API url prefix.
+
+                                         This is a _local_ URL of a physical gateway.
+
+                                         Defaults to `None`. If unspecified, the gateway's local APIs will not be available.
+
+                                         The url_prefix can alternatively be set via the COG_GW_URL_PREFIX environment variable.
 
     Connect to a Cogniac EdgeFlow gateway and maintain session state.
     
@@ -35,7 +49,42 @@ class CogniacGateway(object):
     media from another host on the same network.
     """
 
-    def __init__(self, timeout=60, url_prefix=None):
+    ##
+    #  get
+    ##
+    @classmethod
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def get(cls,
+            connection=None,
+            gateway_id=None,
+            url_prefix=None):
+        """
+        get single network camera
+        connnection (CogniacConnection): Authenticated CogniacConnection object
+        gateway_id (String): the unique identifier of a Gateway object
+        returns CogniacGateway object
+        """
+        gateway_dict = None
+        if connection and gateway_id:
+            resp = connection._get("/gateways/%s" % gateway_id)
+            gateway_dict = resp.json()
+        return CogniacGateway(connection=connection, url_prefix=url_prefix, gateway_dict=gateway_dict)
+
+    ##
+    #  get_all
+    ##
+    @classmethod
+    def get_all(cls, connection):
+        """
+        return all CogniacGateway objects belonging to the currently authenticated tenant
+
+        connnection (CogniacConnection):     Authenticated CogniacConnection object
+        """
+        resp = connection._get('/tenants/%s/gateways' % connection.tenant.tenant_id)
+        gateways = resp.json()['data']
+        return [CogniacGateway(connection, gateway) for gateway in gateways]
+
+    def __init__(self, connection=None, gateway_dict=None, timeout=60, url_prefix=None):
         """
         Initialize a CogniacGateway object.
         
@@ -44,13 +93,31 @@ class CogniacGateway(object):
         if 'COG_GW_URL_PREFIX' in os.environ:
             url_prefix = os.environ['COG_GW_URL_PREFIX']
 
-        if not url_prefix:
-            raise Exception("No EdgeFlow URL prefix was specified.")
+        if not connection and not url_prefix:
+            raise Exception("A URL must be specified for either a CloudCore or EdgeFlow API.")
+
+        if connection and not gateway_dict:
+            raise Exception("Missing gateway object.")
+
+        self._cc = connection
+        if self._cc:
+            self._gateway_keys = gateway_dict.keys()
+            for k, v in gateway_dict.items():
+                super(CogniacGateway, self).__setattr__(k, v)
 
         self.url_prefix = url_prefix
         self.timeout = timeout
 
         self.__initialize()
+
+    def __setattr__(self, name, value):
+        if name not in self._gateway_keys:
+            super(CogniacGateway, self).__setattr__(name, value)
+            return
+        data = {name: value}
+        resp = self._cc._post("/gateways/%s" % self.tenant_id, json=data)
+        for k, v in resp.json().items():
+            super(CogniacGateway, self).__setattr__(k, v)
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __initialize(self):
@@ -93,6 +160,12 @@ class CogniacGateway(object):
         raise_errors(resp)
         return resp
 
+    # -------------------------------------------------------------------------
+    #
+    #  EdgeFlow Local API.
+    #
+    # -------------------------------------------------------------------------
+
     def process_media(self,
                       subject_uid,
                       filename,
@@ -103,7 +176,6 @@ class CogniacGateway(object):
         """
         Uploads a media file object to an EdgeFlow gateway device.
 
-        connnection (CogniacGateway):     CogniacGateway object
         subject_uid		                  A subject's unique identifier.
         filename (str):                   Local filename or http/s URL of image or video media file
         external_media_id (str):          Optional arbitrary external id for this media
@@ -146,3 +218,37 @@ class CogniacGateway(object):
 
         resp = upload()
         return resp.json()
+        
+    # TODO: configure network interfaces
+    # TODO: get network interfaces
+    # TODO: status endpoints
+
+    # -------------------------------------------------------------------------
+    #
+    #  CloudCore API.
+    #
+    # -------------------------------------------------------------------------
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def flush_upload_queue(self, start_time=None, stop_time=None):
+        args = dict()
+        if start_time is not None:
+            args['start_time'] = start_time
+        if stop_time is not None:
+            args['stop_time'] = stop_time
+        resp = self._cc._post("/gateways/%s/events/flush_upload_queue" % (self.gateway_id), data=args)
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def factory_reset(self):
+        resp = self._cc._post("/gateways/%s/events/factory_reset" % (self.gateway_id))
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def upgrade(self, software_version):
+        args = dict()
+        if software_version is not None:
+            args['software_version'] = software_version
+        resp = self._cc._post("/gateways/%s/events/upgrade" % (self.gateway_id), data=args)
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def reboot(self):
+        resp = self._cc._post("/gateways/%s/events/reboot" % (self.gateway_id))
