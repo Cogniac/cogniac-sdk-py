@@ -93,9 +93,6 @@ class CogniacGateway(object):
             gateway_dict = {}
         super(CogniacGateway, self).__setattr__('_gateway_keys', gateway_dict.keys())
 
-        if 'COG_GW_URL_PREFIX' in os.environ:
-            url_prefix = os.environ['COG_GW_URL_PREFIX']
-
         if not connection and not url_prefix:
             raise Exception("A URL must be specified for either a CloudCore or EdgeFlow API.")
 
