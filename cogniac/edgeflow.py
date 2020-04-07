@@ -1,5 +1,5 @@
 """
-CogniacGateway Object Client
+CogniacEdgeFlow Object Client
 
 Copyright (C) 2016 Cogniac Corporation
 """
@@ -20,91 +20,83 @@ from media import file_creation_time
 
 logger = logging.getLogger(__name__)
 
-class CogniacGateway(object):
+class CogniacEdgeFlow(object):
     """
-    CogniacGateway
+    CogniacEdgeFlow
 
     connnection (CogniacConnection):     Authenticated CogniacConnection object.
 
                                          If unspecified, CloudCore functions will not be available.
 
-    url_prefix (String):                 Cogniac Gateway API url prefix.
+    url_prefix (String):                 Cogniac EdgeFlow API url prefix.
 
-                                         This is a _local_ URL of a physical gateway.
+                                         This is a local URL of a physical EdgeFlow.
 
-                                         Defaults to `None`. If unspecified, the gateway's local APIs will not be available.
+                                         Defaults to `None`. If unspecified, the EdgeFlow's local APIs will not be available
 
-                                         The url_prefix can alternatively be set via the COG_GW_URL_PREFIX environment variable.
-
-    Connect to a Cogniac EdgeFlow gateway and maintain session state.
+    Connect to a Cogniac EdgeFlow and maintain session state.
     
     Class definition for an object that stores information about a physical
-    Cogniac gateway device (i.e., EdgeFlow) and methods that provide a client
+    Cogniac EdgeFlow and methods that provide a client
     interface for programmatically managing and requesting work to be done
-    on the gateway.
+    on the EdgeFlow.
     
-    A CogniacGateway object's methods can be used to trigger media capture
-    (e.g., triggering cameras to save images to a gateway) and ingesting
+    A Cogniac EdgeFlow object's methods can be used to trigger media capture
+    (e.g., triggering cameras to save images to an EdgeFlow) and ingesting
     media from another host on the same network.
     """
 
-    ##
-    #  get
-    ##
     @classmethod
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def get(cls,
             connection=None,
-            gateway_id=None,
+            edgeflow_id=None,
             url_prefix=None):
         """
-        get single gateway
+        Get a single EdgeFlow.
         connnection (CogniacConnection): Authenticated CogniacConnection object
-        gateway_id (String): the unique identifier of a Gateway object
-        returns CogniacGateway object
+        edgeflow_id (String): the unique identifier of a EdgeFlow object
+        returns CogniacEdgeFlow object
         """
-        gateway_dict = None
-        if connection and gateway_id:
-            resp = connection._get("/gateways/{}".format(gateway_id))
-            gateway = resp.json()
-        return CogniacGateway(connection=connection, url_prefix=url_prefix, gateway_dict=gateway)
+        edgeflow_dict = None
+        if connection and edgeflow_id:
+            resp = connection._get("/gateways/{}".format(edgeflow_id))
+            edgeflow = resp.json()
+        return CogniacEdgeFlow(connection=connection, url_prefix=url_prefix, edgeflow_dict=edgeflow)
 
-    ##
-    #  get_all
-    ##
     @classmethod
     def get_all(cls, connection):
         """
-        return all CogniacGateway objects belonging to the currently authenticated tenant
+        return all CogniacEdgeFlow objects belonging to the currently authenticated tenant
 
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         """
         resp = connection._get('/tenants/%s/gateways' % connection.tenant.tenant_id)
-        gateways = resp.json()['data']
-        return [CogniacGateway(connection=connection, gateway_dict=gateway) for gateway in gateways]
+        edgeflows = resp.json()['data']
+        return [CogniacEdgeFlow(connection=connection, edgeflow_dict=edgeflow) for edgeflow in edgeflows]
 
-    def __init__(self, connection=None, gateway_dict=None, timeout=60, url_prefix=None):
+    def __init__(self, connection=None, edgeflow_dict=None, timeout=60, url_prefix=None):
         """
-        Initialize a CogniacGateway object.
+        Initialize a CogniacEdgeFlow object.
         
         url_prefix (String):          URL prefix for a Cogniac EdgeFlow device.
         """
-        if not gateway_dict:
-            gateway_dict = {}
-        super(CogniacGateway, self).__setattr__('_gateway_keys', gateway_dict.keys())
+        if not edgeflow_dict:
+            edgeflow_dict = {}
+        super(CogniacEdgeFlow, self).__setattr__('_edgeflow_keys', edgeflow_dict.keys())
 
         if not connection and not url_prefix:
             raise Exception("A URL must be specified for either a CloudCore or EdgeFlow API.")
 
-        if connection and not gateway_dict:
-            raise Exception("Missing gateway object.")
+        if connection and not edgeflow_dict:
+            raise Exception("Missing EdgeFlow object.")
 
         self._cc = connection
 
         if self._cc:
-            self._gateway_keys = gateway_dict.keys()
-            for k, v in gateway_dict.items():
-                super(CogniacGateway, self).__setattr__(k, v)
+            self._edgeflow_keys = edgeflow_dict.keys()
+            for k, v in edgeflow_dict.items():
+                super(CogniacEdgeFlow, self).__setattr__(k, v)
 
         self.url_prefix = url_prefix
         self.timeout = timeout
@@ -112,13 +104,13 @@ class CogniacGateway(object):
         self.__initialize()
 
     def __setattr__(self, name, value):
-        if name not in self._gateway_keys:
-            super(CogniacGateway, self).__setattr__(name, value)
+        if name not in self._edgeflow_keys:
+            super(CogniacEdgeFlow, self).__setattr__(name, value)
             return
         data = {name: value}
         resp = self._cc._post("/gateways/%s" % self.tenant_id, json=data)
         for k, v in resp.json().items():
-            super(CogniacGateway, self).__setattr__(k, v)
+            super(CogniacEdgeFlow, self).__setattr__(k, v)
 
     def __str__(self):
         s = "%s (%s)" % (self.name, self.gateway_id)
@@ -127,6 +119,12 @@ class CogniacGateway(object):
     def __repr__(self):
         s = "%s (%s)" % (self.name, self.gateway_id)
         return s.encode(sys.stdout.encoding)
+
+    # -------------------------------------------------------------------------
+    #
+    #  EdgeFlow API.
+    #
+    # -------------------------------------------------------------------------
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __initialize(self):
@@ -169,12 +167,6 @@ class CogniacGateway(object):
         raise_errors(resp)
         return resp
 
-    # -------------------------------------------------------------------------
-    #
-    #  EdgeFlow Local API.
-    #
-    # -------------------------------------------------------------------------
-
     def get_version(self):
         resp = self._get("/version")
         return resp.json()
@@ -187,7 +179,7 @@ class CogniacGateway(object):
                       domain_unit=None,
                       post_url=None):
         """
-        Uploads a media file object to an EdgeFlow gateway device.
+        Uploads a media file object to an EdgeFlow device.
 
         subject_uid		                  A subject's unique identifier.
         filename (str):                   Local filename or http/s URL of image or video media file
@@ -260,7 +252,7 @@ class CogniacGateway(object):
 
     def status(self, subsystem_name=None, start=None, end=None, reverse=True, limit=None):
         """
-        Yield gateway status, optionally only for a particular subsytem, sorted by timestamp.
+        Yields EdgeFlow status, optionally only for a particular subsytem, sorted by timestamp.
 
         start (float)          filter by last update timestamp > start (seconds since epoch)
         end (float)            filter by last update timestamp < end   (seconds since epoch)

@@ -21,7 +21,7 @@ from subject import CogniacSubject
 from tenant  import CogniacTenant
 from user    import CogniacUser
 from media   import CogniacMedia
-from gateway import CogniacGateway
+from edgeflow import CogniacEdgeFlow
 
 from network_camera import CogniacNetworkCamera
 
@@ -439,21 +439,21 @@ class CogniacConnection(object):
         """
         return CogniacNetworkCamera.get(self, network_camera_id)
 
-    def get_all_gateways(self):
+    def get_all_edgeflows(self):
         """
-        return CogniacGateway for all netcams belonging to the currently authenticated tenant
+        return CogniacEdgeFlow for all netcams belonging to the currently authenticated tenant
         """
-        return CogniacGateway.get_all(self)
+        return CogniacEdgeFlow.get_all(self)
 
-    def get_gateway(self, gateway_id, url_prefix=None):
+    def get_edgeflow(self, edgeflow_id, url_prefix=None):
         """
-        return an existing CogniacGateway 
+        return an existing CogniacEdgeFlow 
 
-        gateway_id (String):  The id of the Cogniac Gateway to return
-        url_prefix (String):  The local URL prefix of a Gateway
+        edgeflow_id (String):  The id of the Cogniac EdgeFlow to return
+        url_prefix (String):  The local URL prefix of a EdgeFlow 
         """
-        return CogniacGateway.get(connection=self,
-                                  gateway_id=gateway_id,
+        return CogniacEdgeFlow.get(connection=self,
+                                  edgeflow_id=edgeflow_id,
                                   url_prefix=url_prefix)
 
 
