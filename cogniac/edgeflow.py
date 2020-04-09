@@ -8,6 +8,8 @@ import os
 import sys
 import logging
 import requests
+import socket
+import re
 from retrying import retry
 from requests.auth import HTTPBasicAuth
 from requests.packages.urllib3 import Retry
@@ -17,8 +19,7 @@ from common import server_error, raise_errors
 
 from media import file_creation_time
 
-
-logger = logging.getLogger(__name__)
+IP_REGEX = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$')
 
 class CogniacEdgeFlow(object):
     """
@@ -48,10 +49,7 @@ class CogniacEdgeFlow(object):
 
     @classmethod
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def get(cls,
-            connection=None,
-            edgeflow_id=None,
-            url_prefix=None):
+    def get(cls, connection, edgeflow_id):
         """
         Get a single EdgeFlow.
         connnection (CogniacConnection): Authenticated CogniacConnection object
@@ -59,10 +57,8 @@ class CogniacEdgeFlow(object):
         returns CogniacEdgeFlow object
         """
         edgeflow_dict = None
-        if connection and edgeflow_id:
-            resp = connection._get("/gateways/{}".format(edgeflow_id))
-            edgeflow = resp.json()
-        return CogniacEdgeFlow(connection=connection, url_prefix=url_prefix, edgeflow_dict=edgeflow)
+        resp = connection._get("/gateways/{}".format(edgeflow_id))
+        return CogniacEdgeFlow(connection, resp.json())
 
     @classmethod
     def get_all(cls, connection):
@@ -73,32 +69,25 @@ class CogniacEdgeFlow(object):
         """
         resp = connection._get('/tenants/%s/gateways' % connection.tenant.tenant_id)
         edgeflows = resp.json()['data']
-        return [CogniacEdgeFlow(connection=connection, edgeflow_dict=edgeflow) for edgeflow in edgeflows]
+        return [CogniacEdgeFlow(connection, edgeflow) for edgeflow in edgeflows]
 
-    def __init__(self, connection=None, edgeflow_dict=None, timeout=60, url_prefix=None):
+    def __init__(self, connection, edgeflow_dict, timeout=60):
         """
         Initialize a CogniacEdgeFlow object.
-        
-        url_prefix (String):          URL prefix for a Cogniac EdgeFlow device.
         """
         if not edgeflow_dict:
             edgeflow_dict = {}
         super(CogniacEdgeFlow, self).__setattr__('_edgeflow_keys', edgeflow_dict.keys())
 
-        if not connection and not url_prefix:
-            raise Exception("A URL must be specified for either a CloudCore or EdgeFlow API.")
-
-        if connection and not edgeflow_dict:
-            raise Exception("Missing EdgeFlow object.")
-
         self._cc = connection
+        self._edgeflow_keys = edgeflow_dict.keys()
+        for k, v in edgeflow_dict.items():
+            super(CogniacEdgeFlow, self).__setattr__(k, v)
 
-        if self._cc:
-            self._edgeflow_keys = edgeflow_dict.keys()
-            for k, v in edgeflow_dict.items():
-                super(CogniacEdgeFlow, self).__setattr__(k, v)
+        # Validate IP address.
+        if self.ip_address and IP_REGEX.match(self.ip_address):
+            self.url_prefix = 'http://{}:8000/1'.format(self.ip_address)
 
-        self.url_prefix = url_prefix
         self.timeout = timeout
 
         self.__initialize()

@@ -441,20 +441,17 @@ class CogniacConnection(object):
 
     def get_all_edgeflows(self):
         """
-        return CogniacEdgeFlow for all netcams belonging to the currently authenticated tenant
+        return CogniacEdgeFlow for all EdgeFlows belonging to the currently authenticated tenant
         """
         return CogniacEdgeFlow.get_all(self)
 
-    def get_edgeflow(self, edgeflow_id, url_prefix=None):
+    def get_edgeflow(self, edgeflow_id):
         """
         return an existing CogniacEdgeFlow 
 
         edgeflow_id (String):  The id of the Cogniac EdgeFlow to return
-        url_prefix (String):  The local URL prefix of a EdgeFlow 
         """
-        return CogniacEdgeFlow.get(connection=self,
-                                  edgeflow_id=edgeflow_id,
-                                  url_prefix=url_prefix)
+        return CogniacEdgeFlow.get(self, edgeflow_id)
 
 
 if __name__ == "__main__":
