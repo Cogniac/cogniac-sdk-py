@@ -87,6 +87,8 @@ class CogniacEdgeFlow(object):
         # Validate IP address.
         if self.ip_address and IP_REGEX.match(self.ip_address):
             self.url_prefix = 'http://{}:8000/1'.format(self.ip_address)
+        else:
+            self.url_prefix = None
 
         self.timeout = timeout
 
@@ -97,7 +99,7 @@ class CogniacEdgeFlow(object):
             super(CogniacEdgeFlow, self).__setattr__(name, value)
             return
         data = {name: value}
-        resp = self._cc._post("/gateways/%s" % self.tenant_id, json=data)
+        resp = self._cc._post("/gateways/%s" % self.gateway_id, json=data)
         for k, v in resp.json().items():
             super(CogniacEdgeFlow, self).__setattr__(k, v)
 
