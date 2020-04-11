@@ -21,6 +21,7 @@ from subject import CogniacSubject
 from tenant  import CogniacTenant
 from user    import CogniacUser
 from media   import CogniacMedia
+from edgeflow import CogniacEdgeFlow
 
 from network_camera import CogniacNetworkCamera
 
@@ -437,6 +438,20 @@ class CogniacConnection(object):
         network_camera_id (String):  The id of the Cogniac network camera to return
         """
         return CogniacNetworkCamera.get(self, network_camera_id)
+
+    def get_all_edgeflows(self):
+        """
+        return CogniacEdgeFlow for all EdgeFlows belonging to the currently authenticated tenant
+        """
+        return CogniacEdgeFlow.get_all(self)
+
+    def get_edgeflow(self, edgeflow_id):
+        """
+        return an existing CogniacEdgeFlow 
+
+        edgeflow_id (String):  The id of the Cogniac EdgeFlow to return
+        """
+        return CogniacEdgeFlow.get(self, edgeflow_id)
 
 
 if __name__ == "__main__":

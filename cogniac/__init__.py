@@ -76,13 +76,17 @@ common Cogniac objects such as applications, subjects, and media:
         return the currently authenticated CogniacTenant
 
 
-CogniacGateway(url_prefix, timeout=60)
+CogniacEdgeFlow(url_prefix, timeout=60)
+    An object representing an EdgeFlow in the Cogniac System.
 
-        Create a client connection to a gateway device (i.e., EdgeFlow):
+    An instance of this class optionally provides a client interface that 
+    communicates directly with a local EdgeFlow's APIs. The local EdgeFlow APIs
+    are useful for application such as uploading images to the EdgeFlow for 
+    fast processing "on the edge" without first uploading the images to
+    CloudCore.
 
-
-        url_prefix (String):          Cogniac API url prefix.
-                                      The url_prefix can alternatively be set via the COG_GW_URL_PREFIX environment variable.
+    url_prefix (String):          Cogniac API url prefix.
+                                    The url_prefix can alternatively be set via the COG_GW_URL_PREFIX environment variable.
 
 
 CogniacApplication
@@ -90,7 +94,7 @@ CogniacApplication
 
     Applications are the main locus of activity within the Cogniac System.
 
-    This classes manages applications within the Cogniac System via the
+    This class manages applications within the Cogniac System via the
     Cogniac public API application endpoints.
 
     Create a new application with
@@ -138,7 +142,7 @@ CogniacTenant
 """
 
 from cogniac import CogniacConnection
-from .gateway import CogniacGateway
+from .edgeflow import CogniacEdgeFlow
 from .app import CogniacApplication
 from .tenant import CogniacTenant
 from .subject import CogniacSubject
