@@ -39,7 +39,23 @@ class CogniacNetworkCamera(object):
                name,
                description=None,
                active=True,
-               url=None):
+               url=None,
+               spec_version_major=None,
+               spec_version_minor=None,
+               device_mode=None,
+               IP_config_options=None,
+               IP_config_current=None,
+               current_IP=None,
+               current_subnet_mask=None,
+               default_gateway=None,
+               mac_address=None,
+               model_name=None,
+               serial_number=None,
+               device_version=None,
+               manufacturer_name=None,
+               manufacturer_info=None,
+               user_defined_name=None):
+
 
         """
         Create a network camera object
@@ -57,6 +73,45 @@ class CogniacNetworkCamera(object):
 
         if url:
             data['url'] = url
+
+        if spec_version_major:
+            data['spec_version_major'] = spec_version_major
+        if spec_version_minor:
+            data['spec_version_minor'] = spec_version_minor
+
+        if device_mode:
+            data['device_mode'] = device_mode
+
+        if IP_config_options:
+            data['IP_config_options'] = IP_config_options
+        if IP_config_current:
+            data['IP_config_current'] = IP_config_current
+        if current_IP:
+            data['current_IP'] = current_IP
+        if current_subnet_mask:
+            data['current_subnet_mask'] = current_subnet_mask
+        if default_gateway:
+            data['default_gateway'] = default_gateway
+        if mac_address:
+            data['mac_address'] = mac_address
+
+        if model_name:
+            data['model_name'] = model_name
+
+        if serial_number:
+            data['serial_number'] = serial_number
+
+        if device_version:
+            data['device_version'] = device_version
+
+        if manufacturer_name:
+            data['manufacturer_name'] = manufacturer_name
+
+        if manufacturer_info:
+            data['manufacturer_info'] = manufacturer_info
+
+        if user_defined_name:
+            data['user_defined_name'] = user_defined_name
 
         resp = connection._post("/networkCameras", json=data)
         return CogniacNetworkCamera(connection, resp.json())
