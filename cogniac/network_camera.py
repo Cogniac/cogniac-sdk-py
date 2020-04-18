@@ -37,9 +37,9 @@ class CogniacNetworkCamera(object):
     def create(cls,
                connection,
                name,
+               url,
                description=None,
                active=True,
-               url=None,
                edgeflow_id=None,
                spec_version_major=None,
                spec_version_minor=None,
@@ -62,14 +62,15 @@ class CogniacNetworkCamera(object):
 
         connnection (CogniacConnection): Authenticated CogniacConnection object
         name (String):                   Name of new camera
+        url(String):                     url of the network camera
         description (String):            Optional description of the camera
         active(Boolean):                 True to indicate system should process the images
-        url(String):                     url of the network camera
         edgeflow_id (String):            cogniac edgeflow_id of the Edgeflow this camera is associated with
 
         plus device dictionaries returned from GVCP discovery
         """
         data = dict(camera_name=name)
+        data['url'] = url
         if active:
             data['active'] = 1
         else:
@@ -77,9 +78,6 @@ class CogniacNetworkCamera(object):
 
         if description:
             data['description'] = description
-
-        if url:
-            data['url'] = url
 
         if edgeflow_id:
             data['gateway_id'] = edgeflow_id
