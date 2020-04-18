@@ -75,17 +75,17 @@ class CogniacNetworkCamera(object):
             data['url'] = url
 
         if spec_version_major:
-            data['spec_version_major'] = spec_version_major
+            data['spec_version_major'] = str(spec_version_major)
         if spec_version_minor:
-            data['spec_version_minor'] = spec_version_minor
+            data['spec_version_minor'] = str(spec_version_minor)
 
         if device_mode:
-            data['device_mode'] = device_mode
+            data['device_mode'] = str(device_mode)
 
         if IP_config_options:
-            data['IP_config_options'] = IP_config_options
+            data['IP_config_options'] = str(IP_config_options)
         if IP_config_current:
-            data['IP_config_current'] = IP_config_current
+            data['IP_config_current'] = str(IP_config_current)
         if current_IP:
             data['current_IP'] = current_IP
         if current_subnet_mask:
@@ -99,7 +99,7 @@ class CogniacNetworkCamera(object):
             data['model_name'] = model_name
 
         if serial_number:
-            data['serial_number'] = serial_number
+            data['serial_number'] = str(serial_number)
 
         if device_version:
             data['device_version'] = device_version
