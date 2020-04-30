@@ -260,13 +260,12 @@ class CogniacEdgeFlow(object):
             args.append('limit=%d' % min(limit, 100))  # api support max limit of 100
 
         if subsystem_name:
-            url = "/gateways/%s/status/%s?" % self.gateway_id, subsystem_name
+            url = "/gateways/%s/status/%s?" % (self.gateway_id, subsystem_name)
         else:
             url = "/gateways/%s/status?" % self.gateway_id
-        del args['subsystem_name']
+
         url += "&".join(args)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def get_next(url):
             resp = self._cc._get(url)
             return resp.json()
