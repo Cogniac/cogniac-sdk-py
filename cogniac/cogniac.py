@@ -147,26 +147,29 @@ class CogniacConnection(object):
                     tenant_id = tenants[0]['tenant_id']
                 else:
                     # try to be helpful and provider interactive user with a list of valid tenants
-                    print "\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:"
+                    print "\nWarning: No tenant specified. To perform operations on a tenant, specify a tenant (e.g. export COG_TENANT=... ) from the following choices:"
                     tenants.sort(key=lambda x: x['name'])
                     for tenant in tenants:
                         print "%24s (%s)    export COG_TENANT='%s'" % (tenant['name'], tenant['tenant_id'], tenant['tenant_id'])
                     print
-                    raise Exception("Unspecified tenant")
 
         self.tenant_id = tenant_id
 
         # get and store auth headers
         self.__authenticate()
 
-        # get tenant and user objects associated with this connection
-        self.tenant = CogniacTenant.get(self)
+        # get user and tenant objects associated with this connection
         self.user = CogniacUser.get(self)
 
-        if self.tenant.region is not None:
-            # use tenant object's specified region preference
-            print "Using API endpoint from Tenant:", self.tenant.region
-            self.url_prefix = 'https://' + self.tenant.region + '/1'
+        if not self.tenant_id:
+            self.tenant = None
+        else:
+            self.tenant = CogniacTenant.get(self)
+
+            if self.tenant.region is not None:
+                # use tenant object's specified region preference
+                print "Using API endpoint from Tenant:", self.tenant.region
+                self.url_prefix = 'https://' + self.tenant.region + '/1'
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __authenticate(self):
@@ -181,10 +184,15 @@ class CogniacConnection(object):
                                 timeout=self.timeout)
         else:
             # trade username/password for user+tenant token
-            resp = requests.get(self.url_prefix + "/token",
-                                params=tenant_data,
-                                auth=HTTPBasicAuth(self.username, self.password),
-                                timeout=self.timeout)
+            if not self.tenant_id:
+                resp = requests.get(self.url_prefix + "/token",
+                                    auth=HTTPBasicAuth(self.username, self.password),
+                                    timeout=self.timeout)
+            else:
+                resp = requests.get(self.url_prefix + "/token",
+                                    params=tenant_data,
+                                    auth=HTTPBasicAuth(self.username, self.password),
+                                    timeout=self.timeout)
         raise_errors(resp)
 
         token = resp.json()
