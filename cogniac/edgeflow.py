@@ -83,10 +83,12 @@ class CogniacEdgeFlow(object):
             super(CogniacEdgeFlow, self).__setattr__(k, v)
 
         # Validate IP address.
-        if self.ip_address and IP_REGEX.match(self.ip_address):
-            self.url_prefix = 'http://{}:8000/1'.format(self.ip_address)
-        else:
-            self.url_prefix = None
+        self.url_prefix = None
+        try:
+            if self.ip_address and IP_REGEX.match(self.ip_address):
+                self.url_prefix = 'http://{}:8000/1'.format(self.ip_address)
+        except:
+            pass
 
         self.timeout = timeout
 
