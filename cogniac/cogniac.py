@@ -165,7 +165,7 @@ class CogniacConnection(object):
 
         if self.tenant.region is not None:
             # use tenant object's specified region preference
-            print "Using API endpoint from Tenant:", self.tenant.region
+            # print "Using API endpoint from Tenant:", self.tenant.region
             self.url_prefix = 'https://' + self.tenant.region + '/1'
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
