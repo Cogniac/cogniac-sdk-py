@@ -11,6 +11,7 @@ import re
 from retrying import retry
 from requests.packages.urllib3 import Retry
 from requests.adapters import HTTPAdapter
+from time import time
 
 from common import server_error, raise_errors
 
@@ -222,24 +223,47 @@ class CogniacEdgeFlow(object):
     # -------------------------------------------------------------------------
 
     def flush_upload_queue(self, start_time=None, stop_time=None):
+        """
+        Flush the EdgeFlow to Core upload queue
+        """
         args = dict()
         if start_time is not None:
             args['start_time'] = start_time
         if stop_time is not None:
             args['stop_time'] = stop_time
-        resp = self._cc._post("/gateways/%s/event/flush_upload_queue" % (self.gateway_id), data=args)
+        self._cc._post("/gateways/%s/event/flush_upload_queue" % (self.gateway_id), data=args)
 
     def factory_reset(self):
-        resp = self._cc._post("/gateways/%s/event/factory_reset" % (self.gateway_id))
+        """
+        Factory reset the EdgeFlow.
+        This results in deletion of this EdgeFlow object in CloudCore/SiteCore!
+        """
+        self._cc._post("/gateways/%s/event/factory_reset" % (self.gateway_id))
 
     def upgrade(self, software_version):
+        """
+        Upgrade the edgeflow to the specified software version
+        """
         args = dict()
         if software_version is not None:
             args['software_version'] = software_version
-        resp = self._cc._post("/gateways/%s/event/upgrade" % (self.gateway_id), data=args)
+        self._cc._post("/gateways/%s/event/upgrade" % (self.gateway_id), data=args)
 
     def reboot(self):
-        resp = self._cc._post("/gateways/%s/event/reboot" % (self.gateway_id))
+        """
+        Reboot the EdgeFlow
+        """
+        self._cc._post("/gateways/%s/event/reboot" % (self.gateway_id))
+
+    def ping(self, ping_id=None):
+        """
+        Send ping event with optional ping_id.
+        EdgeFlow will respond with status message with subsystem="ping"
+        """
+        event = {"timestamp": time()}
+        if ping_id is not None:
+            event['ping_id'] = ping_id
+        self._cc._post("/gateways/%s/event/ping" % self.gateway_id, json=event)
 
     def status(self, subsystem_name=None, start=None, end=None, reverse=True, limit=None):
         """
