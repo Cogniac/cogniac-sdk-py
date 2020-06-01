@@ -265,6 +265,16 @@ class CogniacEdgeFlow(object):
             event['ping_id'] = ping_id
         self._cc._post("/gateways/%s/event/ping" % self.gateway_id, json=event)
 
+    def trigger_camera_capture(self, subject_uid, trigger_domain_unit=None):
+        """
+        trigger a camera capture app via the public-api
+        subject_uid of the 'trigger subject' is required
+        """
+        event = {'subject_uid': subject_uid}
+        if trigger_domain_unit is not None:
+            event['trigger_domain_unit'] = trigger_domain_unit
+        self._cc._post("/gateways/%s/event/trigger_camera_capture" % self.gateway_id, json=event)
+
     def status(self, subsystem_name=None, start=None, end=None, reverse=True, limit=None):
         """
         Yields EdgeFlow status, optionally only for a particular subsytem, sorted by timestamp.
