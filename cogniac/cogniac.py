@@ -200,6 +200,23 @@ class CogniacConnection(object):
         self.session.headers.update(headers)
 
     @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
+    def _head(self, url, timeout=None, **kwargs):
+        """
+        wrap requests session to re-authenticate on credential expiration
+        """
+        if not url.startswith("http"):
+            url = self.url_prefix + url
+        if timeout is None:
+            timeout = self.timeout
+        try:
+            resp = self.session.head(url, timeout=timeout, **kwargs)
+            raise_errors(resp)
+        except CredentialError:
+            self.__authenticate()
+            raise
+        return resp
+
+    @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
     def _get(self, url, timeout=None, **kwargs):
         """
         wrap requests session to re-authenticate on credential expiration
