@@ -142,7 +142,7 @@ class CogniacApplication(object):
         if name in ['application_id', 'created_at', 'created_by', 'modified_at', 'modified_by']:
             raise AttributeError("%s is immutable" % name)
         if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects', 'app_managers',
-                    'detection_post_urls', 'detection_threshols', 'custom_fields']:
+                    'detection_post_urls', 'detection_threshols', 'custom_fields', 'app_type_config']:
             data = {name: value}
             resp = self._cc._post("/applications/%s" % self.application_id, json=data)
             for k, v in resp.json().items():
