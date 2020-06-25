@@ -222,6 +222,17 @@ class CogniacEdgeFlow(object):
     #
     # -------------------------------------------------------------------------
 
+    def request_time_region_upload(self, start_time, stop_time):
+        """
+        Request a time region to upload iamges from the EdgeFlow to CloudCore
+        Must specify start_time and stop_time in unix time
+        """
+        args = dict()
+        args['start_time'] = start_time
+        args['stop_time'] = stop_time
+        self._cc._post("/gateways/%s/event/request_time_region_upload" % (self.gateway_id), data=args)
+
+
     def flush_upload_queue(self, start_time=None, stop_time=None):
         """
         Flush the EdgeFlow to Core upload queue
@@ -233,6 +244,7 @@ class CogniacEdgeFlow(object):
             args['stop_time'] = stop_time
         self._cc._post("/gateways/%s/event/flush_upload_queue" % (self.gateway_id), data=args)
 
+        
     def factory_reset(self):
         """
         Factory reset the EdgeFlow.
