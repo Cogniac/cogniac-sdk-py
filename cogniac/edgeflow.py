@@ -240,7 +240,7 @@ class CogniacEdgeFlow(object):
         args = dict()
         if start_time is not None:
             args['start_time'] = start_time
-        if stop_time is not None:
+        if end_time is not None:
             args['end_time'] = end_time
         self._cc._post("/gateways/%s/event/flush_upload_queue" % (self.gateway_id), json=args)
 
