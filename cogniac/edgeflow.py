@@ -222,16 +222,28 @@ class CogniacEdgeFlow(object):
     #
     # -------------------------------------------------------------------------
 
-    def flush_upload_queue(self, start_time=None, stop_time=None):
+    def time_bound_media_upload(self, start_time, end_time):
+        """
+        Request a time region to upload iamges from the EdgeFlow to CloudCore
+        Must specify start_time and stop_time in unix time
+        """
+        args = dict()
+        args['start_time'] = start_time
+        args['end_time'] = end_time
+        self._cc._post("/gateways/%s/event/time_bound_media_upload" % (self.gateway_id), json=args)
+
+
+    def flush_upload_queue(self, start_time=None, end_time=None):
         """
         Flush the EdgeFlow to Core upload queue
         """
         args = dict()
         if start_time is not None:
             args['start_time'] = start_time
-        if stop_time is not None:
-            args['stop_time'] = stop_time
-        self._cc._post("/gateways/%s/event/flush_upload_queue" % (self.gateway_id), data=args)
+        if end_time is not None:
+            args['end_time'] = end_time
+        self._cc._post("/gateways/%s/event/flush_upload_queue" % (self.gateway_id), json=args)
+
 
     def factory_reset(self):
         """
