@@ -143,7 +143,7 @@ class CogniacApplication(object):
             raise AttributeError("%s is immutable" % name)
         if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects', 'app_managers',
                     'detection_post_urls', 'detection_threshols', 'custom_fields', 'app_type_config',
-                    'edgeflow_upload_policies']:
+                    'edgeflow_upload_policies', 'override_upstream_detection_filter']:
             data = {name: value}
             resp = self._cc._post("/applications/%s" % self.application_id, json=data)
             for k, v in resp.json().items():
