@@ -8,7 +8,6 @@ from hashlib import md5
 from retrying import retry
 from common import *
 from os import stat, path
-import requests
 import platform
 
 platform_system = platform.system()
@@ -132,7 +131,8 @@ class CogniacMedia(object):
                media_timestamp=None,
                domain_unit=None,
                trigger_id=None,
-               sequence_ix=None):
+               sequence_ix=None,
+               custom_data=None):
         """
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
@@ -152,6 +152,9 @@ class CogniacMedia(object):
                                           Media with the same domain_unit will always be assigned to the same
                                           training or validation set. Set this to avoid overfitting when you have
                                           multiple images of the same thing or almost the same thing.
+        trigger_id (str):                 unique trigger identifier leading to a media sequence containing this media
+        sequence_ix (str):                the index of this media within a triggered sequence
+        custom_data (str):                opaque user-specified data associated with this media; limited to 32KB
         """
 
         args = dict()
@@ -181,6 +184,8 @@ class CogniacMedia(object):
             args['trigger_id'] = trigger_id
         if sequence_ix is not None:
             args['sequence_ix'] = sequence_ix
+        if custom_data is not None:
+            args['custom_data'] = custom_data
 
         if filename.startswith('http'):
             args['source_url'] = filename

@@ -392,7 +392,8 @@ class CogniacConnection(object):
                      media_timestamp=None,
                      domain_unit=None,
                      trigger_id=None,
-                     sequence_ix=None):
+                     sequence_ix=None,
+                     custom_data=None):
         """
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
@@ -411,6 +412,9 @@ class CogniacConnection(object):
                                           Media with the same domain_unit will always be assigned to the same
                                           training or validation set. Set this to avoid overfitting when you have
                                           multiple images of the same thing or almost the same thing.
+        trigger_id (str):                 unique trigger identifier leading to a media sequence containing this media
+        sequence_ix (str):                the index of this media within a triggered sequence
+        custom_data (str):                opaque user-specified data associated with this media; limited to 32KB
         """
         return CogniacMedia.create(self,
                                    filename=filename,
@@ -426,7 +430,8 @@ class CogniacConnection(object):
                                    media_timestamp=media_timestamp,
                                    domain_unit=domain_unit,
                                    trigger_id=trigger_id,
-                                   sequence_ix=sequence_ix)
+                                   sequence_ix=sequence_ix,
+                                   custom_data=custom_data)
 
     def get_version(self, auth=False):
         """
