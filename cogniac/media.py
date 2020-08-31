@@ -132,7 +132,8 @@ class CogniacMedia(object):
                domain_unit=None,
                trigger_id=None,
                sequence_ix=None,
-               custom_data=None):
+               custom_data=None,
+               fp=None):
         """
         Create a new CogniacMedia object and upload the media to the Cogniac System.
 
@@ -152,9 +153,11 @@ class CogniacMedia(object):
                                           Media with the same domain_unit will always be assigned to the same
                                           training or validation set. Set this to avoid overfitting when you have
                                           multiple images of the same thing or almost the same thing.
-        trigger_id (str):                 unique trigger identifier leading to a media sequence containing this media
-        sequence_ix (str):                the index of this media within a triggered sequence
-        custom_data (str):                opaque user-specified data associated with this media; limited to 32KB
+        trigger_id (str):                 Unique trigger identifier leading to a media sequence containing this media
+        sequence_ix (str):                The index of this media within a triggered sequence
+        custom_data (str):                Opaque user-specified data associated with this media; limited to 32KB
+        fp (file):                        A '.read()'-supporting file-like object (under 16MB) from which to acquire
+                                          the media instead of reading the media from the specified filename.
         """
 
         args = dict()
@@ -189,7 +192,7 @@ class CogniacMedia(object):
 
         if filename.startswith('http'):
             args['source_url'] = filename
-        else:  # local filename
+        elif fp is None:  # local filename
             fstat = stat(filename)
             if 'media_timestamp' not in args:
                 # set the unspecified media timestamp to the earliest file time we have
@@ -202,6 +205,9 @@ class CogniacMedia(object):
         def upload():
             if filename.startswith('http'):
                 files = None
+            elif fp is not None:
+                fp.seek(0)  # for the retry win
+                files = {'file': fp}
             else:
                 files = {'file': open(filename, 'rb')}
             resp = connection._post("/media", data=args, files=files)
