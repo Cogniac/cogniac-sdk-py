@@ -261,7 +261,7 @@ class CogniacEdgeFlow(object):
             args['software_version'] = software_version
         self._cc._post("/gateways/%s/event/upgrade" % (self.gateway_id), json=args)
 
-    def rollback(self, software_version):
+    def set_boot_software_version(self, software_version):
         """
         Upgrade the edgeflow to the specified software version
         """
