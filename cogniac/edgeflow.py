@@ -259,7 +259,16 @@ class CogniacEdgeFlow(object):
         args = dict()
         if software_version is not None:
             args['software_version'] = software_version
-        self._cc._post("/gateways/%s/event/upgrade" % (self.gateway_id), data=args)
+        self._cc._post("/gateways/%s/event/upgrade" % (self.gateway_id), json=args)
+
+    def set_boot_software_version(self, software_version):
+        """
+        Upgrade the edgeflow to the specified software version
+        """
+        args = dict()
+        if software_version is not None:
+            args['software_version'] = software_version
+        self._cc._post("/gateways/%s/event/set_boot_software_version" % (self.gateway_id), json=args)
 
     def reboot(self):
         """
