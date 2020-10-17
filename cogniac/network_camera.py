@@ -160,6 +160,7 @@ class CogniacNetworkCamera(object):
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def update(self,
+               url=None,
                camera_name=None,
                description=None,
                active=None,
@@ -200,6 +201,8 @@ class CogniacNetworkCamera(object):
         """
         data = {}
 
+        if url is not None:
+            data['url'] = url
         if camera_name is not None:
             data['camera_name'] = camera_name
         if description is not None:
