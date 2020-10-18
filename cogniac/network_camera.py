@@ -161,6 +161,7 @@ class CogniacNetworkCamera(object):
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def update(self,
                url=None,
+               current_IP=None,
                camera_name=None,
                description=None,
                active=None,
@@ -203,6 +204,8 @@ class CogniacNetworkCamera(object):
 
         if url is not None:
             data['url'] = url
+        if current_IP is not None:
+            data['current_IP'] = current_IP
         if camera_name is not None:
             data['camera_name'] = camera_name
         if description is not None:
