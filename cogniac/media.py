@@ -14,7 +14,7 @@ platform_system = platform.system()
 
 immutable_keys = ['frame', 'video', 'media_id', 'size', 'network_camera_id', 'original_url', 'image_width', 'filename', 'original_landing_url', 'uploaded_by_user', 'media_timestamp', 'media_url', 'status', 'hash', 'external_media_id', 'author_profile_url', 'media_src', 'parent_media_id',  'media_resize_urls', 'license', 'tenant_id', 'created_at', 'author', 'public', 'image_height', 'media_format', 'title', 'domain_unit']
 
-mutable_keys =['force_set', 'meta_tags']
+mutable_keys =['set_assignment', 'force_set', 'meta_tags']
 
 
 def file_creation_time(path_to_file):
@@ -121,6 +121,7 @@ class CogniacMedia(object):
                filename,
                meta_tags=None,
                force_set=None,
+               set_assignment=None,
                external_media_id=None,
                original_url=None,
                original_landing_url=None,
@@ -141,6 +142,7 @@ class CogniacMedia(object):
         filename (str):                   Local filename or http/s URL of image or video media file
         meta_tags ([str]):                Optional list of arbitrary strings to associate with the media
         force_set (str):                  Optionally force the media into the 'training', 'validation' or 'test' sets
+        set_assignment (str):             Optionally force the media into the 'training', 'validation' or 'test' sets
         external_media_id (str):          Optional arbitrary external id for this media
         original_url(str):                Optional source url for this media
         original_landing_url (str):       Optional source landing url for this media
@@ -165,6 +167,8 @@ class CogniacMedia(object):
             args['meta_tags'] = meta_tags
         if force_set is not None:
             args['force_set'] = force_set
+        if set_assignment is not None:
+            args['set_assignment'] = set_assignment
         if external_media_id is not None:
             args['external_media_id'] = external_media_id
         if original_url is not None:
