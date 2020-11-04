@@ -401,7 +401,7 @@ class CogniacConnection(object):
 
         filename (str):                   Local filename or http/s URL of image or video media file
         meta_tags ([str]):                Optional list of arbitrary strings to associate with the media
-        force_set (str):                  Optionally force the media into the 'training', 'validation' or 'test' sets
+        force_set (str):                  [DEPRECATED] Optionally force the media into the 'training', 'validation' or 'test' sets
         set_assignment (str):             Optionally associate media with the 'training', 'validation' or 'test' sets
         external_media_id (str):          Optional arbitrary external id for this media
         original_url(str):                Optional source url for this media
