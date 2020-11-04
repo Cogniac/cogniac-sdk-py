@@ -382,6 +382,7 @@ class CogniacConnection(object):
                      filename,
                      meta_tags=None,
                      force_set=None,
+                     set_assignment=None,
                      external_media_id=None,
                      original_url=None,
                      original_landing_url=None,
@@ -400,7 +401,8 @@ class CogniacConnection(object):
 
         filename (str):                   Local filename or http/s URL of image or video media file
         meta_tags ([str]):                Optional list of arbitrary strings to associate with the media
-        force_set (str):                  Optionally force the media into the 'training', 'validation' or 'test' sets
+        force_set (str):                  [DEPRECATED] Optionally force the media into the 'training', 'validation' or 'test' sets
+        set_assignment (str):             Optionally associate media with the 'training', 'validation' or 'test' sets
         external_media_id (str):          Optional arbitrary external id for this media
         original_url(str):                Optional source url for this media
         original_landing_url (str):       Optional source landing url for this media
@@ -423,6 +425,7 @@ class CogniacConnection(object):
                                    filename=filename,
                                    meta_tags=meta_tags,
                                    force_set=force_set,
+                                   set_assignment=set_assignment,
                                    external_media_id=external_media_id,
                                    original_url=original_url,
                                    original_landing_url=original_landing_url,
