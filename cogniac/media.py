@@ -58,7 +58,7 @@ class CogniacMedia(object):
         return CogniacMedia(connection, resp.json())
 
     @classmethod
-    def search(cls, connection, md5=None, filename=None, external_media_id=None, domain_unit=None):
+    def search(cls, connection, md5=None, filename=None, external_media_id=None, domain_unit=None, limit=None):
         """
         Search for a CogniacMedia item in current tenant by md5, filename, or external_media_id.
 
@@ -84,9 +84,29 @@ class CogniacMedia(object):
         else:
             assert((md5 is None) & (filename is None) & (external_media_id is None))
             query = "domain_unit=%s" % domain_unit
-        resp = connection._get("/media/all/search?%s" % query)
+
+        def get_next(last_key=None):
+            query_limit = limit if limit and limit < 100 else 100
+            url = "/media/all/search?%s&limit=%s" % (query, query_limit)
+            if last_key:
+                url += "&last_key=%s" % (last_key)
+            resp = connection._get(url)
+            return resp.json()
+
+        matches = []
+        last_key = None
+        while True:
+            resp = get_next(last_key=last_key)
+            last_key = resp.get('last_key')
+            data = [CogniacMedia(connection, m) for m in resp['data']]
+            for datum in data:
+                matches.append(datum)
+                if limit and len(matches) == limit:
+                    return matches
+            if not last_key:
+                break
         
-        return [CogniacMedia(connection, m) for m in resp.json()['data']]
+        return matches
     
     def __init__(self, connection, media_dict):
         """
