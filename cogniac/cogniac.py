@@ -97,10 +97,11 @@ class CogniacConnection(object):
                                       will be used as the tenant.
 
         url_prefix (String):          Cogniac API url prefix.
-                                      Defaults to "https://api.cogniac.io/1" for the Cogniac cloud systematches              last_key If you are accessing an 'on-prem' version of the Cogniac system,
-          last_key         please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/1'
+                                      Defaults to "https://api.cogniac.io/1" for the Cogniac cloud system.
+                                      If you are accessing an 'on-prem' version of the Cogniac system,
+                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/1'
                                       or a custom DNS prefix assigned by your internal IT.)
-matches                               The url_prefix camatchesnatively be set via the COG_URL_PREFIX environment variable.
+                                      The url_prefix can alternatively be set via the COG_URL_PREFIX environment variable.
 
         If a user is a member of multiple tenants the user can retrieve his list of associated
         tenants via the CogniacConnection.get_all_authorized_tenants() classmethod.
