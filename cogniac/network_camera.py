@@ -6,6 +6,7 @@ Copyright (C) 2019 Cogniac Corporation
 
 from retrying import retry
 import sys
+import os
 from common import server_error
 
 camera_model_keys = ['last_pose_change_timestamp',
@@ -311,6 +312,31 @@ class CogniacNetworkCamera(object):
         self._cam_keys = netcam_dict.keys()
         for k, v in netcam_dict.items():
             super(CogniacNetworkCamera, self).__setattr__(k, v)
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def upload_genicam_xml(self, filename=None, fp=None):
+        """ Upload a GeniCam XML file
+        filename (str): Local filename of a genicam xml.
+        fp (file):      A '.read()'-supporting file-like object (under 16MB) from which to acquire
+                          the genicam xml instead of reading it from the specified filename.
+        """
+        a = filename is None
+        b = fp is None
+
+        if not (a ^ b):
+            raise ValueError("Please specify either filename or fp argument.")
+
+        if fp is not None:
+            fp.seek(0)  # for the retry
+            files = {'file': fp}
+        else:
+            if not os.path.isfile(filename):
+                raise ValueError("{} is not a file.".format(filename))
+
+            files = {'file': open(filename, 'rb')}
+
+        self._cc._post("/networkCameras/%s/genicam".format(self.network_camera_id), files=files)
+        return
 
     def __setattr__(self, name, value):
         if name in ['network_camera_id', 'created_at', 'created_by', 'modified_at', 'modified_by']:
