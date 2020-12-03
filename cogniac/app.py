@@ -5,7 +5,7 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 from retrying import retry
-from common import *
+from common import server_error
 
 
 class CogniacApplication(object):
@@ -120,8 +120,16 @@ class CogniacApplication(object):
         """
         self._cc = connection
         self._app_keys = application_dict.keys()
+        self.__parse_app_dict__(application_dict)
+
+    def __parse_app_dict__(self, application_dict):
         for k, v in application_dict.items():
-            super(CogniacApplication, self).__setattr__(k, v)
+
+            if k == "app_type_config":
+                app_type_config = CogniacApplication._CogniacAppTypeConfig(app=self, app_type_config_dict=v)
+                super(CogniacApplication, self).__setattr__("app_type_config", app_type_config)
+            else:
+                super(CogniacApplication, self).__setattr__(k, v)
 
     ##
     #  delete
@@ -133,26 +141,32 @@ class CogniacApplication(object):
         This will delete existing models but will not delete associated subjects or media.
         """
         self._cc._delete("/applications/%s" % self.application_id)
+
         for k in self._app_keys:
             delattr(self, k)
+
         self._app_keys = None
         self.connection = None
 
+    def __post_update__(self, data):
+        resp = self._cc._post("/applications/%s" % self.application_id, json=data)
+        self.__parse_app_dict__(resp.json())
+
     def __setattr__(self, name, value):
+        if name in ['app_type_config']:
+            raise AttributeError("Please modify {} by accessing its own attributes.".format(name))
+
         if name in ['application_id', 'created_at', 'created_by', 'modified_at', 'modified_by']:
             raise AttributeError("%s is immutable" % name)
+
         if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects', 'app_managers',
-                    'detection_post_urls', 'detection_threshols', 'custom_fields', 'app_type_config',
+                    'detection_post_urls', 'detection_thresholds', 'custom_fields', 'app_type_config',
                     'edgeflow_upload_policies', 'override_upstream_detection_filter', 'feedback_resample_ratio']:
             data = {name: value}
-            resp = self._cc._post("/applications/%s" % self.application_id, json=data)
-            for k, v in resp.json().items():
-                super(CogniacApplication, self).__setattr__(k, v)
+            self.__post_update__(data)
             return
-        super(CogniacApplication, self).__setattr__(name, value)
 
-    def __str__(self):
-        return "%s (%s)" % (self.name, self.application_id)
+        super(CogniacApplication, self).__setattr__(name, value)
 
     def __repr__(self):
         return "%s (%s)" % (self.name, self.application_id)
@@ -209,7 +223,7 @@ class CogniacApplication(object):
         media_id (String):             Media ID of the media to provide feedback on
         subjects (list of dicts):      Subject-media association dictionaries of the form:
 
-            subject_uid:               Subject UID 
+            subject_uid:               Subject UID
             result (str):              Either 'True', 'False', 'Uncertain'
             app_data_type (String):    (Optional) Type of extra app-specific data for certain app types
             app_data (Object):         (Optional) Additional, app-specific, subject-media association data
@@ -279,7 +293,7 @@ class CogniacApplication(object):
         probability_upper:     filter by probability < probability_upper
         limit (int)            yield maximum of limit results
         consensus_none (bool): only return items that have not reached consensus.
-                               This is useful for alternate feedback interfaces where it is 
+                               This is useful for alternate feedback interfaces where it is
                                undesirable to display items that have already reached consensus
         only_user (bool):      If True, only return feedback assertions from users, not model predictions
         only_model (bool);     If True, only return model prediction assertions, not feedback assertions from users
@@ -287,14 +301,14 @@ class CogniacApplication(object):
 
 
         Returns (yield) association dictionary with the following fields:
-        
+
         media(dict):  { system media dictionary}
 
         focus(dict):  { system focus context (box, segment, etc) dictionary}
 
         updated_at(float):  epoch timstamp of model prediction or user feedback
-        
-        detections : list of dictionaries as follows: 
+
+        detections : list of dictionaries as follows:
              detection_id:     internal detection_id
              user_id:          a user_id if this was from a user
              model_id:         a model_id if this was from an app w/model
@@ -303,7 +317,7 @@ class CogniacApplication(object):
              prev_prob:        subject-media probability before this detection (if any)
              probability:      the resulting probability after this detection
              app_data_type     Optional type of extra app-specific data
-             app_data          Optional extra app-specific data        
+             app_data          Optional extra app-specific data
 
         """
         args = []
@@ -372,3 +386,35 @@ class CogniacApplication(object):
             for record in resp['data']:
                 yield record
             url = resp['paging'].get('next')
+
+    class _CogniacAppTypeConfig(object):
+        def __init__(self, app, app_type_config_dict):
+            super(CogniacApplication._CogniacAppTypeConfig, self).__setattr__(
+                "_app_type_config_keys", app_type_config_dict.keys())
+            self._app = app
+
+            for k, v in app_type_config_dict.items():
+                super(CogniacApplication._CogniacAppTypeConfig, self).__setattr__(k, v)
+
+        def __get_app_type_config_dict__(self):
+            d = {}
+
+            for k, v in self.__dict__.iteritems():
+                if k in self._app_type_config_keys:
+                    d[k] = v
+
+            return d
+
+        def __setattr__(self, name, value):
+            if name in self._app_type_config_keys:
+                d = self.__get_app_type_config_dict__()
+                d[name] = value
+
+                data = {"app_type_config": d}
+                self._app.__post_update__(data)
+            else:
+                super(CogniacApplication._CogniacAppTypeConfig, self).__setattr__(name, value)
+
+        def __repr__(self):
+            d = self.__get_app_type_config_dict__()
+            return repr(d)
