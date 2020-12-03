@@ -21,6 +21,14 @@ camera_model_keys = ['last_pose_change_timestamp',
                      'x_axis_x', 'x_axis_y',
                      'y_axis_x', 'y_axis_y',
                      'z_axis_x', 'z_axis_y']
+
+mutable_keys = ['url', 'current_IP', 'camera_name', 'description',
+                'active', 'lat', 'lon', 'hae'] + camera_model_keys
+
+immutable_keys = ['network_camera_id', 'created_at',
+                  'created_by', 'modified_at', 'modified_by']
+
+
 ##
 #  Cogniac Network Camera
 ##
@@ -65,7 +73,7 @@ class CogniacNetworkCamera(object):
         url(String):                     url of the network camera
         description (String):            Optional description of the camera
         active(Boolean):                 True to indicate system should process the images
-        discovered_by (String):          cogniac edgeflow_id of the Edgeflow that discovered this camera 
+        discovered_by (String):          cogniac edgeflow_id of the Edgeflow that discovered this camera
 
         plus device dictionaries returned from GVCP discovery
         """
@@ -79,7 +87,7 @@ class CogniacNetworkCamera(object):
         if description:
             data['description'] = description
 
-        if discovered_by: 
+        if discovered_by:
             data['discovered_by'] = discovered_by
 
         if spec_version_major:
@@ -195,11 +203,17 @@ class CogniacNetworkCamera(object):
                z_axis_x=None,
                z_axis_y=None):
         """
+        (Deprecated)
         update single network camera's camera model
         connnection (CogniacConnection): Authenticated CogniacConnection object
         network_camera_id (String): the netcam id of the Cogniac NetCam object
         returns CogniacNetworkCamera object
         """
+        print("'update' function of CogniacNetworkCamera object is deprecated "
+              "and will be removed in the next version.\n"
+              "Please use __setattr__ instead.\n "
+              "For example:\n    netcam.current_IP = '192.164.10.1'")
+
         data = {}
 
         if url is not None:
@@ -290,7 +304,7 @@ class CogniacNetworkCamera(object):
         """
         Delete the op review result.
         """
-        resp = self._cc._delete("/networkCameras/%s" % self.network_camera_id)
+        self._cc._delete("/networkCameras/%s" % self.network_camera_id)
 
         for k in self._cam_keys:
             delattr(self, k)
@@ -309,19 +323,24 @@ class CogniacNetworkCamera(object):
         """
         self._cc = connection
         self._cam_keys = netcam_dict.keys()
+
         for k, v in netcam_dict.items():
             super(CogniacNetworkCamera, self).__setattr__(k, v)
 
     def __setattr__(self, name, value):
-        if name in ['network_camera_id', 'created_at', 'created_by', 'modified_at', 'modified_by']:
+        if name in immutable_keys:
             raise AttributeError("%s is immutable" % name)
-        if name in ['camera_name', 'description', 'active', 'lat', 'lon', 'hae'] + camera_model_keys:
+
+        if name in mutable_keys:
             data = {name: value}
             print "\n====", data
             resp = self._cc._post("/networkCameras/%s" % self.network_camera_id, json=data)
+
             for k, v in resp.json().items():
                 super(CogniacNetworkCamera, self).__setattr__(k, v)
+
             return
+
         super(CogniacNetworkCamera, self).__setattr__(name, value)
 
     def __str__(self):
