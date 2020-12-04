@@ -2,6 +2,10 @@ Python 2.7 SDK for Cogniac Public API
 
 This client library provides access to most of the common functionality of the Cogniac public API.
 
+## Installation
+pip install cogniac
+
+## Usage
 The main entry point is the CogniacConnection object which is created as follows:
 
         CogniacConnection(username=None,
@@ -171,5 +175,5 @@ cogupload
      usage: cogupload <subject_uid> <directory_name>
 
 
-
+## Support
 Please email us at support@cogniac.co with your feedback and thoughts about this library.
