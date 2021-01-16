@@ -231,9 +231,9 @@ class CogniacMedia(object):
                 files = None
             elif fp is not None:
                 fp.seek(0)  # for the retry win
-                files = {'file': fp}
+                files = {'filename': fp}
             else:
-                files = {'file': open(filename, 'rb')}
+                files = {'filename': open(filename, 'rb')}
             resp = connection._post("/media", data=args, files=files)
             return resp
 
