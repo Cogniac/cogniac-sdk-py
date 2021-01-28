@@ -6,7 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 from retrying import retry
 import sys
-from common import server_error
+from .common import server_error
 
 
 ##

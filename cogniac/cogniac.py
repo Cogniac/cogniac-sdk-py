@@ -14,16 +14,16 @@ from requests.auth import HTTPBasicAuth
 from requests.packages.urllib3 import Retry
 from requests.adapters import HTTPAdapter
 
-from common import server_error, raise_errors, CredentialError, credential_error
+from .common import server_error, raise_errors, CredentialError, credential_error
 
-from app     import CogniacApplication
-from subject import CogniacSubject
-from tenant  import CogniacTenant
-from user    import CogniacUser
-from media   import CogniacMedia
-from edgeflow import CogniacEdgeFlow
+from .app     import CogniacApplication
+from .subject import CogniacSubject
+from .tenant  import CogniacTenant
+from .user    import CogniacUser
+from .media   import CogniacMedia
+from .edgeflow import CogniacEdgeFlow
 
-from network_camera import CogniacNetworkCamera
+from .network_camera import CogniacNetworkCamera
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,7 @@ class CogniacConnection(object):
                 tenant_id = os.environ['COG_TENANT']
             except:
                 if self.api_key:
-                    print "tenant_id must be explicitly specified when using api_key"
+                    print("tenant_id must be explicitly specified when using api_key")
                     raise Exception("Unspecified tenant")
 
                 # get list of user's tenants
@@ -147,10 +147,10 @@ class CogniacConnection(object):
                     tenant_id = tenants[0]['tenant_id']
                 else:
                     # try to be helpful and provider interactive user with a list of valid tenants
-                    print "\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:"
+                    print("\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:")
                     tenants.sort(key=lambda x: x['name'])
                     for tenant in tenants:
-                        print "%24s (%s)    export COG_TENANT='%s'" % (tenant['name'], tenant['tenant_id'], tenant['tenant_id'])
+                        print("%24s (%s)    export COG_TENANT='%s'" % (tenant['name'], tenant['tenant_id'], tenant['tenant_id']))
                     print
                     raise Exception("Unspecified tenant")
 
@@ -487,10 +487,10 @@ if __name__ == "__main__":
     c = CogniacConnection()
     tenant = c.tenant()
     from pprint import pprint
-    print tenant
-    print "\nApplications:"
+    print(tenant)
+    print("\nApplications:")
     for app in tenant.applications():
         pprint(app.name)
-    print "\Subjects:"
+    print("\Subjects:")
     for sub in tenant.subjects():
-        print sub.name, sub.subject_uid
+        print(sub.name, sub.subject_uid)

@@ -7,7 +7,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 import json
 from retrying import retry
-from common import *
+from .common import *
 
 
 TENANT_ADMIN_ROLE = "tenant_admin"

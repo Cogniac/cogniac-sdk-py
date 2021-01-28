@@ -141,7 +141,7 @@ CogniacTenant
 
 """
 
-from cogniac import CogniacConnection
+from .cogniac import CogniacConnection
 from .edgeflow import CogniacEdgeFlow
 from .app import CogniacApplication
 from .tenant import CogniacTenant

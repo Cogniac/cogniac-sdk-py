@@ -7,7 +7,7 @@ Copyright (C) 2019 Cogniac Corporation
 
 import json
 from retrying import retry
-from common import *
+from .common import *
 
 
 mutable_keys = ['given_name', 'surname', 'title']

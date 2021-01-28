@@ -6,7 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 from hashlib import md5
 from retrying import retry
-from common import *
+from .common import *
 from os import stat, path
 import platform
 
@@ -234,8 +234,8 @@ class CogniacMedia(object):
                 files = {filename: fp}
             else:
                 files = {filename: open(filename, 'rb')}
-            print args
-            print files
+            print(args)
+            print(files)
             resp = connection._post("/media", data=args, files=files)
             return resp
 

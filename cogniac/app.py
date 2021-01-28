@@ -5,7 +5,7 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 from retrying import retry
-from common import server_error
+from .common import server_error
 
 
 class CogniacApplication(object):

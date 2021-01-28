@@ -6,7 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 from retrying import retry
 import sys
-from common import server_error
+from .common import server_error
 
 
 ##
@@ -104,7 +104,7 @@ class CogniacExternalResult(object):
                 data['limit'] = limit
 
         resp = connection._get("/externalResults", json=data)
-        print resp.json()
+        print(resp.json())
         subs = resp.json()['data']
         return [CogniacExternalResult(connection, s) for s in subs]
 
