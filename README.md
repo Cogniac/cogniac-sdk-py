@@ -1,4 +1,6 @@
-Python 2.7 SDK for Cogniac Public API
+Python SDK for Cogniac Public API
+
+Supported Python versions: Python 2.7 and Python 3
 
 This client library provides access to most of the common functionality of the Cogniac public API.
 
