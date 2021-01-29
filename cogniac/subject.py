@@ -5,10 +5,10 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 from retrying import retry
-from common import *
+from .common import *
 import sys
 
-from media import CogniacMedia
+from .media import CogniacMedia
 
 
 ##

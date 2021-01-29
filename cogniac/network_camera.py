@@ -6,7 +6,7 @@ Copyright (C) 2019 Cogniac Corporation
 
 from retrying import retry
 import sys
-from common import server_error
+from .common import server_error
 
 camera_model_keys = ['last_pose_change_timestamp',
                      'resolution_h_px', 'resolution_v_px',
@@ -333,7 +333,7 @@ class CogniacNetworkCamera(object):
 
         if name in mutable_keys:
             data = {name: value}
-            print "\n====", data
+            print("\n====", data)
             resp = self._cc._post("/networkCameras/%s" % self.network_camera_id, json=data)
 
             for k, v in resp.json().items():
