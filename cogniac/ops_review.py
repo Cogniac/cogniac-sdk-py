@@ -74,6 +74,66 @@ class CogniacOpsReview(object):
         return CogniacOpsReview(connection, resp.json())
 
     ##
+    #  get multiple
+    ##
+    @classmethod
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def get_many(cls,
+                 connection,
+                 start=None,
+                 end=None,
+                 reverse=False,
+                 limit=None):
+
+        """
+        get single item from operations review queue
+        connnection (CogniacConnection): Authenticated CogniacConnection object
+
+        return:
+            review_id, cogniac supplied unique ID,
+            review_items
+            review_unit if any
+        """
+
+        # build the search args
+        # perform only one search at a time
+        args = []
+        if start is not None:
+            args.append("start=%f" % start)
+        if end is not None:
+            args.append("end=%f" % end)
+
+        if reverse:
+            args.append('reverse=True')
+        if limit:
+            assert(limit > 0)
+            args.append('limit=%d' % min(limit, 100))  # api support max limit of 100
+
+        url = "/ops/review/many?"
+        url += "&".join(args)
+
+        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        def get_next(url):
+            resp = connection._get(url)
+            return [CogniacOpsReview(connection, s) for s in resp.json()['data']], resp.json()['paging']
+
+        count = 0
+        while url:
+            print "url", url
+            reviews, paging = get_next(url)
+            print "paging", paging
+            print "reviews", reviews
+            for review in reviews:
+                yield review
+                count += 1
+                if limit and count == limit:
+                    return
+            url = paging.get('next')
+
+        #resp = connection._get("/ops/reviews")
+        #return CogniacOpsReview(connection, resp.json())
+
+    ##
     #  get pending
     ##
     @classmethod
