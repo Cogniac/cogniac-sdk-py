@@ -240,6 +240,47 @@ class CogniacApplication(object):
         self._cc._post("/applications/%s/feedback" % self.application_id, json=feedback_response)
 
     ##
+    #  list of models released
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def models(self, start=None, end=None, limit=None, reverse=True):
+        """
+        return a list of models
+        """
+        # build the search args
+        # perform only one search at a time
+        args = []
+        if start is not None:
+            args.append("start=%f" % start)
+        if end is not None:
+            args.append("end=%f" % end)
+
+        if reverse:
+            args.append('reverse=True')
+        if limit:
+            assert(limit > 0)
+            args.append('limit=%d' % min(limit, 100))  # api support max limit of 100
+
+        url = "/applications/%s/models?" % self.application_id
+        url += "&".join(args)
+
+        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        def get_next(url):
+            print "url", url
+            resp = self._cc._get(url)
+            return [s for s in resp.json()['data']], resp.json()['paging']
+
+        count = 0
+        while url:
+            results, paging = get_next(url)
+            for result in results:
+                yield result
+                count += 1
+                if limit and count == limit:
+                    return
+            url = paging.get('next')
+
+    ##
     #  model_name
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
