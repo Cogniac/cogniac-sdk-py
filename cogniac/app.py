@@ -266,20 +266,25 @@ class CogniacApplication(object):
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def get_next(url):
-            print "url", url
             resp = self._cc._get(url)
-            return [s for s in resp.json()['data']], resp.json()['paging']
+            return resp.json()
 
-        count = 0
+        # due to one model_id can have multiple runtimes, we want to return them together
+        # the limit is applied on number of model_ids, not model runtimes
+        model_ids = set()
+        previous_model_id = None
         while url:
-            results, paging = get_next(url)
-            for result in results:
-                yield result
-                count += 1
-                if limit and count == limit:
-                    return
-            url = paging.get('next')
+            resp = get_next(url)
+            for det in resp['data']:
+                model_id = det['model_id']
+                model_ids.add(model_id)
+                yield det
 
+                if limit and len(model_ids) >= limit:
+                    if previous_model_id is not None and model_id != previous_model_id:
+                        return
+                previous_model_id = model_id
+            url = resp['paging'].get('next')
     ##
     #  model_name
     ##
