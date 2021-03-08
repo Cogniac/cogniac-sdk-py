@@ -240,6 +240,52 @@ class CogniacApplication(object):
         self._cc._post("/applications/%s/feedback" % self.application_id, json=feedback_response)
 
     ##
+    #  list of models released
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def models(self, start=None, end=None, limit=None, reverse=True):
+        """
+        return a list of models
+        """
+        # build the search args
+        # perform only one search at a time
+        args = []
+        if start is not None:
+            args.append("start=%f" % start)
+        if end is not None:
+            args.append("end=%f" % end)
+
+        if reverse:
+            args.append('reverse=True')
+        if limit:
+            assert(limit > 0)
+            args.append('limit=%d' % min(limit, 100))  # api support max limit of 100
+
+        url = "/applications/%s/models?" % self.application_id
+        url += "&".join(args)
+
+        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        def get_next(url):
+            resp = self._cc._get(url)
+            return resp.json()
+
+        # due to one model_id can have multiple runtimes, we want to return them together
+        # the limit is applied on number of model_ids, not model runtimes
+        model_ids = set()
+        previous_model_id = None
+        while url:
+            resp = get_next(url)
+            for det in resp['data']:
+                model_id = det['model_id']
+                model_ids.add(model_id)
+                yield det
+
+                if limit and len(model_ids) >= limit:
+                    if previous_model_id is not None and model_id != previous_model_id:
+                        return
+                previous_model_id = model_id
+            url = resp['paging'].get('next')
+    ##
     #  model_name
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
