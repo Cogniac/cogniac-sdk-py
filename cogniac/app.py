@@ -169,7 +169,8 @@ class CogniacApplication(object):
         super(CogniacApplication, self).__setattr__(name, value)
 
     def __repr__(self):
-        return "%s (%s)" % (self.name, self.application_id)
+        s = "%s (%s)" % (self.name, self.application_id)
+        return s if (sys.version_info.major > 2) else s.encode(sys.stdout.encoding)
 
     def add_output_subject(self, subject):
         """

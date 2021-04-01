@@ -34,10 +34,11 @@ class CogniacTenant(object):
             super(CogniacTenant, self).__setattr__(k, v)
 
     def __str__(self):
-        return "%s (%s)" % (self.name, self.tenant_id)
+        s = "%s (%s)" % (self.name, self.tenant_id)
+        return s if (sys.version_info.major > 2) else s.encode(sys.stdout.encoding)
 
     def __repr__(self):
-        return "%s (%s)" % (self.name, self.tenant_id)
+        return self.__str__()
 
     def __setattr__(self, name, value):
         if name not in self._tenant_keys:

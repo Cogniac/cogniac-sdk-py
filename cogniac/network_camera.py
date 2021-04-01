@@ -345,8 +345,7 @@ class CogniacNetworkCamera(object):
 
     def __str__(self):
         s = "%s (%s)" % (self.camera_name, self.network_camera_id)
-        return s.encode(sys.stdout.encoding)
+        return s if (sys.version_info.major > 2) else s.encode(sys.stdout.encoding)
 
     def __repr__(self):
-        s = "%s (%s)" % (self.camera_name, self.network_camera_id)
-        return s.encode(sys.stdout.encoding)
+        return self.__str__()
