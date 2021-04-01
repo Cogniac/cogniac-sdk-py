@@ -5,6 +5,7 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 from retrying import retry
+import six
 import sys
 from .common import server_error
 
@@ -12,6 +13,7 @@ from .common import server_error
 ##
 #  Cogniac Ops Review
 ##
+@six.python_2_unicode_compatible
 class CogniacOpsReview(object):
     """
     CogniacOpsReview
@@ -211,9 +213,7 @@ class CogniacOpsReview(object):
         super(CogniacOpsReview, self).__setattr__(name, value)
 
     def __str__(self):
-        s = "%s" % (self.review_id)
-        return s.encode(sys.stdout.encoding)
+        return "%s" % (self.review_id)
 
     def __repr__(self):
-        s = "%s" % (self.review_id)
-        return s.encode(sys.stdout.encoding)
+        return self.__str__()

@@ -6,6 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 from retrying import retry
 from .common import *
+import six
 import sys
 
 from .media import CogniacMedia
@@ -14,6 +15,7 @@ from .media import CogniacMedia
 ##
 #  CogniacSubject
 ##
+@six.python_2_unicode_compatible
 class CogniacSubject(object):
     """
     CogniacSubject
@@ -212,12 +214,10 @@ class CogniacSubject(object):
         super(CogniacSubject, self).__setattr__(name, value)
 
     def __str__(self):
-        s = "%s (%s)" % (self.name, self.subject_uid)
-        return s.encode(sys.stdout.encoding)
+        return "%s (%s)" % (self.name, self.subject_uid)
 
     def __repr__(self):
-        s = "%s (%s)" % (self.name, self.subject_uid)
-        return s.encode(sys.stdout.encoding)
+        return self.__str__()
 
     ##
     #  dissassociate_media

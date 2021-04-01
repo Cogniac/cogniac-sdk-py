@@ -6,6 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 import json
+import six
 from retrying import retry
 from .common import *
 
@@ -19,6 +20,7 @@ TENANT_BILLING_ROLE = "tenant_billing"
 ##
 #   CogniacTenant
 ##
+@six.python_2_unicode_compatible
 class CogniacTenant(object):
 
     @classmethod
@@ -37,7 +39,7 @@ class CogniacTenant(object):
         return "%s (%s)" % (self.name, self.tenant_id)
 
     def __repr__(self):
-        return "%s (%s)" % (self.name, self.tenant_id)
+        return self.__str__()
 
     def __setattr__(self, name, value):
         if name not in self._tenant_keys:
