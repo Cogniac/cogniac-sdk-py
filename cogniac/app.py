@@ -5,9 +5,11 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 from retrying import retry
+import six
 from .common import server_error
 
 
+@six.python_2_unicode_compatible
 class CogniacApplication(object):
     """
     CogniacApplication
