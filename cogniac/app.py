@@ -5,9 +5,11 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 from retrying import retry
+import six
 from .common import server_error
 
 
+@six.python_2_unicode_compatible
 class CogniacApplication(object):
     """
     CogniacApplication
@@ -168,8 +170,11 @@ class CogniacApplication(object):
 
         super(CogniacApplication, self).__setattr__(name, value)
 
-    def __repr__(self):
+    def __str__(self):
         return "%s (%s)" % (self.name, self.application_id)
+
+    def __repr__(self):
+        return self.__str__()
 
     def add_output_subject(self, subject):
         """

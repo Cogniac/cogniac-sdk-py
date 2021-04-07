@@ -5,6 +5,7 @@ Copyright (C) 2019 Cogniac Corporation
 """
 
 from retrying import retry
+import six
 import sys
 from .common import server_error
 
@@ -32,6 +33,7 @@ immutable_keys = ['network_camera_id', 'created_at',
 ##
 #  Cogniac Network Camera
 ##
+@six.python_2_unicode_compatible
 class CogniacNetworkCamera(object):
     """
     CogniacNetworkCamera
@@ -344,9 +346,7 @@ class CogniacNetworkCamera(object):
         super(CogniacNetworkCamera, self).__setattr__(name, value)
 
     def __str__(self):
-        s = "%s (%s)" % (self.camera_name, self.network_camera_id)
-        return s.encode(sys.stdout.encoding)
+        return "%s (%s)" % (self.camera_name, self.network_camera_id)
 
     def __repr__(self):
-        s = "%s (%s)" % (self.camera_name, self.network_camera_id)
-        return s.encode(sys.stdout.encoding)
+        return self.__str__()

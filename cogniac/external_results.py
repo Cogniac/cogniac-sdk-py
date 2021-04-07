@@ -5,6 +5,7 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 from retrying import retry
+import six
 import sys
 from .common import server_error
 
@@ -12,6 +13,7 @@ from .common import server_error
 ##
 #  Cogniac External Result
 ##
+@six.python_2_unicode_compatible
 class CogniacExternalResult(object):
     """
     CogniacExternalResult
@@ -142,9 +144,7 @@ class CogniacExternalResult(object):
         super(CogniacExternalResult, self).__setattr__(name, value)
 
     def __str__(self):
-        s = "%s" % (self.external_result_id)
-        return s.encode(sys.stdout.encoding)
+        return "%s" % (self.external_result_id)
 
     def __repr__(self):
-        s = "%s" % (self.external_result_id)
-        return s.encode(sys.stdout.encoding)
+        return self.__str__()
