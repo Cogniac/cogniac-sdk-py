@@ -6,6 +6,7 @@ from tabulate import tabulate
 from datetime import datetime
 import os
 import time_range
+from sys import argv
 
 __builtins__['cc'] = None
 __builtins__['S'] = None
@@ -202,4 +203,13 @@ else:
     if len(tenant_list) == 1:
         authenticate(tenant_list[0]['tenant_id'])
     else:
-        print_tenants(tenant_list)
+        # see if user provided a partial tenant name or tenant_id on command line
+        def match(t):
+            return argv[-1].lower() in t['name'].lower() or argv[-1] in t['tenant_id']
+        filter_tenant_list = filter(match, tenant_list)
+        if len(filter_tenant_list) == 1:
+            authenticate(filter_tenant_list[0]['tenant_id'])  # use tenant from command line
+        elif len(filter_tenant_list) > 1:
+            print_tenants(filter_tenant_list)  # show tenants that match
+        else:
+            print_tenants(tenant_list)  # show all tenants
