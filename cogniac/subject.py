@@ -205,7 +205,7 @@ class CogniacSubject(object):
     def __setattr__(self, name, value):
         if name in ['subject_uid', 'created_at', 'created_by', 'modified_at', 'modified_by']:
             raise AttributeError("%s is immutable" % name)
-        if name in ['name', 'description', 'public_read', 'public_write']:
+        if name in ['name', 'description', 'expires_in', 'external_id', 'custom_data']:
             data = {name: value}
             resp = self._cc._post("/subjects/%s" % self.subject_uid, json=data)
             for k, v in resp.json().items():
