@@ -6,6 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 from retrying import retry
 from .common import *
+import six
 import sys
 
 from .media import CogniacMedia
@@ -14,6 +15,7 @@ from .media import CogniacMedia
 ##
 #  CogniacSubject
 ##
+@six.python_2_unicode_compatible
 class CogniacSubject(object):
     """
     CogniacSubject
@@ -203,7 +205,7 @@ class CogniacSubject(object):
     def __setattr__(self, name, value):
         if name in ['subject_uid', 'created_at', 'created_by', 'modified_at', 'modified_by']:
             raise AttributeError("%s is immutable" % name)
-        if name in ['name', 'description', 'public_read', 'public_write']:
+        if name in ['name', 'description', 'expires_in', 'external_id', 'custom_data']:
             data = {name: value}
             resp = self._cc._post("/subjects/%s" % self.subject_uid, json=data)
             for k, v in resp.json().items():
@@ -212,12 +214,10 @@ class CogniacSubject(object):
         super(CogniacSubject, self).__setattr__(name, value)
 
     def __str__(self):
-        s = "%s (%s)" % (self.name, self.subject_uid)
-        return s.encode(sys.stdout.encoding)
+        return "%s (%s)" % (self.name, self.subject_uid)
 
     def __repr__(self):
-        s = "%s (%s)" % (self.name, self.subject_uid)
-        return s.encode(sys.stdout.encoding)
+        return self.__str__()
 
     ##
     #  create_reference_media

@@ -5,6 +5,7 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 import os
+import six
 import sys
 import requests
 import re
@@ -20,6 +21,7 @@ from .media import file_creation_time
 IP_REGEX = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$')
 
 
+@six.python_2_unicode_compatible
 class CogniacEdgeFlow(object):
     """
     CogniacEdgeFlow
@@ -105,12 +107,10 @@ class CogniacEdgeFlow(object):
             super(CogniacEdgeFlow, self).__setattr__(k, v)
 
     def __str__(self):
-        s = "%s (%s)" % (self.name, self.gateway_id)
-        return s.encode(sys.stdout.encoding)
+        return "%s (%s)" % (self.name, self.gateway_id)
 
     def __repr__(self):
-        s = "%s (%s)" % (self.name, self.gateway_id)
-        return s.encode(sys.stdout.encoding)
+        return self.__str__()
 
     # -------------------------------------------------------------------------
     #

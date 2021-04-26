@@ -1,4 +1,4 @@
 retrying
 requests
+six
 tabulate
-
