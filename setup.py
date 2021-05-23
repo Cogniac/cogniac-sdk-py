@@ -3,7 +3,7 @@
 from distutils.core import setup
 
 setup(name='cogniac',
-      version='2.0.1',
+      version='2.0.2',
       description='Python SDK for Cogniac Public API',
       packages=['cogniac'],
       author = 'Cogniac Corporation',
