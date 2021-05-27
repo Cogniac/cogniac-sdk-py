@@ -375,6 +375,7 @@ class CogniacSubject(object):
                                          'box'     Optional dictionary of bounding box pixel offsets (with keys x0, x1, y0, y1) within the frame.
         consensus (str)                  'True' if media is associated with subject,
                                          'False' if media is NOT associated with subject.
+                                         'Sidelined' if consensus was decisively not provided.
                                          'None' if consenus is unknown.  Required uncal_prob
         probability (float)              association probability, only valid if consensus = 'None'
         force_feedback (bool)            True to force feedback on the media item in downstream apps
@@ -398,7 +399,7 @@ class CogniacSubject(object):
         if focus is not None:
             data['focus'] = focus
 
-        assert(consensus in ['True', 'False', 'None'])
+        assert(consensus in ['True', 'False', 'None', 'Sidelined'])
         data['consensus'] = consensus
 
         if consensus is 'None' and probability is None:
@@ -450,11 +451,12 @@ class CogniacSubject(object):
         timestamp	time of last update to subject media association
         app_data_type	optional app data type if applicable
         app_data        optional app data if applicable
-        consensus		'True', 'False', or , or None
+        consensus		'True', 'False', or 'Sidelined', or None
                         'True' if there is consensus that the subject is associated with the media
                             (Media will be used as a positive training example of the subject)
                         'False' if there is consensus that the subject is not associated w/the media
                             (Media will be used as a negative training example of the subject.)
+                        'Sidelined' if the media's association with the subject was decisively not provided. 
                          None if if there is not enough evidence to reach consensus
                          Some application types only support 'True' or None.
         """
@@ -469,7 +471,7 @@ class CogniacSubject(object):
         if probability_upper is not None:
             args.append("probability_upper=%f" % probability_upper)
         if consensus is not None:
-            assert(consensus in ['True', 'False'])
+            assert(consensus in ['True', 'False', 'Sidelined'])
             args.append("consensus=%s" % consensus)
         if reverse:
             args.append('reverse=True')
