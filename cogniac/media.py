@@ -229,7 +229,6 @@ class CogniacMedia(object):
                 fp.seek(0)
 
             if fsize > 12 * 1024 * 1024:
-                print("%s using multipart upload" % filename)
                 return CogniacMedia._create_multipart(connection, filename, fp, fsize, args)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
