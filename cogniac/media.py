@@ -7,7 +7,7 @@ Copyright (C) 2016 Cogniac Corporation
 from hashlib import md5
 from retrying import retry
 from .common import *
-from os import stat, fstat, path
+from os import stat, fstat, path, SEEK_END
 import platform
 
 platform_system = platform.system()
@@ -178,7 +178,7 @@ class CogniacMedia(object):
         trigger_id (str):                 Unique trigger identifier leading to a media sequence containing this media
         sequence_ix (str):                The index of this media within a triggered sequence
         custom_data (str):                Opaque user-specified data associated with this media; limited to 32KB
-        fp (file):                        A '.read()'-supporting file-like object (under 16MB) from which to acquire
+        fp (file):                        A '.read()'-supporting file-like object from which to acquire
                                           the media instead of reading the media from the specified filename.
         """
 
@@ -224,9 +224,12 @@ class CogniacMedia(object):
                 fsize = stat(filename).st_size
                 # use the multipart interface for large files
             else:
-                fsize = fstat(fp.fileno()).st_size
+                fp.seek(0, SEEK_END) # most reliable way of finding file size.
+                fsize = fp.tell()
+                fp.seek(0)
 
             if fsize > 12 * 1024 * 1024:
+                print("%s using multipart upload" % filename)
                 return CogniacMedia._create_multipart(connection, filename, fp, fsize, args)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
