@@ -295,6 +295,7 @@ class CogniacMedia(object):
             return resp.json()
 
         idx = 1
+        mfp.seek(0)
         while True:
             chunk = mfp.read(chunk_size)
             if not chunk:
