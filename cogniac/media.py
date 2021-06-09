@@ -14,7 +14,7 @@ platform_system = platform.system()
 
 immutable_keys = ['frame', 'video', 'media_id', 'size', 'network_camera_id', 'original_url', 'image_width', 'filename', 'original_landing_url', 'uploaded_by_user', 'media_timestamp', 'media_url', 'status', 'hash', 'external_media_id', 'author_profile_url', 'media_src', 'parent_media_id',  'media_resize_urls', 'license', 'tenant_id', 'created_at', 'author', 'public', 'image_height', 'media_format', 'title', 'domain_unit']
 
-mutable_keys =['set_assignment', 'force_set', 'meta_tags']
+mutable_keys =['set_assignment', 'force_set', 'meta_tags', "custom_data"]
 
 
 def file_creation_time(path_to_file):
