@@ -7,7 +7,7 @@ Copyright (C) 2016 Cogniac Corporation
 from hashlib import md5
 from retrying import retry
 from .common import *
-from os import stat, path
+from os import stat, fstat, path, SEEK_END
 import platform
 
 platform_system = platform.system()
@@ -62,7 +62,7 @@ class CogniacMedia(object):
         """
         Search for a CogniacMedia item in current tenant by md5, filename, or external_media_id.
 
-        connnection (CogniacConnection):     Authenticated CogniacConnection object        
+        connnection (CogniacConnection):     Authenticated CogniacConnection object
         md5 (String):                        MD5 of media item
         filename (String):                   Original filename of media item
         external_media_id (String):          Customer specified unique ID
@@ -71,12 +71,12 @@ class CogniacMedia(object):
 
         returns list of CogniacMedia objects that match the query parameters
         """
-        
+
         if md5 is not None:
-            assert((filename is None) & (external_media_id is None) & (domain_unit is None))            
+            assert((filename is None) & (external_media_id is None) & (domain_unit is None))
             query = "md5=%s" % md5
         elif filename is not None:
-            assert((md5 is None) & (external_media_id is None) & (domain_unit is None))                        
+            assert((md5 is None) & (external_media_id is None) & (domain_unit is None))
             query = "filename=%s" % filename
         elif external_media_id is not None:
             assert((md5 is None) & (filename is None) & (domain_unit is None))
@@ -105,9 +105,9 @@ class CogniacMedia(object):
                     return matches
             if not last_key:
                 break
-        
+
         return matches
-    
+
     def __init__(self, connection, media_dict):
         """
         create a CogniacMedia
@@ -178,7 +178,7 @@ class CogniacMedia(object):
         trigger_id (str):                 Unique trigger identifier leading to a media sequence containing this media
         sequence_ix (str):                The index of this media within a triggered sequence
         custom_data (str):                Opaque user-specified data associated with this media; limited to 32KB
-        fp (file):                        A '.read()'-supporting file-like object (under 16MB) from which to acquire
+        fp (file):                        A '.read()'-supporting file-like object from which to acquire
                                           the media instead of reading the media from the specified filename.
         """
 
@@ -216,14 +216,20 @@ class CogniacMedia(object):
 
         if filename.startswith('http'):
             args['source_url'] = filename
-        elif fp is None:  # local filename
-            fstat = stat(filename)
+        else:
             if 'media_timestamp' not in args:
                 # set the unspecified media timestamp to the earliest file time we have
                 args['media_timestamp'] = file_creation_time(filename)
-            if stat(filename).st_size > 12 * 1024 * 1024:
+            if fp is None:
+                fsize = stat(filename).st_size
                 # use the multipart interface for large files
-                return CogniacMedia._create_multipart(connection, filename, args)
+            else:
+                fp.seek(0, SEEK_END) # most reliable way of finding file size.
+                fsize = fp.tell()
+                fp.seek(0)
+
+            if fsize > 12 * 1024 * 1024:
+                return CogniacMedia._create_multipart(connection, filename, fp, fsize, args)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def upload():
@@ -234,8 +240,6 @@ class CogniacMedia(object):
                 files = {filename: fp}
             else:
                 files = {filename: open(filename, 'rb')}
-            print(args)
-            print(files)
             resp = connection._post("/media", data=args, files=files)
             return resp
 
@@ -243,30 +247,32 @@ class CogniacMedia(object):
         return CogniacMedia(connection, resp.json())
 
     @classmethod
-    def _create_multipart(cls, connection, filename, args):
+    def _create_multipart(cls, connection, filename, mfp, filesize, args):
         """
         upload via the multipart api
         """
-        def md5_hexdigest():
+        def md5_hexdigest(fp):
             """
             return the md5 hexdigest of a potentially very large file
             """
             md = md5()
-            fp = open(filename, 'rb')
             while True:
                 block = fp.read(8*1024*1024)
                 if not block:
                     return md.hexdigest()
                 md.update(block)
 
-        md5hash = md5_hexdigest()
+        if mfp is None:
+            mfp = open(filename, 'rb')
+        else:
+            mfp.seek(0)
+
+        md5hash = md5_hexdigest(mfp)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def post_data(data):
             resp = connection._post("/media/resumable", json=data)
             return resp.json()
-
-        filesize = stat(filename).st_size
 
         data = {'upload_phase': 'start',
                 'file_size':    filesize,
@@ -288,8 +294,8 @@ class CogniacMedia(object):
             resp = connection._post("/media/resumable", data=data, files=files)
             return resp.json()
 
-        mfp = open(filename, 'rb')
         idx = 1
+        mfp.seek(0)
         while True:
             chunk = mfp.read(chunk_size)
             if not chunk:
