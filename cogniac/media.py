@@ -240,8 +240,6 @@ class CogniacMedia(object):
                 files = {filename: fp}
             else:
                 files = {filename: open(filename, 'rb')}
-            print(args)
-            print(files)
             resp = connection._post("/media", data=args, files=files)
             return resp
 
