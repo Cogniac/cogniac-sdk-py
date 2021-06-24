@@ -24,7 +24,7 @@ camera_model_keys = ['last_pose_change_timestamp',
                      'z_axis_x', 'z_axis_y']
 
 mutable_keys = ['url', 'current_IP', 'camera_name', 'description',
-                'active', 'lat', 'lon', 'hae'] + camera_model_keys
+                'active', 'lat', 'lon', 'hae', 'alt_subject_uid', 'custom_configuration'] + camera_model_keys
 
 immutable_keys = ['network_camera_id', 'created_at',
                   'created_by', 'modified_at', 'modified_by']
