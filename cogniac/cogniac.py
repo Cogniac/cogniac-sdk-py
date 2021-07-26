@@ -46,12 +46,12 @@ class CogniacConnection(object):
 
     @classmethod
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def get_all_authorized_tenants(cls, username=None, password=None, url_prefix="https://api.cogniac.io/1"):
+    def get_all_authorized_tenants(cls, username=None, password=None, url_prefix="https://api.cogniac.io/"):
         """
         return the list of valid tenants for the specified user credentials and url_prefix
         """
         if 'COG_API_KEY' in os.environ:
-            resp = requests.get(url_prefix + "/users/current/tenants",
+            resp = requests.get(url_prefix + "/1/users/current/tenants",
                                 headers={"Authorization": "Key %s" % os.environ['COG_API_KEY']})
             raise_errors(resp)
             return resp.json()
@@ -64,7 +64,7 @@ class CogniacConnection(object):
             except:
                 raise Exception("No Cogniac Credentials. Try setting COG_USER and COG_PASS environment.")
 
-        resp = requests.get(url_prefix + "/users/current/tenants", auth=HTTPBasicAuth(username, password))
+        resp = requests.get(url_prefix + "/1/users/current/tenants", auth=HTTPBasicAuth(username, password))
         raise_errors(resp)
         return resp.json()
 
@@ -74,7 +74,7 @@ class CogniacConnection(object):
                  api_key=None,
                  tenant_id=None,
                  timeout=60,
-                 url_prefix="https://api.cogniac.io/1"):
+                 url_prefix="https://api.cogniac.io/"):
         """
         Create an authenticated CogniacConnection with the following credentials:
 
@@ -126,6 +126,8 @@ class CogniacConnection(object):
 
         if 'COG_URL_PREFIX' in os.environ:
             url_prefix = os.environ['COG_URL_PREFIX']
+        if url_prefix.endswith('/'):
+            url_prefix = url_prefix[0:-1]
 
         self.url_prefix = url_prefix
         self.timeout = timeout
@@ -166,7 +168,7 @@ class CogniacConnection(object):
         if self.tenant.region is not None:
             # use tenant object's specified region preference
             # print "Using API endpoint from Tenant:", self.tenant.region
-            self.url_prefix = 'https://' + self.tenant.region + '/1'
+            self.url_prefix = 'https://' + self.tenant.region
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __authenticate(self):
@@ -175,13 +177,13 @@ class CogniacConnection(object):
         tenant_data = {"tenant_id": self.tenant_id}
         if self.api_key:
             # trade API KEY for user+tenant token
-            resp = requests.get(self.url_prefix + "/token",
+            resp = requests.get(self.url_prefix + "/1/token",
                                 params=tenant_data,
                                 headers={"Authorization": "Key %s" % self.api_key},
                                 timeout=self.timeout)
         else:
             # trade username/password for user+tenant token
-            resp = requests.get(self.url_prefix + "/token",
+            resp = requests.get(self.url_prefix + "/1/token",
                                 params=tenant_data,
                                 auth=HTTPBasicAuth(self.username, self.password),
                                 timeout=self.timeout)
