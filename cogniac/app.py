@@ -202,7 +202,7 @@ class CogniacApplication(object):
         Return the integer number of feedback requests pending for this application.
         This is useful for controlling the flow of images input into the system to avoid creating too many backlogged feedback requests.
         """
-        resp = self._cc._get("/21/applications/%s/feedback/pending" % self.application_id)
+        resp = self._cc._get("/1/applications/%s/feedback/pending" % self.application_id)
         return resp.json()['pending']
 
     ##
@@ -215,7 +215,7 @@ class CogniacApplication(object):
 
         limit (Int):   Maximum number of feedback request messages to return
         """
-        resp = self._cc._get("/21/applications/%s/feedback?limit=%d" % (self.application_id, limit))
+        resp = self._cc._get("/1/applications/%s/feedback?limit=%d" % (self.application_id, limit))
         return resp.json()
 
     ##
@@ -243,7 +243,7 @@ class CogniacApplication(object):
         feedback_response = {'media_id': media_id,
                              'subjects': subjects}
 
-        self._cc._post("/21/applications/%s/feedback" % self.application_id, json=feedback_response)
+        self._cc._post("/1/applications/%s/feedback" % self.application_id, json=feedback_response)
 
     ##
     #  list of models released
