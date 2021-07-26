@@ -8,6 +8,7 @@ Copyright (C) 2016 Cogniac Corporation.
 
 import os
 import logging
+import re
 import requests
 from retrying import retry
 from requests.auth import HTTPBasicAuth
@@ -126,6 +127,10 @@ class CogniacConnection(object):
 
         if 'COG_URL_PREFIX' in os.environ:
             url_prefix = os.environ['COG_URL_PREFIX']
+        m = re.search(r'/\d+(/)?$', url_prefix)
+        # Strip API version number and tailing '/' from URL prefix.
+        if m is not None:
+            url_prefix = url_prefix[0:m.span()[0]]
         if url_prefix.endswith('/'):
             url_prefix = url_prefix[0:-1]
 
