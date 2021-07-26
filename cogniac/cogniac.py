@@ -449,9 +449,9 @@ class CogniacConnection(object):
         returns json version info
         """
         if auth:
-            url = self.url_prefix + "/authversion"
+            url = self.url_prefix + "/1/authversion"
         else:
-            url = self.url_prefix + "/version"
+            url = self.url_prefix + "/1/version"
         resp = self._get(url)
         raise_errors(resp)
         return resp.json()

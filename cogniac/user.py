@@ -21,7 +21,7 @@ class CogniacUser(object):
     @classmethod
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def get(cls, connection):
-        resp = connection._get("/users/current")
+        resp = connection._get("/1/users/current")
         return CogniacUser(connection, json.loads(resp.content))
 
     def __init__(self, connection, tenant_dict):
@@ -38,23 +38,23 @@ class CogniacUser(object):
     def __setattr__(self, name, value):
         if name in mutable_keys:
             data = {name: value}
-            resp = self._cc._post("/users/%s" % self.user_id, json=data)
+            resp = self._cc._post("/1/users/%s" % self.user_id, json=data)
             for k, v in resp.json().items():
                 super(CogniacUser, self).__setattr__(k, v)
             return
         super(CogniacUser, self).__setattr__(name, value)
 
     def api_keys(self):
-        resp = self._cc._get("/users/%s/apiKeys" % self.user_id)
+        resp = self._cc._get("/1/users/%s/apiKeys" % self.user_id)
         return resp.json()['data']
 
     def api_key(self, key_id):
-        resp = self._cc._get("/users/%s/apiKeys/%s" % (self.user_id, key_id))
+        resp = self._cc._get("/1/users/%s/apiKeys/%s" % (self.user_id, key_id))
         return resp.json()
 
     def create_api_key(self, description):
-        resp = self._cc._post("/users/%s/apiKeys" % self.user_id, json={'description': description})
+        resp = self._cc._post("/1/users/%s/apiKeys" % self.user_id, json={'description': description})
         return resp.json()
 
     def delete_api_key(self, key_id):
-        self._cc._delete("/users/%s/apiKeys/%s" % (self.user_id, key_id))
+        self._cc._delete("/1/users/%s/apiKeys/%s" % (self.user_id, key_id))
