@@ -194,46 +194,59 @@ class CogniacApplication(object):
         self.input_subjects = self.input_subjects + [subject.subject_uid]
 
     ##
-    #  pending_feedback
+    #  request_feedback
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def pending_feedback(self):
+    def request_feedback(self, media_id, subjects):
         """
-        Return the integer number of feedback requests pending for this application.
-        This is useful for controlling the flow of images input into the system to avoid creating too many backlogged feedback requests.
-        """
-        resp = self._cc._get("/21/applications/%s/feedback/pending" % self.application_id)
-        return resp.json()['pending']
+        Requests application feedback on the specified media.
 
-    ##
-    #  get_feedback
-    ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def get_feedback(self, limit=10):
-        """
-        returns a list of  up to {limit} feedback request messages for the application
+        media_id (String):
+            Media ID of the media to provide feedback on
 
-        limit (Int):   Maximum number of feedback request messages to return
-        """
-        resp = self._cc._get("/21/applications/%s/feedback?limit=%d" % (self.application_id, limit))
-        return resp.json()
+        focus (dict):
+            (Optional) Specific focus region in which feedback is being requested.
+            If specified, feedback provided for this feedback request will be
+            limited to this focus region.
 
-    ##
-    #  post_feedback
-    ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def post_feedback(self, media_id, subjects):
-        """
-        Provides feedback to the application for a given subject-media assocation; returns None.
+            An example `focus` dictionary for a feedback request in a specific
+            area of an image:
+            
+            ```
+            focus = {
+                "box": {
+                    "x0": 20,
+                    "y0": 20,
+                    "x1": 100,
+                    "y1": 100
+                }
+            }
+            ```
 
-        media_id (String):             Media ID of the media to provide feedback on
-        subjects (list of dicts):      Subject-media association dictionaries of the form:
+            Defaults to `None`, indicating feedback can be provided in any region
+            of the specified media item.
 
-            subject_uid:               Subject UID
-            result (str):              Either 'True', 'False', 'Uncertain'
-            app_data_type (String):    (Optional) Type of extra app-specific data for certain app types
-            app_data (Object):         (Optional) Additional, app-specific, subject-media association data
+        reviewer_roles (list):
+            List of application reviewer roles required by application reviewers
+            to receive this feedback request and that will be allowed to provide
+            feedback in response to this feedback request.
+                                       
+            The available roles are limited to those assignable to users added
+            as application reviewers (in an application's `reviewers` field),
+            including "annotator" and "reviewer".
+                                       
+        total_response_count_min (int):
+            (Optional) The total number of feedback responses required to 
+            fulfill this feedback request.o
+                                        
+            Defaults to 1.
 
+        per_reviewer_response_count_max (int):
+            (Optional) The total number of feedback responses that each
+            assigned application reviewer can submit for this feedback
+            request.
+
+            Defaults to 1.
         """
         # add media_id to each subject-media association dict
         # TODO: deprecate this
@@ -243,7 +256,59 @@ class CogniacApplication(object):
         feedback_response = {'media_id': media_id,
                              'subjects': subjects}
 
-        self._cc._post("/21/applications/%s/feedback" % self.application_id, json=feedback_response)
+        self._cc._post("/21/applications/%s/feedbackRequests" % self.application_id, json=feedback_response)
+
+    # <TODO>
+    # TODO: count_feedback_requests
+    # ##
+    # #  pending_feedback
+    # ##
+    # @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    # def pending_feedback(self):
+    #     """
+    #     Return the integer number of feedback requests pending for this application.
+    #     This is useful for controlling the flow of images input into the system to avoid creating too many backlogged feedback requests.
+    #     """
+    #     resp = self._cc._get("/21/applications/%s/feedback/pending" % self.application_id)
+    #     return resp.json()['pending']
+    # </TODO>
+
+    ##
+    #  get_feedback_requests
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def get_feedback_requests(self, limit=10):
+        """
+        returns a list of  up to {limit} feedback request messages for the application
+
+        limit (Int):   Maximum number of feedback request messages to return
+        """
+        resp = self._cc._get("/21/applications/%s/feedbackRequests?limit=%d" % (self.application_id, limit))
+        return resp.json()
+
+    ##
+    #  submit_feedback
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def submit_feedback(self, feedback_request_id, subjects):
+        """
+        Provides feedback to the application for a given subject-media assocation; returns None.
+
+        feedback_request_id (String):  Feedback Request ID for which feedback is being submitted.
+
+        assertions (list of dicts):    List of subject-media assertion dictionaries, each including:
+
+            subject_uid:               Subject UID
+            result (str):              Either 'True', 'False', 'Uncertain'
+            app_data_type (String):    (Optional) Type of extra app-specific data for certain app types
+            app_data (Object):         (Optional) Additional, app-specific, subject-media association data
+
+        """
+        feedback_response = {'media_id': media_id,
+                             'subjects': subjects}
+
+        self._cc._post("/21/applications/%s/feedbackRequests/%s/feedbackResponses" % (self.application_id, feedback_request_id),
+                       json=feedback_response)
 
     ##
     #  list of models released
