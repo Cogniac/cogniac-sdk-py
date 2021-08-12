@@ -212,6 +212,11 @@ class CogniacConnection(object):
         wrap requests session to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
+            # Prepend /1/ version if no version is specified in the URL (backward compatibility).
+            m = re.search(r'^/\d+(/)?', url)
+            if m is None:
+                url = '/1' + url
+
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
@@ -229,6 +234,11 @@ class CogniacConnection(object):
         wrap requests session to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
+            # Prepend /1/ version if no version is specified in the URL (backward compatibility).
+            m = re.search(r'^/\d+(/)?', url)
+            if m is None:
+                url = '/1' + url
+
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
@@ -246,6 +256,11 @@ class CogniacConnection(object):
         wrap requests session to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
+            # Prepend /1/ version if no version is specified in the URL (backward compatibility).
+            m = re.search(r'^/\d+(/)?', url)
+            if m is None:
+                url = '/1' + url
+
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
@@ -263,6 +278,11 @@ class CogniacConnection(object):
         wrap requests session to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
+            # Prepend /1/ version if no version is specified in the URL (backward compatibility).
+            m = re.search(r'^/\d+(/)?', url)
+            if m is None:
+                url = '/1' + url
+
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
