@@ -26,7 +26,7 @@ class CogniacTenant(object):
     @classmethod
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def get(cls, connection):
-        resp = connection._get("/tenants/current")
+        resp = connection._get("/1/tenants/current")
         return CogniacTenant(connection, json.loads(resp.content))
 
     def __init__(self, connection, tenant_dict):
@@ -46,12 +46,12 @@ class CogniacTenant(object):
             super(CogniacTenant, self).__setattr__(name, value)
             return
         data = {name: value}
-        resp = self._cc._post("/tenants/%s" % self.tenant_id, json=data)
+        resp = self._cc._post("/1/tenants/%s" % self.tenant_id, json=data)
         for k, v in resp.json().items():
             super(CogniacTenant, self).__setattr__(k, v)
 
     def users(self):
-        resp = self._cc._get("/tenants/%s/users" % self.tenant_id)
+        resp = self._cc._get("/1/tenants/%s/users" % self.tenant_id)
         return resp.json()['data']
 
     def set_user_role(self, user_email, role):
@@ -60,7 +60,7 @@ class CogniacTenant(object):
         if not users:
             raise Exception("unknown user_email %s" % user_email)
         data = {'user_id': users[0]['user_id'], 'role': role}
-        self._cc._post("/tenants/%s/users/role" % self.tenant_id, json=data)
+        self._cc._post("/1/tenants/%s/users/role" % self.tenant_id, json=data)
 
     def add_user(self, user_email, role='tenant_user'):
         users = self.users()
@@ -68,7 +68,7 @@ class CogniacTenant(object):
         if not users:
             raise Exception("unknown user_email %s" % user_email)
         data = {'user_id': users[0]['user_id'], 'role': role}
-        self._cc._post("/tenants/%s/users" % self.tenant_id, json=data)
+        self._cc._post("/1/tenants/%s/users" % self.tenant_id, json=data)
 
     def delete_user(self, user_email):
         users = self.users()
@@ -76,13 +76,13 @@ class CogniacTenant(object):
         if not users:
             raise Exception("unknown user_email %s" % user_email)
         data = {'user_id': users[0]['user_id']}
-        self._cc._delete("/tenants/%s/users" % self.tenant_id, json=data)
+        self._cc._delete("/1/tenants/%s/users" % self.tenant_id, json=data)
 
     def usage(self, start, end, period='15min'):
 
         assert(period in ['15min', 'hour', 'day'])
 
-        url = "/usage/summary?period=%s&start=%d&end=%d" % (period, start, end)
+        url = "/1/usage/summary?period=%s&start=%d&end=%d" % (period, start, end)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def get_next(url):

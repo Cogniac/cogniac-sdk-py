@@ -49,7 +49,7 @@ class CogniacExternalResult(object):
         if domain_unit:
             data['domain_unit'] = domain_unit
 
-        resp = connection._post("/externalResults", json=data)
+        resp = connection._post("/1/externalResults", json=data)
         return CogniacExternalResult(connection, resp.json())
 
     ##
@@ -66,7 +66,7 @@ class CogniacExternalResult(object):
         connnection (CogniacConnection): Authenticated CogniacConnection object
         external_result_id (String):     The id of the Cogniac External Result to return
         """
-        resp = connection._get("/externalResults/%s" % external_result_id)
+        resp = connection._get("/1/externalResults/%s" % external_result_id)
         return CogniacExternalResult(connection, resp.json())
 
     ##
@@ -105,7 +105,7 @@ class CogniacExternalResult(object):
             if limit:
                 data['limit'] = limit
 
-        resp = connection._get("/externalResults", json=data)
+        resp = connection._get("/1/externalResults", json=data)
         print(resp.json())
         subs = resp.json()['data']
         return [CogniacExternalResult(connection, s) for s in subs]
@@ -133,7 +133,7 @@ class CogniacExternalResult(object):
         """
         Delete the external result.
         """
-        resp = self._cc._delete("/externalResults/%s" % self.external_result_id)
+        resp = self._cc._delete("/1/externalResults/%s" % self.external_result_id)
 
         for k in self._sub_keys:
             delattr(self, k)
