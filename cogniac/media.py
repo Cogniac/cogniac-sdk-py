@@ -9,6 +9,7 @@ from retrying import retry
 from .common import *
 from os import stat, fstat, path, SEEK_END
 import platform
+from time import time
 
 platform_system = platform.system()
 
@@ -218,8 +219,12 @@ class CogniacMedia(object):
             args['source_url'] = filename
         else:
             if 'media_timestamp' not in args:
-                # set the unspecified media timestamp to the earliest file time we have
-                args['media_timestamp'] = file_creation_time(filename)
+                if fp is None:
+                    # set the unspecified media timestamp to the earliest file time we have
+                    args['media_timestamp'] = file_creation_time(filename)
+                else:
+                    args['media_timestamp'] = time()
+
             if fp is None:
                 fsize = stat(filename).st_size
                 # use the multipart interface for large files
