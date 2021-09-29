@@ -248,7 +248,6 @@ class CogniacApplication(object):
 
             Defaults to 1.
         """
-<<<<<<< HEAD
         # add media_id to each subject-media association dict
         # TODO: deprecate this
         for s in subjects:
@@ -261,25 +260,18 @@ class CogniacApplication(object):
 
     # <TODO>
     # TODO: count_feedback_requests
-    # ##
-    # #  pending_feedback
-    # ##
-    # @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    # def pending_feedback(self):
-    #     """
-    #     Return the integer number of feedback requests pending for this application.
-    #     This is useful for controlling the flow of images input into the system to avoid creating too many backlogged feedback requests.
-    #     """
-    #     resp = self._cc._get("/21/applications/%s/feedback/pending" % self.application_id)
-    #     return resp.json()['pending']
-    # </TODO>
-=======
+    ##
+    #  pending_feedback
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def pending_feedback(self):
+        """
         Return the integer number of feedback requests pending for this application.
         This is useful for controlling the flow of images input into the system to avoid creating too many backlogged feedback requests.
         """
         resp = self._cc._get("/1/applications/%s/feedback/pending" % self.application_id)
         return resp.json()['pending']
->>>>>>> master
+    # </TODO>
 
     ##
     #  get_feedback_requests
@@ -291,11 +283,7 @@ class CogniacApplication(object):
 
         limit (Int):   Maximum number of feedback request messages to return
         """
-<<<<<<< HEAD
         resp = self._cc._get("/21/applications/%s/feedbackRequests?limit=%d" % (self.application_id, limit))
-=======
-        resp = self._cc._get("/1/applications/%s/feedback?limit=%d" % (self.application_id, limit))
->>>>>>> master
         return resp.json()
 
     ##
@@ -319,12 +307,8 @@ class CogniacApplication(object):
         feedback_response = {'media_id': media_id,
                              'subjects': subjects}
 
-<<<<<<< HEAD
         self._cc._post("/21/applications/%s/feedbackRequests/%s/feedbackResponses" % (self.application_id, feedback_request_id),
                        json=feedback_response)
-=======
-        self._cc._post("/1/applications/%s/feedback" % self.application_id, json=feedback_response)
->>>>>>> master
 
     ##
     #  list of models released
