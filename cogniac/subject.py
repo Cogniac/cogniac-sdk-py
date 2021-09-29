@@ -70,7 +70,7 @@ class CogniacSubject(object):
         if external_id:
             data['external_id'] = external_id
 
-        resp = connection._post("/subjects", json=data)
+        resp = connection._post("/1/subjects", json=data)
 
         return CogniacSubject(connection, resp.json())
 
@@ -88,7 +88,7 @@ class CogniacSubject(object):
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         subject_id (String):                 The subject_id of the Cogniac Subject to return
         """
-        resp = connection._get("/subjects/%s" % subject_uid)
+        resp = connection._get("/1/subjects/%s" % subject_uid)
         return CogniacSubject(connection, resp.json())
 
     ##
@@ -110,7 +110,7 @@ class CogniacSubject(object):
         if public_write:
             args.append("public_read_write=True")
 
-        url = "/tenants/%s/subjects?" % connection.tenant.tenant_id
+        url = "/1/tenants/%s/subjects?" % connection.tenant.tenant_id
         url += "&".join(args)
 
         resp = connection._get(url)
@@ -164,7 +164,7 @@ class CogniacSubject(object):
         elif name:
             args.append('name=%s' % name)
 
-        url = "/tenants/%s/subjects?" % connection.tenant.tenant_id
+        url = "/1/tenants/%s/subjects?" % connection.tenant.tenant_id
         url += "&".join(args)
 
         resp = connection._get(url)
@@ -195,7 +195,7 @@ class CogniacSubject(object):
         """
         Delete the subject.
         """
-        resp = self._cc._delete("/subjects/%s" % self.subject_uid)
+        resp = self._cc._delete("/1/subjects/%s" % self.subject_uid)
 
         for k in self._sub_keys:
             delattr(self, k)
@@ -207,7 +207,7 @@ class CogniacSubject(object):
             raise AttributeError("%s is immutable" % name)
         if name in ['name', 'description', 'expires_in', 'external_id', 'custom_data']:
             data = {name: value}
-            resp = self._cc._post("/subjects/%s" % self.subject_uid, json=data)
+            resp = self._cc._post("/1/subjects/%s" % self.subject_uid, json=data)
             for k, v in resp.json().items():
                 super(CogniacSubject, self).__setattr__(k, v)
             return
@@ -321,7 +321,7 @@ class CogniacSubject(object):
             else:
                 files = {'file': open(filename, 'rb')}
                 # api.add_resource(SubjectReferenceMedia, '/1/subjects/<string:subject_uid>/referenceMedia')
-            resp = self._cc._post("/subjects/{}/referenceMedia".format(self.subject_uid), data=args, files=files)
+            resp = self._cc._post("/1/subjects/{}/referenceMedia".format(self.subject_uid), data=args, files=files)
             return resp
 
         resp = upload()
@@ -350,7 +350,7 @@ class CogniacSubject(object):
 
         if focus is not None:
             data['focus'] = focus
-        self._cc._delete("/subjects/%s/media" % self.subject_uid, json=data)
+        self._cc._delete("/1/subjects/%s/media" % self.subject_uid, json=data)
 
     ##
     #  associate_media
@@ -416,7 +416,7 @@ class CogniacSubject(object):
         data['app_data_type'] = app_data_type
         data['app_data'] = app_data
 
-        resp = self._cc._post("/subjects/%s/media" % self.subject_uid, json=data)
+        resp = self._cc._post("/1/subjects/%s/media" % self.subject_uid, json=data)
         return resp.json()['capture_id']
 
     ##
@@ -483,7 +483,7 @@ class CogniacSubject(object):
         if abridged_media:
             args.append('abridged_media=True')
 
-        url = "/subjects/%s/media?" % self.subject_uid
+        url = "/1/subjects/%s/media?" % self.subject_uid
         url += "&".join(args)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)

@@ -58,7 +58,7 @@ class CogniacEdgeFlow(object):
         returns CogniacEdgeFlow object
         """
         edgeflow_dict = None
-        resp = connection._get("/gateways/{}".format(edgeflow_id))
+        resp = connection._get("/1/gateways/{}".format(edgeflow_id))
         return CogniacEdgeFlow(connection, resp.json())
 
     @classmethod
@@ -68,7 +68,7 @@ class CogniacEdgeFlow(object):
 
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         """
-        resp = connection._get('/tenants/%s/gateways' % connection.tenant.tenant_id)
+        resp = connection._get('/1/tenants/%s/gateways' % connection.tenant.tenant_id)
         edgeflows = resp.json()['data']
         return [CogniacEdgeFlow(connection, edgeflow) for edgeflow in edgeflows]
 
@@ -102,7 +102,7 @@ class CogniacEdgeFlow(object):
             super(CogniacEdgeFlow, self).__setattr__(name, value)
             return
         data = {name: value}
-        resp = self._cc._post("/gateways/%s" % self.gateway_id, json=data)
+        resp = self._cc._post("/1/gateways/%s" % self.gateway_id, json=data)
         for k, v in resp.json().items():
             super(CogniacEdgeFlow, self).__setattr__(k, v)
 
@@ -160,7 +160,7 @@ class CogniacEdgeFlow(object):
         return resp
 
     def get_version(self):
-        resp = self._get("/version")
+        resp = self._get("/1/version")
         return resp.json()
 
     def process_media(self,
@@ -210,7 +210,7 @@ class CogniacEdgeFlow(object):
                 raise Exception("The media file must be uploaded from local storage.")
             else:
                 files = {'file': open(filename, 'rb')}
-            resp = self._post("/process/{}".format(subject_uid), data=args, files=files)
+            resp = self._post("/1/process/{}".format(subject_uid), data=args, files=files)
             return resp
 
         resp = upload()
@@ -230,7 +230,7 @@ class CogniacEdgeFlow(object):
         args = dict()
         args['start_time'] = start_time
         args['end_time'] = end_time
-        self._cc._post("/gateways/%s/event/time_bound_media_upload" % (self.gateway_id), json=args)
+        self._cc._post("/1/gateways/%s/event/time_bound_media_upload" % (self.gateway_id), json=args)
 
 
     def flush_upload_queue(self, start_time=None, end_time=None):
@@ -242,7 +242,7 @@ class CogniacEdgeFlow(object):
             args['start_time'] = start_time
         if end_time is not None:
             args['end_time'] = end_time
-        self._cc._post("/gateways/%s/event/flush_upload_queue" % (self.gateway_id), json=args)
+        self._cc._post("/1/gateways/%s/event/flush_upload_queue" % (self.gateway_id), json=args)
 
 
     def factory_reset(self):
@@ -250,7 +250,7 @@ class CogniacEdgeFlow(object):
         Factory reset the EdgeFlow.
         This results in deletion of this EdgeFlow object in CloudCore/SiteCore!
         """
-        self._cc._post("/gateways/%s/event/factory_reset" % (self.gateway_id))
+        self._cc._post("/1/gateways/%s/event/factory_reset" % (self.gateway_id))
 
     def upgrade(self, software_version):
         """
@@ -259,7 +259,7 @@ class CogniacEdgeFlow(object):
         args = dict()
         if software_version is not None:
             args['software_version'] = software_version
-        self._cc._post("/gateways/%s/event/upgrade" % (self.gateway_id), json=args)
+        self._cc._post("/1/gateways/%s/event/upgrade" % (self.gateway_id), json=args)
 
     def set_boot_software_version(self, software_version):
         """
@@ -268,13 +268,13 @@ class CogniacEdgeFlow(object):
         args = dict()
         if software_version is not None:
             args['software_version'] = software_version
-        self._cc._post("/gateways/%s/event/set_boot_software_version" % (self.gateway_id), json=args)
+        self._cc._post("/1/gateways/%s/event/set_boot_software_version" % (self.gateway_id), json=args)
 
     def reboot(self):
         """
         Reboot the EdgeFlow
         """
-        self._cc._post("/gateways/%s/event/reboot" % (self.gateway_id))
+        self._cc._post("/1/gateways/%s/event/reboot" % (self.gateway_id))
 
     def ping(self, ping_id=None):
         """
@@ -284,7 +284,7 @@ class CogniacEdgeFlow(object):
         event = {"timestamp": time()}
         if ping_id is not None:
             event['ping_id'] = ping_id
-        self._cc._post("/gateways/%s/event/ping" % self.gateway_id, json=event)
+        self._cc._post("/1/gateways/%s/event/ping" % self.gateway_id, json=event)
 
     def trigger_camera_capture(self, subject_uid, trigger_domain_unit=None):
         """
@@ -294,7 +294,7 @@ class CogniacEdgeFlow(object):
         event = {'subject_uid': subject_uid}
         if trigger_domain_unit is not None:
             event['trigger_domain_unit'] = trigger_domain_unit
-        self._cc._post("/gateways/%s/event/trigger_camera_capture" % self.gateway_id, json=event)
+        self._cc._post("/1/gateways/%s/event/trigger_camera_capture" % self.gateway_id, json=event)
 
     def status(self, subsystem_name=None, start=None, end=None, reverse=True, limit=None):
         """
@@ -317,9 +317,9 @@ class CogniacEdgeFlow(object):
             args.append('limit=%d' % min(limit, 100))  # api support max limit of 100
 
         if subsystem_name:
-            url = "/gateways/%s/status/%s?" % (self.gateway_id, subsystem_name)
+            url = "/1/gateways/%s/status/%s?" % (self.gateway_id, subsystem_name)
         else:
-            url = "/gateways/%s/status?" % self.gateway_id
+            url = "/1/gateways/%s/status?" % self.gateway_id
 
         url += "&".join(args)
 

@@ -9,6 +9,7 @@ from retrying import retry
 from .common import *
 from os import stat, fstat, path, SEEK_END
 import platform
+from time import time
 
 platform_system = platform.system()
 
@@ -53,7 +54,7 @@ class CogniacMedia(object):
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         media_id (String):                   The media_id of the Cogniac Media item to return
         """
-        resp = connection._get("/media/%s" % media_id)
+        resp = connection._get("/1/media/%s" % media_id)
 
         return CogniacMedia(connection, resp.json())
 
@@ -87,7 +88,7 @@ class CogniacMedia(object):
 
         def get_next(last_key=None):
             query_limit = limit if limit and limit < 100 else 100
-            url = "/media/all/search?%s&limit=%s" % (query, query_limit)
+            url = "/1/media/all/search?%s&limit=%s" % (query, query_limit)
             if last_key:
                 url += "&last_key=%s" % (last_key)
             resp = connection._get(url)
@@ -129,7 +130,7 @@ class CogniacMedia(object):
             raise AttributeError("%s is immutable" % name)
         if name in mutable_keys:
             data = {name: value}
-            resp = self._cc._post("/media/%s" % self.media_id, json=data)
+            resp = self._cc._post("/1/media/%s" % self.media_id, json=data)
             for k, v in resp.json().items():
                 super(CogniacMedia, self).__setattr__(k, v)
             return
@@ -218,8 +219,12 @@ class CogniacMedia(object):
             args['source_url'] = filename
         else:
             if 'media_timestamp' not in args:
-                # set the unspecified media timestamp to the earliest file time we have
-                args['media_timestamp'] = file_creation_time(filename)
+                if fp is None:
+                    # set the unspecified media timestamp to the earliest file time we have
+                    args['media_timestamp'] = file_creation_time(filename)
+                else:
+                    args['media_timestamp'] = time()
+
             if fp is None:
                 fsize = stat(filename).st_size
                 # use the multipart interface for large files
@@ -240,7 +245,7 @@ class CogniacMedia(object):
                 files = {filename: fp}
             else:
                 files = {filename: open(filename, 'rb')}
-            resp = connection._post("/media", data=args, files=files)
+            resp = connection._post("/1/media", data=args, files=files)
             return resp
 
         resp = upload()
@@ -271,7 +276,7 @@ class CogniacMedia(object):
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
         def post_data(data):
-            resp = connection._post("/media/resumable", json=data)
+            resp = connection._post("/1/media/resumable", json=data)
             return resp.json()
 
         data = {'upload_phase': 'start',
@@ -291,7 +296,7 @@ class CogniacMedia(object):
                     'video_file_chunk_no': chunk_no}
 
             files = {'file': chunk}
-            resp = connection._post("/media/resumable", data=data, files=files)
+            resp = connection._post("/1/media/resumable", data=data, files=files)
             return resp.json()
 
         idx = 1
@@ -314,7 +319,7 @@ class CogniacMedia(object):
         """
         delete the media object
         """
-        self._cc._delete("/media/%s" % self.media_id)
+        self._cc._delete("/1/media/%s" % self.media_id)
         self.__dict__.clear()
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
@@ -371,7 +376,7 @@ class CogniacMedia(object):
         app_data          Optional extra app-specific data
         """
 
-        url = "/media/%s/detections" % (self.media_id)
+        url = "/1/media/%s/detections" % (self.media_id)
 
         if wait_capture_id is not None:
             url += "?wait_capture_id=%s" % wait_capture_id
@@ -409,5 +414,5 @@ class CogniacMedia(object):
                          Some application types only support 'True' or None.
                          }
         """
-        resp = self._cc._get("/media/%s/subjects" % (self.media_id))
+        resp = self._cc._get("/1/media/%s/subjects" % (self.media_id))
         return resp.json()['data']

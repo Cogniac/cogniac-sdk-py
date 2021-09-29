@@ -74,7 +74,7 @@ class CogniacApplication(object):
         if app_managers is not None:
             data['app_managers'] = app_managers
 
-        resp = connection._post("/applications", json=data)
+        resp = connection._post("/1/applications", json=data)
 
         return CogniacApplication(connection, resp.json())
 
@@ -92,7 +92,7 @@ class CogniacApplication(object):
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         application_id (String):             The application_id of the Cogniac application to return
         """
-        resp = connection._get("/applications/%s" % application_id)
+        resp = connection._get("/1/applications/%s" % application_id)
         return CogniacApplication(connection, resp.json())
 
     ##
@@ -105,7 +105,7 @@ class CogniacApplication(object):
 
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         """
-        resp = connection._get('/tenants/%s/applications' % connection.tenant.tenant_id)
+        resp = connection._get('/1/tenants/%s/applications' % connection.tenant.tenant_id)
         apps = resp.json()['data']
         return [CogniacApplication(connection, appd) for appd in apps]
 
@@ -142,7 +142,7 @@ class CogniacApplication(object):
         Delete the application.
         This will delete existing models but will not delete associated subjects or media.
         """
-        self._cc._delete("/applications/%s" % self.application_id)
+        self._cc._delete("/1/applications/%s" % self.application_id)
 
         for k in self._app_keys:
             delattr(self, k)
@@ -151,7 +151,7 @@ class CogniacApplication(object):
         self.connection = None
 
     def __post_update__(self, data):
-        resp = self._cc._post("/applications/%s" % self.application_id, json=data)
+        resp = self._cc._post("/1/applications/%s" % self.application_id, json=data)
         self.__parse_app_dict__(resp.json())
 
     def __setattr__(self, name, value):
@@ -248,6 +248,7 @@ class CogniacApplication(object):
 
             Defaults to 1.
         """
+<<<<<<< HEAD
         # add media_id to each subject-media association dict
         # TODO: deprecate this
         for s in subjects:
@@ -272,6 +273,13 @@ class CogniacApplication(object):
     #     resp = self._cc._get("/21/applications/%s/feedback/pending" % self.application_id)
     #     return resp.json()['pending']
     # </TODO>
+=======
+        Return the integer number of feedback requests pending for this application.
+        This is useful for controlling the flow of images input into the system to avoid creating too many backlogged feedback requests.
+        """
+        resp = self._cc._get("/1/applications/%s/feedback/pending" % self.application_id)
+        return resp.json()['pending']
+>>>>>>> master
 
     ##
     #  get_feedback_requests
@@ -283,7 +291,11 @@ class CogniacApplication(object):
 
         limit (Int):   Maximum number of feedback request messages to return
         """
+<<<<<<< HEAD
         resp = self._cc._get("/21/applications/%s/feedbackRequests?limit=%d" % (self.application_id, limit))
+=======
+        resp = self._cc._get("/1/applications/%s/feedback?limit=%d" % (self.application_id, limit))
+>>>>>>> master
         return resp.json()
 
     ##
@@ -307,8 +319,12 @@ class CogniacApplication(object):
         feedback_response = {'media_id': media_id,
                              'subjects': subjects}
 
+<<<<<<< HEAD
         self._cc._post("/21/applications/%s/feedbackRequests/%s/feedbackResponses" % (self.application_id, feedback_request_id),
                        json=feedback_response)
+=======
+        self._cc._post("/1/applications/%s/feedback" % self.application_id, json=feedback_response)
+>>>>>>> master
 
     ##
     #  list of models released
@@ -332,7 +348,7 @@ class CogniacApplication(object):
             assert(limit > 0)
             args.append('limit=%d' % min(limit, 100))  # api support max limit of 100
 
-        url = "/applications/%s/models?" % self.application_id
+        url = "/1/applications/%s/models?" % self.application_id
         url += "&".join(args)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
@@ -364,7 +380,7 @@ class CogniacApplication(object):
         """
         return the modelname for the current best model for this application
         """
-        resp = self._cc._get("/applications/%s/ccp" % self.application_id)
+        resp = self._cc._get("/1/applications/%s/ccp" % self.application_id)
         resp = resp.json()
 
         url = resp['best_model_ccp_url']
@@ -381,14 +397,14 @@ class CogniacApplication(object):
         return the local filename which will be the same as the model name.
         """
         if model_id is None:
-            resp = self._cc._get("/applications/%s/ccp" % self.application_id)
+            resp = self._cc._get("/1/applications/%s/ccp" % self.application_id)
             resp = resp.json()
             url = resp['best_model_ccp_url']
             modelname = url.split('/')[-1]
         else:
             modelname = model_id.split('/')[-1]
 
-        resp = self._cc._get("/applications/%s/ccppkg" % self.application_id, json={"ccp_filename": modelname})
+        resp = self._cc._get("/1/applications/%s/ccppkg" % self.application_id, json={"ccp_filename": modelname})
 
         fp = open(modelname, "wb")
         fp.write(resp.content)
@@ -460,7 +476,7 @@ class CogniacApplication(object):
         if abridged_media:
             args.append('abridged_media=True')
 
-        url = "/applications/%s/detections?" % self.application_id
+        url = "/1/applications/%s/detections?" % self.application_id
         url += "&".join(args)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
@@ -482,7 +498,7 @@ class CogniacApplication(object):
         """
         return single cummulative app usage record for start to end epoch times
         """
-        url = "/usage/app/%s?start=%d&end=%d&accumulate=True" % (self.application_id, start, end)
+        url = "/1/usage/app/%s?start=%d&end=%d&accumulate=True" % (self.application_id, start, end)
         resp = self._cc._get(url)
         data = resp.json()['data']
         return data[0] if len(data) else None
@@ -491,7 +507,7 @@ class CogniacApplication(object):
         """
         yield sparse app usage records in order between start and end epoch times
         """
-        url = "/usage/app/%s?start=%d&end=%d" % (self.application_id, start, end)
+        url = "/1/usage/app/%s?start=%d&end=%d" % (self.application_id, start, end)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=5, retry_on_exception=server_error)
         def get_next(url):
