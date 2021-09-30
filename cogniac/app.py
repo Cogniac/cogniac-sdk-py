@@ -192,9 +192,9 @@ class CogniacApplication(object):
         subject (CogniacSubject):   the subject to add
         """
         self.input_subjects = self.input_subjects + [subject.subject_uid]
-    
+
     ##
-    #  pending_feedback (legacy)
+    #  pending_feedback (backward compatiblity for v1)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def pending_feedback(self):
@@ -206,7 +206,7 @@ class CogniacApplication(object):
         return resp.json()['pending']
 
     ##
-    #  get_feedback (legacy)
+    #  get_feedback (backward compatiblity for v1)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def get_feedback(self, limit=10):
@@ -217,9 +217,36 @@ class CogniacApplication(object):
         """
         resp = self._cc._get("/1/applications/%s/feedback?limit=%d" % (self.application_id, limit))
         return resp.json()
+    
+    ##
+    #  post_feedback (backward compatiblity for v1)
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def post_feedback(self, media_id, subjects):
+        """
+        Provides feedback to the application for a given subject-media assocation; returns None.
+
+        media_id (String):             Media ID of the media to provide feedback on
+        subjects (list of dicts):      Subject-media association dictionaries of the form:
+
+            subject_uid:               Subject UID
+            result (str):              Either 'True', 'False', 'Uncertain'
+            app_data_type (String):    (Optional) Type of extra app-specific data for certain app types
+            app_data (Object):         (Optional) Additional, app-specific, subject-media association data
+
+        """
+        # add media_id to each subject-media association dict
+        # TODO: deprecate this
+        for s in subjects:
+            s['media_id'] = media_id
+
+        feedback_response = {'media_id': media_id,
+                             'subjects': subjects}
+
+        self._cc._post("/1/applications/%s/feedback" % self.application_id, json=feedback_response)
 
     ##
-    #  request_feedback
+    #  request_feedback (v21)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def request_feedback(self, media_id, subjects):
@@ -283,54 +310,73 @@ class CogniacApplication(object):
         self._cc._post("/21/applications/%s/feedbackRequests" % self.application_id, json=feedback_response)
 
     ##
-    #  get_feedback_requests
+    #  get_feedback_requests (v21)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def get_feedback_requests(self, limit=10):
         """
-        returns a list of  up to {limit} feedback request messages for the application
+        Returns feedback requests available to the user for this application.
 
-        limit (Int):   Maximum number of feedback request messages to return
+        limit (int): Maximum number of feedback requests to return.
         """
         resp = self._cc._get("/21/applications/%s/feedbackRequests?limit=%d" % (self.application_id, limit))
         return resp.json()
 
     ##
-    #  get_feedback_requests
+    #  count_feedback_requests (v21)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def count_feedback_requests(self, limit=10):
+    def count_feedback_requests(self):
         """
-        returns a list of  up to {limit} feedback request messages for the application
-
-        limit (Int):   Maximum number of feedback request messages to return
+        Return the integer number of feedback requests available to the user 
+        for this application.
         """
         resp = self._cc._get("/21/applications/%s/feedbackRequests/count" % (self.application_id, limit))
-        return resp.json()
+        return resp.json()['count']
 
     ##
-    #  submit_feedback
+    #  submit_feedback (v21)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def submit_feedback(self, feedback_request_id, subjects):
         """
-        Provides feedback to the application for a given subject-media assocation; returns None.
+        Submits feedback containing subject-media assertions in response to a
+        specified feedback request for this application.
 
-        feedback_request_id (String):  Feedback Request ID for which feedback is being submitted.
+        Returns the submitted subject-media assertions.
 
-        assertions (list of dicts):    List of subject-media assertion dictionaries, each including:
+        Arguments:
 
-            subject_uid:               Subject UID
-            result (str):              Either 'True', 'False', 'Uncertain'
-            app_data_type (String):    (Optional) Type of extra app-specific data for certain app types
-            app_data (Object):         (Optional) Additional, app-specific, subject-media association data
+            feedback_request_id (str):
+                Unique feedback request identifier for which feedback is being 
+                submitted.
 
+            subjects (List[dict]):
+                List of subject-media assertions.
+                
+                A subject-media assertion has the following attributes:
+
+                subject_uid (str):
+                    Subject UID
+
+                result (str):
+                    Type of subject-media association ('True', 'False', 
+                    'Sidelined', or 'Uncertain').
+
+                app_data_type (str):
+                    (Optional) Type of extra app-specific data for certain 
+                    app types.
+
+                app_data (dict):
+                    (Optional) Additional, app-specific, subject-media 
+                    association data.
         """
-        feedback_response = {'media_id': media_id,
-                             'subjects': subjects}
-
-        self._cc._post("/21/applications/%s/feedbackRequests/%s/feedbackResponses" % (self.application_id, feedback_request_id),
-                       json=feedback_response)
+        feedback_response = {
+            'feedback_request_id': feedback_request_id,
+            'subjects': subjects
+        }
+        response = self._cc._post("/21/applications/%s/feedbackRequests/%s/feedbackResponses" % (self.application_id, feedback_request_id), json=feedback_response)
+        return response['subjects']
 
     ##
     #  list of models released
