@@ -192,6 +192,31 @@ class CogniacApplication(object):
         subject (CogniacSubject):   the subject to add
         """
         self.input_subjects = self.input_subjects + [subject.subject_uid]
+    
+    ##
+    #  pending_feedback (legacy)
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def pending_feedback(self):
+        """
+        Return the integer number of feedback requests pending for this application.
+        This is useful for controlling the flow of images input into the system to avoid creating too many backlogged feedback requests.
+        """
+        resp = self._cc._get("/1/applications/%s/feedback/pending" % self.application_id)
+        return resp.json()['pending']
+
+    ##
+    #  get_feedback (legacy)
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def get_feedback(self, limit=10):
+        """
+        returns a list of  up to {limit} feedback request messages for the application
+
+        limit (Int):   Maximum number of feedback request messages to return
+        """
+        resp = self._cc._get("/1/applications/%s/feedback?limit=%d" % (self.application_id, limit))
+        return resp.json()
 
     ##
     #  request_feedback
@@ -249,7 +274,6 @@ class CogniacApplication(object):
             Defaults to 1.
         """
         # add media_id to each subject-media association dict
-        # TODO: deprecate this
         for s in subjects:
             s['media_id'] = media_id
 
@@ -257,21 +281,6 @@ class CogniacApplication(object):
                              'subjects': subjects}
 
         self._cc._post("/21/applications/%s/feedbackRequests" % self.application_id, json=feedback_response)
-
-    # <TODO>
-    # TODO: count_feedback_requests
-    ##
-    #  pending_feedback
-    ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def pending_feedback(self):
-        """
-        Return the integer number of feedback requests pending for this application.
-        This is useful for controlling the flow of images input into the system to avoid creating too many backlogged feedback requests.
-        """
-        resp = self._cc._get("/1/applications/%s/feedback/pending" % self.application_id)
-        return resp.json()['pending']
-    # </TODO>
 
     ##
     #  get_feedback_requests
@@ -284,6 +293,19 @@ class CogniacApplication(object):
         limit (Int):   Maximum number of feedback request messages to return
         """
         resp = self._cc._get("/21/applications/%s/feedbackRequests?limit=%d" % (self.application_id, limit))
+        return resp.json()
+
+    ##
+    #  get_feedback_requests
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def count_feedback_requests(self, limit=10):
+        """
+        returns a list of  up to {limit} feedback request messages for the application
+
+        limit (Int):   Maximum number of feedback request messages to return
+        """
+        resp = self._cc._get("/21/applications/%s/feedbackRequests/count" % (self.application_id, limit))
         return resp.json()
 
     ##
