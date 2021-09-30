@@ -376,7 +376,7 @@ class CogniacApplication(object):
             'subjects': subjects
         }
         response = self._cc._post("/21/applications/%s/feedbackRequests/%s/feedbackResponses" % (self.application_id, feedback_request_id), json=feedback_response)
-        return response['subjects']
+        return response.json()['subjects']
 
     ##
     #  list of models released
