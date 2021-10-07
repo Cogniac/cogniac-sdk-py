@@ -164,7 +164,7 @@ class CogniacApplication(object):
         if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects', 'app_managers',
                     'detection_post_urls', 'detection_thresholds', 'custom_fields', 'app_type_config',
                     'edgeflow_upload_policies', 'override_upstream_detection_filter', 'feedback_resample_ratio',
-                    'reviewers', 'inference_execution_policies']:
+                    'reviewers', 'inference_execution_policies', 'primary_release_metric', 'secondary_evaluation_metrics']:
             data = {name: value}
             self.__post_update__(data)
             return
