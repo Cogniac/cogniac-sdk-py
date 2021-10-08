@@ -249,7 +249,13 @@ class CogniacApplication(object):
     #  request_feedback (v21)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def request_feedback(self, media_id, subjects):
+    def request_feedback(self,
+                         media_id,
+                         subjects,
+                         focus=None,
+                         total_response_count_min=1,
+                         per_reviewer_response_count_max=1,
+                         reviewer_roles=None):
         """
         Requests application feedback on the specified media.
 
@@ -304,10 +310,14 @@ class CogniacApplication(object):
         for s in subjects:
             s['media_id'] = media_id
 
-        feedback_response = {'media_id': media_id,
-                             'subjects': subjects}
+        feedback_request = {'media_id': media_id,
+                            'subjects': subjects,
+                            'per_reviewer_response_count_max': per_reviewer_response_count_max,
+                            'total_response_count_min': total_response_count_min,
+                            'focus': focus,
+                            'reviewer_roles': reviewer_roles}
 
-        self._cc._post("/21/applications/%s/feedbackRequests" % self.application_id, json=feedback_response)
+        self._cc._post("/21/applications/%s/feedbackRequests" % self.application_id, json=feedback_request)
 
     ##
     #  get_feedback_requests (v21)
