@@ -98,9 +98,9 @@ class CogniacConnection(object):
                                       will be used as the tenant.
 
         url_prefix (String):          Cogniac API url prefix.
-                                      Defaults to "https://api.cogniac.io/1" for the Cogniac cloud system.
+                                      Defaults to "https://api.cogniac.io/" for the Cogniac cloud system.
                                       If you are accessing an 'on-prem' version of the Cogniac system,
-                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/1'
+                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/'
                                       or a custom DNS prefix assigned by your internal IT.)
                                       The url_prefix can alternatively be set via the COG_URL_PREFIX environment variable.
 
@@ -114,7 +114,7 @@ class CogniacConnection(object):
             self.username = username
             self.password = password
         elif 'COG_API_KEY' in os.environ:
-            self.api_key = os.environ['COG_API_KEY']            
+            self.api_key = os.environ['COG_API_KEY']
         else:
             # credentials not specified, use environment variables if found
             try:
