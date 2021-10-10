@@ -194,22 +194,27 @@ except:
     os._exit(1)
 
 
+@register_line_magic
+def login(tname):
+    """
+    attempt to match user supplied partial tenant name or tenant_id 
+    authenticate with the matched tenant
+    """
+    tenant_list = cogniac.CogniacConnection.get_all_authorized_tenants(username, password)['tenants']
+    def match(t):
+        return tname.lower() in t['name'].lower() or tname in t['tenant_id']
+    filter_tenant_list = filter(match, tenant_list)
+    if len(filter_tenant_list) == 1:
+        authenticate(filter_tenant_list[0]['tenant_id'])  # use tenant from command line
+    elif len(filter_tenant_list) > 1:
+        print_tenants(filter_tenant_list)  # show tenants that match
+    else:
+        print_tenants(tenant_list)  # show all tenants
+
+
 if 'COG_TENANT' in os.environ:
     tenant_id = os.environ['COG_TENANT']
     print "found COG_TENANT %s" % tenant_id
     authenticate(tenant_id)
 else:
-    tenant_list = cogniac.CogniacConnection.get_all_authorized_tenants(username, password)['tenants']
-    if len(tenant_list) == 1:
-        authenticate(tenant_list[0]['tenant_id'])
-    else:
-        # see if user provided a partial tenant name or tenant_id on command line
-        def match(t):
-            return argv[-1].lower() in t['name'].lower() or argv[-1] in t['tenant_id']
-        filter_tenant_list = filter(match, tenant_list)
-        if len(filter_tenant_list) == 1:
-            authenticate(filter_tenant_list[0]['tenant_id'])  # use tenant from command line
-        elif len(filter_tenant_list) > 1:
-            print_tenants(filter_tenant_list)  # show tenants that match
-        else:
-            print_tenants(tenant_list)  # show all tenants
+    login(argv[-1])
