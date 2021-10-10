@@ -15,7 +15,7 @@ The main entry point is the CogniacConnection object which is created as follows
                           api_key=None,
                           tenant_id=None,
                           timeout=60,
-                          url_prefix="https://api.cogniac.io/1")
+                          url_prefix="https://api.cogniac.io/")
 
         Create an authenticated CogniacConnection with the following credentials:
         
