@@ -251,11 +251,11 @@ class CogniacApplication(object):
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def request_feedback(self,
                          media_id,
-                         subjects,
+                         subjects=None,
                          focus=None,
                          total_response_count_min=1,
                          per_reviewer_response_count_max=1,
-                         reviewer_roles=None):
+                         reviewer_roles=['anyone']):
         """
         Requests application feedback on the specified media.
 
@@ -306,10 +306,6 @@ class CogniacApplication(object):
 
             Defaults to 1.
         """
-        # add media_id to each subject-media association dict
-        for s in subjects:
-            s['media_id'] = media_id
-
         feedback_request = {'media_id': media_id,
                             'subjects': subjects,
                             'per_reviewer_response_count_max': per_reviewer_response_count_max,
@@ -348,7 +344,7 @@ class CogniacApplication(object):
     #  submit_feedback (v21)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def submit_feedback(self, feedback_request_id, subjects):
+    def submit_feedback(self, subjects, feedback_request_id=None, media_id=None):
         """
         Submits feedback containing subject-media assertions in response to a
         specified feedback request for this application.
@@ -383,6 +379,7 @@ class CogniacApplication(object):
         """
         feedback_response = {
             'feedback_request_id': feedback_request_id,
+            'media_id': media_id,
             'subjects': subjects
         }
         response = self._cc._post("/21/applications/%s/feedbackRequests/%s/feedbackResponses" % (self.application_id, feedback_request_id), json=feedback_response)
