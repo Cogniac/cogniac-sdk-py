@@ -451,7 +451,7 @@ class CogniacApplication(object):
         def __get_app_type_config_dict__(self):
             d = {}
 
-            for k, v in self.__dict__.iteritems():
+            for k, v in self.__dict__.items():
                 if k in self._app_type_config_keys:
                     d[k] = v
 
