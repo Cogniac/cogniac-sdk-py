@@ -57,7 +57,7 @@ print "added ipython magic %authenticate"
 
 def print_detections(detections):
     # remove None values from dict
-    detections = [{k: v for k, v in d.iteritems() if v is not None} for d in detections]
+    detections = [{k: v for k, v in d.items() if v is not None} for d in detections]
 
     detections.sort(key=lambda x: x['created_at'])
 
@@ -83,7 +83,7 @@ print "added ipython magic %media_detections"
 
 def print_subjects(media_subjects):
     subjects = [ms['subject'] for ms in media_subjects]
-    subjects = [{k: v for k, v in s.iteritems() if v is not None} for s in subjects]
+    subjects = [{k: v for k, v in s.items() if v is not None} for s in subjects]
     subjects.sort(key=lambda x: x['updated_at'])
     for s in subjects:
         if 'timestamp' in s:
