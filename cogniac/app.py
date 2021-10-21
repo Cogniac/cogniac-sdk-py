@@ -164,7 +164,7 @@ class CogniacApplication(object):
         if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects', 'app_managers',
                     'detection_post_urls', 'detection_thresholds', 'custom_fields', 'app_type_config',
                     'edgeflow_upload_policies', 'override_upstream_detection_filter', 'feedback_resample_ratio',
-                    'reviewers', 'inference_execution_policies', 'primary_release_metric', 'secondary_evaluation_metrics']:
+                    'inference_execution_policies', 'primary_release_metric', 'secondary_evaluation_metrics']:
             data = {name: value}
             self.__post_update__(data)
             return
@@ -255,7 +255,7 @@ class CogniacApplication(object):
                          focus=None,
                          total_response_count_min=1,
                          per_reviewer_response_count_max=1,
-                         reviewer_roles=['anyone']):
+                         roles=['anyone']):
         """
         Requests application feedback on the specified media.
 
@@ -284,18 +284,16 @@ class CogniacApplication(object):
             Defaults to `None`, indicating feedback can be provided in any region
             of the specified media item.
 
-        reviewer_roles (list):
-            List of application reviewer roles required by application reviewers
-            to receive this feedback request and that will be allowed to provide
-            feedback in response to this feedback request.
+        roles (list):
+            List of annotator roles for which the feedback request will be 
+            available.
                                        
-            The available roles are limited to those assignable to users added
-            as application reviewers (in an application's `reviewers` field),
-            including "annotator" and "reviewer".
+            Supported annotator roles are `"anyone"`, `"annotator"`, and
+            `"expert_annotator"`.
                                        
         total_response_count_min (int):
             (Optional) The total number of feedback responses required to 
-            fulfill this feedback request.o
+            fulfill this feedback request.
                                         
             Defaults to 1.
 
@@ -311,7 +309,7 @@ class CogniacApplication(object):
                             'per_reviewer_response_count_max': per_reviewer_response_count_max,
                             'total_response_count_min': total_response_count_min,
                             'focus': focus,
-                            'reviewer_roles': reviewer_roles}
+                            'roles': roles}
 
         self._cc._post("/21/applications/%s/feedbackRequests" % self.application_id, json=feedback_request)
 
