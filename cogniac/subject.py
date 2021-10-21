@@ -431,7 +431,7 @@ class CogniacSubject(object):
         reverse (bool)         reverse the sorting order: sort high to low
         probability_lower:     filter by probability > probability_lower
         probability_upper:     filter by probability < probability_upper
-        consensus (string):    filter by consensus label: "True", "False"
+        consensus (string):    filter by consensus label: "True", "False" or "None"
         sort_probability(bool) Sort by probability instead of last update timestamp
         limit (int)            yield maximum of limit results
         abridged_media (bool)  return full media items if False (slower), otherwise return just media_id's for each media_item
@@ -469,7 +469,7 @@ class CogniacSubject(object):
         if probability_upper is not None:
             args.append("probability_upper=%f" % probability_upper)
         if consensus is not None:
-            assert(consensus in ['True', 'False'])
+            assert(consensus in ['True', 'False', 'None'])
             args.append("consensus=%s" % consensus)
         if reverse:
             args.append('reverse=True')

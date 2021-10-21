@@ -164,7 +164,7 @@ class CogniacApplication(object):
         if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects', 'app_managers',
                     'detection_post_urls', 'detection_thresholds', 'custom_fields', 'app_type_config',
                     'edgeflow_upload_policies', 'override_upstream_detection_filter', 'feedback_resample_ratio',
-                    'reviewers']:
+                    'reviewers', 'inference_execution_policies', 'primary_release_metric', 'secondary_evaluation_metrics']:
             data = {name: value}
             self.__post_update__(data)
             return
@@ -591,7 +591,7 @@ class CogniacApplication(object):
         def __get_app_type_config_dict__(self):
             d = {}
 
-            for k, v in self.__dict__.iteritems():
+            for k, v in self.__dict__.items():
                 if k in self._app_type_config_keys:
                     d[k] = v
 
