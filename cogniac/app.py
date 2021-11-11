@@ -230,7 +230,7 @@ class CogniacApplication(object):
         subjects (list of dicts):      Subject-media association dictionaries of the form:
 
             subject_uid:               Subject UID
-            result (str):              Either 'True', 'False', 'Uncertain'
+            result (str):              One of 'True', 'False', 'Sidelined'
             app_data_type (String):    (Optional) Type of extra app-specific data for certain app types
             app_data (Object):         (Optional) Additional, app-specific, subject-media association data
 
