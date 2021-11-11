@@ -53,7 +53,7 @@ class CogniacOpsReview(object):
         if review_unit:
             data['review_unit'] = review_unit
 
-        resp = connection._post("/ops/review", json=data)
+        resp = connection._post("/1/ops/review", json=data)
         return CogniacOpsReview(connection, resp.json())
 
     ##
@@ -72,7 +72,7 @@ class CogniacOpsReview(object):
             review_items
             review_unit if any
         """
-        resp = connection._get("/ops/review")
+        resp = connection._get("/1/ops/review")
         return CogniacOpsReview(connection, resp.json())
 
     ##
@@ -86,7 +86,7 @@ class CogniacOpsReview(object):
         return number of pending items in operations review queue
         connnection (CogniacConnection): Authenticated CogniacConnection object
         """
-        resp = connection._get("/ops/review/pending")
+        resp = connection._get("/1/ops/review/pending")
         return resp.json()['pending']
 
     ##
@@ -110,7 +110,7 @@ class CogniacOpsReview(object):
         data = dict(review_id=review_id, result=result)
         if comment:
             data['comment'] = comment
-        resp = connection._post("/ops/results", json=data)
+        resp = connection._post("/1/ops/results", json=data)
         return CogniacOpsReview(connection, resp.json())
 
     ##
@@ -161,7 +161,7 @@ class CogniacOpsReview(object):
             args.append("review_unit=%s" % review_unit)
         if result is not None:
             args.append("result=%s" % result)
-        url = "/ops/results?"
+        url = "/1/ops/results?"
         url += "&".join(args)
 
         @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
@@ -202,7 +202,7 @@ class CogniacOpsReview(object):
         """
         Delete the op review result.
         """
-        resp = self._cc._delete("/ops/review/%s" % self.review_id)
+        resp = self._cc._delete("/1/ops/review/%s" % self.review_id)
 
         for k in self._sub_keys:
             delattr(self, k)

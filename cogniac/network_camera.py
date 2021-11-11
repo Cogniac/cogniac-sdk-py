@@ -24,7 +24,7 @@ camera_model_keys = ['last_pose_change_timestamp',
                      'z_axis_x', 'z_axis_y']
 
 mutable_keys = ['url', 'current_IP', 'camera_name', 'description',
-                'active', 'lat', 'lon', 'hae'] + camera_model_keys
+                'active', 'lat', 'lon', 'hae', 'alt_subject_uid', 'custom_configuration'] + camera_model_keys
 
 immutable_keys = ['network_camera_id', 'created_at',
                   'created_by', 'modified_at', 'modified_by']
@@ -131,7 +131,7 @@ class CogniacNetworkCamera(object):
         if user_defined_name:
             data['user_defined_name'] = user_defined_name
 
-        resp = connection._post("/networkCameras", json=data)
+        resp = connection._post("/1/networkCameras", json=data)
         return CogniacNetworkCamera(connection, resp.json())
 
     ##
@@ -148,7 +148,7 @@ class CogniacNetworkCamera(object):
         network_camera_id (String): the netcam id of the Cogniac NetCam object
         returns CogniacNetworkCamera object
         """
-        resp = connection._get("/networkCameras/%s" % network_camera_id)
+        resp = connection._get("/1/networkCameras/%s" % network_camera_id)
         return CogniacNetworkCamera(connection, resp.json())
 
     ##
@@ -161,7 +161,7 @@ class CogniacNetworkCamera(object):
 
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         """
-        resp = connection._get('/tenants/%s/networkCameras' % connection.tenant.tenant_id)
+        resp = connection._get('/1/tenants/%s/networkCameras' % connection.tenant.tenant_id)
         netcams = resp.json()['data']
         return [CogniacNetworkCamera(connection, netcam) for netcam in netcams]
 
@@ -295,7 +295,7 @@ class CogniacNetworkCamera(object):
         if z_axis_y is not None:
             data['z_axis_y'] = z_axis_y
 
-        resp = self._cc._post("/networkCameras/%s" % self.network_camera_id, json=data)
+        resp = self._cc._post("/1/networkCameras/%s" % self.network_camera_id, json=data)
         return CogniacNetworkCamera(self._cc, resp.json())
 
     ##
@@ -306,7 +306,7 @@ class CogniacNetworkCamera(object):
         """
         Delete the op review result.
         """
-        self._cc._delete("/networkCameras/%s" % self.network_camera_id)
+        self._cc._delete("/1/networkCameras/%s" % self.network_camera_id)
 
         for k in self._cam_keys:
             delattr(self, k)
@@ -336,7 +336,7 @@ class CogniacNetworkCamera(object):
         if name in mutable_keys:
             data = {name: value}
             print("\n====", data)
-            resp = self._cc._post("/networkCameras/%s" % self.network_camera_id, json=data)
+            resp = self._cc._post("/1/networkCameras/%s" % self.network_camera_id, json=data)
 
             for k, v in resp.json().items():
                 super(CogniacNetworkCamera, self).__setattr__(k, v)

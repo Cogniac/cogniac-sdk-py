@@ -15,7 +15,7 @@ The main entry point is the CogniacConnection object which is created as follows
                           api_key=None,
                           tenant_id=None,
                           timeout=60,
-                          url_prefix="https://api.cogniac.io/1")
+                          url_prefix="https://api.cogniac.io/")
 
         Create an authenticated CogniacConnection with the following credentials:
         
@@ -38,9 +38,9 @@ The main entry point is the CogniacConnection object which is created as follows
                                       will be used as the tenant.
 
         url_prefix (String):          Cogniac API url prefix.
-                                      Defaults to "https://api.cogniac.io/1" for the Cogniac cloud system.
+                                      Defaults to "https://api.cogniac.io/" for Cogniac CloudCore.
                                       If you are accessing an 'on-prem' version of the Cogniac system,
-                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/1'
+                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/'
                                       or a custom DNS prefix assigned by your internal IT.)
                                       The url_prefix can alternatively be set via the COG_URL_PREFIX environment variable.
                                       
@@ -161,7 +161,7 @@ Example Usage:
 
 or to run ipython with extra magic commands:
 
-        % icogniac     
+        % icogniac [optional partial tenant name or tenant_id]
 
         print cc.tenant_id
                         

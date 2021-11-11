@@ -8,6 +8,7 @@ Copyright (C) 2016 Cogniac Corporation.
 
 import os
 import logging
+import re
 import requests
 from retrying import retry
 from requests.auth import HTTPBasicAuth
@@ -46,12 +47,12 @@ class CogniacConnection(object):
 
     @classmethod
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def get_all_authorized_tenants(cls, username=None, password=None, url_prefix="https://api.cogniac.io/1"):
+    def get_all_authorized_tenants(cls, username=None, password=None, url_prefix="https://api.cogniac.io/"):
         """
         return the list of valid tenants for the specified user credentials and url_prefix
         """
         if 'COG_API_KEY' in os.environ:
-            resp = requests.get(url_prefix + "/users/current/tenants",
+            resp = requests.get(url_prefix + "/1/users/current/tenants",
                                 headers={"Authorization": "Key %s" % os.environ['COG_API_KEY']})
             raise_errors(resp)
             return resp.json()
@@ -64,7 +65,7 @@ class CogniacConnection(object):
             except:
                 raise Exception("No Cogniac Credentials. Try setting COG_USER and COG_PASS environment.")
 
-        resp = requests.get(url_prefix + "/users/current/tenants", auth=HTTPBasicAuth(username, password))
+        resp = requests.get(url_prefix + "/1/users/current/tenants", auth=HTTPBasicAuth(username, password))
         raise_errors(resp)
         return resp.json()
 
@@ -74,7 +75,7 @@ class CogniacConnection(object):
                  api_key=None,
                  tenant_id=None,
                  timeout=60,
-                 url_prefix="https://api.cogniac.io/1"):
+                 url_prefix="https://api.cogniac.io/"):
         """
         Create an authenticated CogniacConnection with the following credentials:
 
@@ -97,9 +98,9 @@ class CogniacConnection(object):
                                       will be used as the tenant.
 
         url_prefix (String):          Cogniac API url prefix.
-                                      Defaults to "https://api.cogniac.io/1" for the Cogniac cloud system.
+                                      Defaults to "https://api.cogniac.io/" for the Cogniac cloud system.
                                       If you are accessing an 'on-prem' version of the Cogniac system,
-                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/1'
+                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/'
                                       or a custom DNS prefix assigned by your internal IT.)
                                       The url_prefix can alternatively be set via the COG_URL_PREFIX environment variable.
 
@@ -113,7 +114,7 @@ class CogniacConnection(object):
             self.username = username
             self.password = password
         elif 'COG_API_KEY' in os.environ:
-            self.api_key = os.environ['COG_API_KEY']            
+            self.api_key = os.environ['COG_API_KEY']
         else:
             # credentials not specified, use environment variables if found
             try:
@@ -126,6 +127,12 @@ class CogniacConnection(object):
 
         if 'COG_URL_PREFIX' in os.environ:
             url_prefix = os.environ['COG_URL_PREFIX']
+        m = re.search(r'/\d+(/)?$', url_prefix)
+        # Strip API version number and tailing '/' from URL prefix.
+        if m is not None:
+            url_prefix = url_prefix[0:m.span()[0]]
+        if url_prefix.endswith('/'):
+            url_prefix = url_prefix[0:-1]
 
         self.url_prefix = url_prefix
         self.timeout = timeout
@@ -166,7 +173,7 @@ class CogniacConnection(object):
         if self.tenant.region is not None:
             # use tenant object's specified region preference
             # print "Using API endpoint from Tenant:", self.tenant.region
-            self.url_prefix = 'https://' + self.tenant.region + '/1'
+            self.url_prefix = 'https://' + self.tenant.region
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __authenticate(self):
@@ -175,13 +182,13 @@ class CogniacConnection(object):
         tenant_data = {"tenant_id": self.tenant_id}
         if self.api_key:
             # trade API KEY for user+tenant token
-            resp = requests.get(self.url_prefix + "/token",
+            resp = requests.get(self.url_prefix + "/1/token",
                                 params=tenant_data,
                                 headers={"Authorization": "Key %s" % self.api_key},
                                 timeout=self.timeout)
         else:
             # trade username/password for user+tenant token
-            resp = requests.get(self.url_prefix + "/token",
+            resp = requests.get(self.url_prefix + "/1/token",
                                 params=tenant_data,
                                 auth=HTTPBasicAuth(self.username, self.password),
                                 timeout=self.timeout)
@@ -205,6 +212,11 @@ class CogniacConnection(object):
         wrap requests session to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
+            # Prepend /1/ version if no version is specified in the URL (backward compatibility).
+            m = re.search(r'^/\d+(/)?', url)
+            if m is None:
+                url = '/1' + url
+
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
@@ -222,6 +234,11 @@ class CogniacConnection(object):
         wrap requests session to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
+            # Prepend /1/ version if no version is specified in the URL (backward compatibility).
+            m = re.search(r'^/\d+(/)?', url)
+            if m is None:
+                url = '/1' + url
+
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
@@ -239,6 +256,11 @@ class CogniacConnection(object):
         wrap requests session to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
+            # Prepend /1/ version if no version is specified in the URL (backward compatibility).
+            m = re.search(r'^/\d+(/)?', url)
+            if m is None:
+                url = '/1' + url
+
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
@@ -256,6 +278,11 @@ class CogniacConnection(object):
         wrap requests session to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
+            # Prepend /1/ version if no version is specified in the URL (backward compatibility).
+            m = re.search(r'^/\d+(/)?', url)
+            if m is None:
+                url = '/1' + url
+
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
@@ -447,9 +474,9 @@ class CogniacConnection(object):
         returns json version info
         """
         if auth:
-            url = self.url_prefix + "/authversion"
+            url = self.url_prefix + "/1/authversion"
         else:
-            url = self.url_prefix + "/version"
+            url = self.url_prefix + "/1/version"
         resp = self._get(url)
         raise_errors(resp)
         return resp.json()
