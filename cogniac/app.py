@@ -382,6 +382,12 @@ class CogniacApplication(object):
         }
         response = self._cc._post("/21/applications/%s/feedbackRequests/%s/feedbackResponses" % (self.application_id, feedback_request_id), json=feedback_response)
         return response.json()['subjects']
+    
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def purge_feedback_requests(self):
+        """Delete the application's feedback requests.
+        """
+        self._cc._delete("/21/applications/%s/feedbackRequests" % self.application_id)
 
     ##
     #  list of models released
