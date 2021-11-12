@@ -330,12 +330,12 @@ class CogniacApplication(object):
     #  count_feedback_requests (v21)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def count_feedback_requests(self):
+    def count_feedback_requests(self, limit=100):
         """
         Return the integer number of feedback requests available to the user 
         for this application.
         """
-        resp = self._cc._get("/21/applications/%s/feedbackRequests/count" % (self.application_id, limit))
+        resp = self._cc._get("/21/applications/%s/feedbackRequests/count?limit=%d" % (self.application_id, limit))
         return resp.json()['count']
 
     ##
@@ -365,7 +365,7 @@ class CogniacApplication(object):
 
                 result (str):
                     Type of subject-media association ('True', 'False', 
-                    'Sidelined', or 'Uncertain').
+                    'Sidelined').
 
                 app_data_type (str):
                     (Optional) Type of extra app-specific data for certain 
@@ -375,12 +375,13 @@ class CogniacApplication(object):
                     (Optional) Additional, app-specific, subject-media 
                     association data.
         """
+        assert(feedback_request_id is not None or media_id is not None)
         feedback_response = {
             'feedback_request_id': feedback_request_id,
             'media_id': media_id,
             'subjects': subjects
         }
-        response = self._cc._post("/21/applications/%s/feedbackRequests/%s/feedbackResponses" % (self.application_id, feedback_request_id), json=feedback_response)
+        response = self._cc._post("/21/applications/%s/feedback" % (self.application_id), json=feedback_response)
         return response.json()['subjects']
     
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
