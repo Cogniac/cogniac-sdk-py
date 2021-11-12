@@ -334,6 +334,10 @@ class CogniacApplication(object):
         """
         Return the integer number of feedback requests available to the user 
         for this application.
+
+        Arguments:
+
+            limit (int): Maximum number of feedback requests to return.
         """
         resp = self._cc._get("/21/applications/%s/feedbackRequests/count?limit=%d" % (self.application_id, limit))
         return resp.json()['count']
