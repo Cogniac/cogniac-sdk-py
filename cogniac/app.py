@@ -384,6 +384,18 @@ class CogniacApplication(object):
         return response.json()['subjects']
     
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def delete_feedback_request(self, feedback_request_id):
+        """Delete a specific feedback request for the application.
+
+        Arguments:
+
+            feedback_request_id (str):
+                Unique feedback request identifier for which feedback is being 
+                submitted.
+        """
+        self._cc._delete("/21/applications/%s/feedbackRequests/%s" % self.application_id, feedback_request_id)
+    
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def purge_feedback_requests(self):
         """Delete the application's feedback requests.
         """
