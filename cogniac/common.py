@@ -37,7 +37,7 @@ def credential_error(exception):
 
 def server_error(exception):
     """Return True if we should retry (in this case when it's an ServerError, False otherwise"""
-    return isinstance(exception, ServerError) or isinstance(exception, ConnectionError)
+    return isinstance(exception, (ServerError, ConnectionError))
 
 
 def raise_errors(response):
