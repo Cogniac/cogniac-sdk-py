@@ -81,10 +81,7 @@ class CogniacNetworkCamera(object):
         """
         data = dict(camera_name=name)
         data['url'] = url
-        if active:
-            data['active'] = 1
-        else:
-            data['active'] = 0
+        data['active'] = 1 if active else 0
 
         if description:
             data['description'] = description
