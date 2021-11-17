@@ -325,9 +325,8 @@ class CogniacApplication(object):
 
         resp = self._cc._get("/1/applications/%s/ccppkg" % self.application_id, json={"ccp_filename": modelname})
 
-        fp = open(modelname, "wb")
-        fp.write(resp.content)
-        fp.close()
+        with open(modelname, "wb") as fp:
+            fp.write(resp.content)
         return modelname
 
     ##
@@ -449,13 +448,11 @@ class CogniacApplication(object):
                 super(CogniacApplication._CogniacAppTypeConfig, self).__setattr__(k, v)
 
         def __get_app_type_config_dict__(self):
-            d = {}
-
-            for k, v in self.__dict__.items():
-                if k in self._app_type_config_keys:
-                    d[k] = v
-
-            return d
+            return {
+                k: v
+                for k, v in self.__dict__.items()
+                if k in self._app_type_config_keys
+            }
 
         def __setattr__(self, name, value):
             if name in self._app_type_config_keys:
