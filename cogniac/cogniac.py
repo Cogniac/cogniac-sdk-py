@@ -6,10 +6,12 @@ Copyright (C) 2016 Cogniac Corporation.
 
 """
 
-import os
 import logging
+import os
 import re
 import requests
+import six
+import sys
 from retrying import retry
 from requests.auth import HTTPBasicAuth
 from requests.packages.urllib3 import Retry
@@ -188,10 +190,26 @@ class CogniacConnection(object):
                                 timeout=self.timeout)
         else:
             # trade username/password for user+tenant token
+
+            # https://staging.cogniac.io/21/users/mfa/status
+            resp = requests.get(self.url_prefix + "/21/users/mfa/status",
+                                auth=HTTPBasicAuth(self.username, self.password),
+                                timeout=self.timeout)
+            raise_errors(resp)
+
+            mfa_status = resp.json()
+            if mfa_status.get('totp') == 'active':
+                try:
+                    totp = six.moves.input('Multi-Factor Authentication is required. Enter OTP: ')
+                except KeyboardInterrupt:
+                    sys.exit()
+                tenant_data['otp'] = totp
+
             resp = requests.get(self.url_prefix + "/1/token",
                                 params=tenant_data,
                                 auth=HTTPBasicAuth(self.username, self.password),
                                 timeout=self.timeout)
+
         raise_errors(resp)
 
         token = resp.json()
