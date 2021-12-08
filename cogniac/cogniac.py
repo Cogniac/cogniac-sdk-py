@@ -255,6 +255,7 @@ class CogniacConnection(object):
         """
         wrap requests session to re-authenticate on credential expiration
         """
+        print("^^^ url: {}  ^^^".format(url))
         if not url.startswith("http"):
             # Prepend /1/ version if no version is specified in the URL (backward compatibility).
             m = re.search(r'^/\d+(/)?', url)
@@ -503,7 +504,7 @@ class CogniacConnection(object):
 
     def get_edgeflow(self, edgeflow_id):
         """
-        return an existing CogniacEdgeFlow 
+        return an existing CogniacEdgeFlow
 
         edgeflow_id (String):  The id of the Cogniac EdgeFlow to return
         """

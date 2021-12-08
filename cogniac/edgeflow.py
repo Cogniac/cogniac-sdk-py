@@ -5,20 +5,21 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 import os
-import six
-import sys
-import requests
 import re
+from time import time
+import six
+import requests
 from retrying import retry
 from requests.packages.urllib3 import Retry
 from requests.adapters import HTTPAdapter
-from time import time
 
 from .common import server_error, raise_errors
-
 from .media import file_creation_time
 
 IP_REGEX = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$')
+
+
+CLOUDFLOW_PREFIX = "cloudflow.cogniac.io"
 
 
 @six.python_2_unicode_compatible
@@ -37,12 +38,12 @@ class CogniacEdgeFlow(object):
                                          Defaults to `None`. If unspecified, the EdgeFlow's local APIs will not be available
 
     Connect to a Cogniac EdgeFlow and maintain session state.
-    
+
     Class definition for an object that stores information about a physical
     Cogniac EdgeFlow and methods that provide a client
     interface for programmatically managing and requesting work to be done
     on the EdgeFlow.
-    
+
     A Cogniac EdgeFlow object's methods can be used to trigger media capture
     (e.g., triggering cameras to save images to an EdgeFlow) and ingesting
     media from another host on the same network.
@@ -85,14 +86,6 @@ class CogniacEdgeFlow(object):
         for k, v in edgeflow_dict.items():
             super(CogniacEdgeFlow, self).__setattr__(k, v)
 
-        # Validate IP address.
-        self.url_prefix = None
-        try:
-            if self.ip_address and IP_REGEX.match(self.ip_address):
-                self.url_prefix = 'http://{}:8000/1'.format(self.ip_address)
-        except:
-            pass
-
         self.timeout = timeout
 
         self.__initialize()
@@ -118,9 +111,22 @@ class CogniacEdgeFlow(object):
     #
     # -------------------------------------------------------------------------
 
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __initialize(self):
         self.session = requests.Session()
+
+        # Setup url prefix based on model of Edgeflow (cloudflow vs edgeflow)
+        if 'cf' in self.model.lower():
+            # cloudflow uses https based post request with token
+            self.url_prefix = 'https://{}.{}'.format(self.gateway_id, CLOUDFLOW_PREFIX)
+            self._post = self._cc._post
+        else:
+            try:
+                if self.ip_address and IP_REGEX.match(self.ip_address):
+                    self.url_prefix = 'http://{}:8000'.format(self.ip_address)
+            except:
+                self.url_prefix = None
+
+        print("model: %s url_prefix:%s" % (self.model, self.url_prefix))
 
         # Configure session with appropriate retries.
         self.session.mount('https://', HTTPAdapter(
@@ -155,6 +161,7 @@ class CogniacEdgeFlow(object):
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
+        print("_post: url: {}".format(url))
         resp = self.session.post(url, timeout=timeout, **kwargs)
         raise_errors(resp)
         return resp
@@ -173,7 +180,7 @@ class CogniacEdgeFlow(object):
         """
         Uploads a media file object to an EdgeFlow device.
 
-        subject_uid		                  A subject's unique identifier.
+        subject_uid                               A subject's unique identifier.
         filename (str):                   Local filename or http/s URL of image or video media file
         external_media_id (str):          Optional arbitrary external id for this media
         media_timestamp (float):          Optional actual timestamp of media creation/occurance time
@@ -210,7 +217,8 @@ class CogniacEdgeFlow(object):
                 raise Exception("The media file must be uploaded from local storage.")
             else:
                 files = {'file': open(filename, 'rb')}
-            resp = self._post("/1/process/{}".format(subject_uid), data=args, files=files)
+            url = "%s/%s/%s" % (self.url_prefix, "1/process", subject_uid)
+            resp = self._post(url, data=args, files=files)
             return resp
 
         resp = upload()
