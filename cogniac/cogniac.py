@@ -521,7 +521,7 @@ class CogniacConnection(object):
 
     def get_edgeflow(self, edgeflow_id):
         """
-        return an existing CogniacEdgeFlow 
+        return an existing CogniacEdgeFlow
 
         edgeflow_id (String):  The id of the Cogniac EdgeFlow to return
         """
