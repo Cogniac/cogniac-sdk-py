@@ -16,6 +16,8 @@ from requests.adapters import HTTPAdapter
 from .common import server_error, raise_errors
 from .media import file_creation_time
 
+from pprint import pprint
+
 IP_REGEX = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$')
 
 
@@ -110,23 +112,28 @@ class CogniacEdgeFlow(object):
     #  EdgeFlow API.
     #
     # -------------------------------------------------------------------------
-
-    def __initialize(self):
-        self.session = requests.Session()
-
-        # Setup url prefix based on model of Edgeflow (cloudflow vs edgeflow)
+    def __set_url_prefix(self):
+        """ Setup url prefix based on model of Edgeflow (cloudflow vs edgeflow).
+            For local http actions, the WAN0 ip address is used"""
+        self.url_prefix = None
         if 'cf' in self.model.lower():
             # cloudflow uses https based post request with token
             self.url_prefix = 'https://{}.{}'.format(self.gateway_id, CLOUDFLOW_PREFIX)
             self._post = self._cc._post
         else:
+            # use wan0 if available as the http destination ip addres
             try:
-                if self.ip_address and IP_REGEX.match(self.ip_address):
+                ifconfigs = self.status(subsystem_name='ifconfig', limit=1).next()
+                self.ip_address = ifconfigs['status']['wan0']['ip']
+                if IP_REGEX.match(self.ip_address):
                     self.url_prefix = 'http://{}:8000'.format(self.ip_address)
             except:
-                self.url_prefix = None
+                raise
 
-        print("model: %s url_prefix:%s" % (self.model, self.url_prefix))
+    def __initialize(self):
+        self.session = requests.Session()
+
+        self.__set_url_prefix()
 
         # Configure session with appropriate retries.
         self.session.mount('https://', HTTPAdapter(
@@ -169,6 +176,7 @@ class CogniacEdgeFlow(object):
     def get_version(self):
         resp = self._get("/1/version")
         return resp.json()
+
 
     def process_media(self,
                       subject_uid,
