@@ -255,7 +255,6 @@ class CogniacConnection(object):
         """
         wrap requests session to re-authenticate on credential expiration
         """
-        print("^^^ url: {}  ^^^".format(url))
         if not url.startswith("http"):
             # Prepend /1/ version if no version is specified in the URL (backward compatibility).
             m = re.search(r'^/\d+(/)?', url)
