@@ -16,7 +16,6 @@ from requests.adapters import HTTPAdapter
 from .common import server_error, raise_errors
 from .media import file_creation_time
 
-from pprint import pprint
 
 IP_REGEX = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$')
 
