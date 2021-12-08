@@ -168,7 +168,6 @@ class CogniacEdgeFlow(object):
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
-        print("_post: url: {}".format(url))
         resp = self.session.post(url, timeout=timeout, **kwargs)
         raise_errors(resp)
         return resp
