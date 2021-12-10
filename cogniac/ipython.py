@@ -22,7 +22,7 @@ def print_tenants(tenants):
 
 @register_line_magic
 def tenants(line):
-    tenants = cogniac.CogniacConnection.get_all_authorized_tenants(username, password)['tenants']
+    tenants = cogniac.CogniacConnection.get_all_authorized_tenants()['tenants']
     print_tenants(tenants)
 
 print "added ipython magic %tenants"
@@ -185,13 +185,6 @@ def usage(line):
     print tabulate(data, headers='firstrow')
 print "added ipython magic %usage"
 
-try:
-    username = os.environ['COG_USER']
-    password = os.environ['COG_PASS']
-    print "found environment credentials for %s" % username
-except:
-    print "No Cogniac Credentials. Specify username and password or set COG_USER and COG_PASS environment variables."
-    os._exit(1)
 
 
 @register_line_magic
@@ -200,7 +193,7 @@ def login(tname):
     attempt to match user supplied partial tenant name or tenant_id 
     authenticate with the matched tenant
     """
-    tenant_list = cogniac.CogniacConnection.get_all_authorized_tenants(username, password)['tenants']
+    tenant_list = cogniac.CogniacConnection.get_all_authorized_tenants()['tenants']
     def match(t):
         return tname.lower() in t['name'].lower() or tname in t['tenant_id']
     filter_tenant_list = filter(match, tenant_list)
