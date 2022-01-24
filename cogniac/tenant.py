@@ -94,3 +94,19 @@ class CogniacTenant(object):
             for record in resp['data']:
                 yield record
             url = resp['paging'].get('next')
+
+    ##
+    #  count_feedback_requests (v21)
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def count_feedback_requests(self, limit=100):
+        """
+        Return the integer number of feedback requests available to the user 
+        for across all applications in the tenant.
+        
+        Arguments:
+
+            limit (int): Maximum number of feedback requests to return.
+        """
+        resp = self._cc._get("/21/tenants/%s/feedbackRequests/count?limit=%d" % (self.tenant_id, limit))
+        return resp.json()['count']

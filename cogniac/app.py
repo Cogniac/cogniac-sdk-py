@@ -164,7 +164,7 @@ class CogniacApplication(object):
         if name in ['name', 'description', 'active', 'input_subjects', 'output_subjects', 'app_managers',
                     'detection_post_urls', 'detection_thresholds', 'custom_fields', 'app_type_config',
                     'edgeflow_upload_policies', 'override_upstream_detection_filter', 'feedback_resample_ratio',
-                    'reviewers', 'inference_execution_policies', 'primary_release_metric', 'secondary_evaluation_metrics']:
+                    'inference_execution_policies', 'primary_release_metric', 'secondary_evaluation_metrics']:
             data = {name: value}
             self.__post_update__(data)
             return
@@ -194,7 +194,7 @@ class CogniacApplication(object):
         self.input_subjects = self.input_subjects + [subject.subject_uid]
 
     ##
-    #  pending_feedback
+    #  pending_feedback (backward compatiblity for v1)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def pending_feedback(self):
@@ -206,7 +206,7 @@ class CogniacApplication(object):
         return resp.json()['pending']
 
     ##
-    #  get_feedback
+    #  get_feedback (backward compatiblity for v1)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def get_feedback(self, limit=10):
@@ -217,9 +217,9 @@ class CogniacApplication(object):
         """
         resp = self._cc._get("/1/applications/%s/feedback?limit=%d" % (self.application_id, limit))
         return resp.json()
-
+    
     ##
-    #  post_feedback
+    #  post_feedback (backward compatiblity for v1)
     ##
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def post_feedback(self, media_id, subjects):
@@ -244,6 +244,167 @@ class CogniacApplication(object):
                              'subjects': subjects}
 
         self._cc._post("/1/applications/%s/feedback" % self.application_id, json=feedback_response)
+
+    ##
+    #  request_feedback (v21)
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def request_feedback(self,
+                         media_id,
+                         subjects=None,
+                         focus=None,
+                         total_response_count_min=1,
+                         per_reviewer_response_count_max=1,
+                         roles=['anyone']):
+        """
+        Requests application feedback on the specified media.
+
+        media_id (String):
+            Media ID of the media to provide feedback on
+
+        focus (dict):
+            (Optional) Specific focus region in which feedback is being requested.
+            If specified, feedback provided for this feedback request will be
+            limited to this focus region.
+
+            An example `focus` dictionary for a feedback request in a specific
+            area of an image:
+            
+            ```
+            focus = {
+                "box": {
+                    "x0": 20,
+                    "y0": 20,
+                    "x1": 100,
+                    "y1": 100
+                }
+            }
+            ```
+
+            Defaults to `None`, indicating feedback can be provided in any region
+            of the specified media item.
+
+        roles (list):
+            List of annotator roles for which the feedback request will be 
+            available.
+                                       
+            Supported annotator roles are `"anyone"`, `"annotator"`, and
+            `"expert_annotator"`.
+                                       
+        total_response_count_min (int):
+            (Optional) The total number of feedback responses required to 
+            fulfill this feedback request.
+                                        
+            Defaults to 1.
+
+        per_reviewer_response_count_max (int):
+            (Optional) The total number of feedback responses that each
+            assigned application reviewer can submit for this feedback
+            request.
+
+            Defaults to 1.
+        """
+        feedback_request = {'media_id': media_id,
+                            'subjects': subjects,
+                            'per_reviewer_response_count_max': per_reviewer_response_count_max,
+                            'total_response_count_min': total_response_count_min,
+                            'focus': focus,
+                            'roles': roles}
+
+        self._cc._post("/21/applications/%s/feedbackRequests" % self.application_id, json=feedback_request)
+
+    ##
+    #  get_feedback_requests (v21)
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def get_feedback_requests(self, limit=10):
+        """
+        Returns feedback requests available to the user for this application.
+
+        limit (int): Maximum number of feedback requests to return.
+        """
+        resp = self._cc._get("/21/applications/%s/feedbackRequests?limit=%d" % (self.application_id, limit))
+        return resp.json()['data']
+
+    ##
+    #  count_feedback_requests (v21)
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def count_feedback_requests(self, limit=100):
+        """
+        Return the integer number of feedback requests available to the user 
+        for this application.
+
+        Arguments:
+
+            limit (int): Maximum number of feedback requests to return.
+        """
+        resp = self._cc._get("/21/applications/%s/feedbackRequests/count?limit=%d" % (self.application_id, limit))
+        return resp.json()['count']
+
+    ##
+    #  submit_feedback (v21)
+    ##
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def submit_feedback(self, subjects, feedback_request_id=None, media_id=None):
+        """
+        Submits feedback containing subject-media assertions in response to a
+        specified feedback request for this application.
+
+        Returns the submitted subject-media assertions.
+
+        Arguments:
+
+            feedback_request_id (str):
+                Unique feedback request identifier for which feedback is being 
+                submitted.
+
+            subjects (List[dict]):
+                List of subject-media assertions.
+                
+                A subject-media assertion has the following attributes:
+
+                subject_uid (str):
+                    Subject UID
+
+                result (str):
+                    Type of subject-media association ('True', 'False', 
+                    'Sidelined').
+
+                app_data_type (str):
+                    (Optional) Type of extra app-specific data for certain 
+                    app types.
+
+                app_data (dict):
+                    (Optional) Additional, app-specific, subject-media 
+                    association data.
+        """
+        assert(feedback_request_id is not None or media_id is not None)
+        feedback_response = {
+            'feedback_request_id': feedback_request_id,
+            'media_id': media_id,
+            'subjects': subjects
+        }
+        response = self._cc._post("/21/applications/%s/feedback" % (self.application_id), json=feedback_response)
+        return response.json()['subjects']
+    
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def delete_feedback_request(self, feedback_request_id):
+        """Delete a specific feedback request for the application.
+
+        Arguments:
+
+            feedback_request_id (str):
+                Unique feedback request identifier for which feedback is being 
+                submitted.
+        """
+        self._cc._delete("/21/applications/%s/feedbackRequests/%s" % self.application_id, feedback_request_id)
+    
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def delete_feedback_requests(self):
+        """Delete all feedback requests for the application.
+        """
+        self._cc._delete("/21/applications/%s/feedbackRequests" % self.application_id)
 
     ##
     #  list of models released
