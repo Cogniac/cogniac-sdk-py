@@ -121,13 +121,13 @@ class CogniacEdgeFlow(object):
             self._post = self._cc._post
         else:
             # use wan0 if available as the http destination ip addres
-            try:
-                ifconfigs = self.status(subsystem_name='ifconfig', limit=1).next()
-                self.ip_address = ifconfigs['status']['wan0']['ip']
+            ifconfigs = list(self.status(subsystem_name='ifconfig', limit=1))
+
+            if ifconfigs:
+                self.ip_address = ifconfigs[0]['status']['wan0']['ip']
+
                 if IP_REGEX.match(self.ip_address):
                     self.url_prefix = 'http://{}:8000'.format(self.ip_address)
-            except:
-                raise
 
     def __initialize(self):
         self.session = requests.Session()
