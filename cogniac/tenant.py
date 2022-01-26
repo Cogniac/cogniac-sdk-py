@@ -27,7 +27,7 @@ class CogniacTenant(object):
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def get(cls, connection):
         resp = connection._get("/1/tenants/current")
-        return CogniacTenant(connection, json.loads(resp.content))
+        return CogniacTenant(connection, resp.json())
 
     def __init__(self, connection, tenant_dict):
         super(CogniacTenant, self).__setattr__('_tenant_keys', tenant_dict.keys())
