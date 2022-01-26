@@ -22,7 +22,7 @@ class CogniacUser(object):
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def get(cls, connection):
         resp = connection._get("/1/users/current")
-        return CogniacUser(connection, json.loads(resp.content))
+        return CogniacUser(connection, resp.json())
 
     def __init__(self, connection, tenant_dict):
         self._cc = connection
