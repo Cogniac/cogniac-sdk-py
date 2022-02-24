@@ -1,15 +1,15 @@
 """
 CogniacMedia Object Client
 
-Copyright (C) 2016 Cogniac Corporation
+Copyright (C) 2016-2022 Cogniac Corporation
 """
-
-from hashlib import md5
-from retrying import retry
 from .common import *
+from hashlib import md5
 from os import stat, fstat, path, SEEK_END
-import platform
+from retrying import retry
+from six.moves.urllib.parse import quote
 from time import time
+import platform
 
 platform_system = platform.system()
 
@@ -78,7 +78,7 @@ class CogniacMedia(object):
             query = "md5=%s" % md5
         elif filename is not None:
             assert((md5 is None) & (external_media_id is None) & (domain_unit is None))
-            query = "filename=%s" % filename
+            query = "filename=%s" % quote(filename)
         elif external_media_id is not None:
             assert((md5 is None) & (filename is None) & (domain_unit is None))
             query = "external_media_id=%s" % external_media_id
