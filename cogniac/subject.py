@@ -402,7 +402,7 @@ class CogniacSubject(object):
         assert(consensus in ['True', 'False', 'None', 'Sidelined'])
         data['consensus'] = consensus
 
-        if consensus is 'None' and probability is None:
+        if consensus == 'None' and probability is None:
             data['uncal_prob'] = .99
 
         if probability is not None:
