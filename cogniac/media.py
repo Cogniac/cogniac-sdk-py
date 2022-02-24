@@ -9,6 +9,7 @@ from retrying import retry
 from .common import *
 from os import stat, fstat, path, SEEK_END
 import platform
+import urllib
 from time import time
 
 platform_system = platform.system()
@@ -78,7 +79,7 @@ class CogniacMedia(object):
             query = "md5=%s" % md5
         elif filename is not None:
             assert((md5 is None) & (external_media_id is None) & (domain_unit is None))
-            query = "filename=%s" % filename
+            query = "filename=%s" % urllib.quote(filename)
         elif external_media_id is not None:
             assert((md5 is None) & (filename is None) & (domain_unit is None))
             query = "external_media_id=%s" % external_media_id
