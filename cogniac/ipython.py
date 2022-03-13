@@ -141,10 +141,7 @@ def tenant_usage_convert_for_display(ur):
     ur['end_time'] = value.strftime('%Y-%m-%d %H:%M:%S')
     ur['app_count'] = len(ur['active_model_apps'])
     gb = float(ur.get('media_bytes', 0)) / 1e9
-    if gb < 1000:
-        ur['media_GB'] = round(gb, 1)
-    else:
-        ur['media_GB'] = round(gb, 0)
+    ur['media_GB'] = round(gb, 1) if gb < 1000 else round(gb, 0)
     if 'media_count' not in ur:
         ur['media_count'] = 0
 

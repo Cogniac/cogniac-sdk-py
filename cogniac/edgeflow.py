@@ -241,9 +241,7 @@ class CogniacEdgeFlow(object):
         Request a time region to upload iamges from the EdgeFlow to CloudCore
         Must specify start_time and stop_time in unix time
         """
-        args = dict()
-        args['start_time'] = start_time
-        args['end_time'] = end_time
+        args = {'start_time': start_time, 'end_time': end_time}
         self._cc._post("/1/gateways/%s/event/time_bound_media_upload" % (self.gateway_id), json=args)
 
 
@@ -251,7 +249,7 @@ class CogniacEdgeFlow(object):
         """
         Flush the EdgeFlow to Core upload queue
         """
-        args = dict()
+        args = {}
         if start_time is not None:
             args['start_time'] = start_time
         if end_time is not None:
@@ -270,7 +268,7 @@ class CogniacEdgeFlow(object):
         """
         Upgrade the edgeflow to the specified software version
         """
-        args = dict()
+        args = {}
         if software_version is not None:
             args['software_version'] = software_version
         self._cc._post("/1/gateways/%s/event/upgrade" % (self.gateway_id), json=args)
@@ -279,7 +277,7 @@ class CogniacEdgeFlow(object):
         """
         Upgrade the edgeflow to the specified software version
         """
-        args = dict()
+        args = {}
         if software_version is not None:
             args['software_version'] = software_version
         self._cc._post("/1/gateways/%s/event/set_boot_software_version" % (self.gateway_id), json=args)
