@@ -350,3 +350,38 @@ class CogniacEdgeFlow(object):
                 if limit and count == limit:
                     return
             url = resp['paging'].get('next')
+
+
+    def get_xput_stats(self, last_x_minutes=5):
+        """
+        Returns total detections and pixels processed in last x minutes.
+
+        last_x_minutes(int)     report stats for last x minutes
+        """
+        curr_time = time()
+        start_time = max(0, curr_time - int(last_x_minutes)*60)
+        status = self.status(subsystem_name='model_detections*',
+                             start=start_time,
+                             end=curr_time)
+
+        model_detections = 0
+        xput_media_pixels = 0
+        xput_gpu_pixels = 0
+        for s in status:
+            tenant_id = s['subsystem'].split('_')[2]
+            status = s['status'].get(tenant_id)
+            model_detections += status.get('model_detections', 0)
+            media_pixels = status.get('xput_media_pixels', 0)
+            gpu_pixels = status.get('xput_gpu_pixels', 0)
+
+            if gpu_pixels:
+                xput_media_pixels += media_pixels
+                xput_gpu_pixels += gpu_pixels
+
+        xput_stats = {
+                        'minutes': int((curr_time - start_time)/60),
+                        'model_detections': model_detections,
+                        'xput_media_pixels': xput_media_pixels,
+                        'xput_gpu_pixels': xput_gpu_pixels
+                      }
+        return xput_stats
