@@ -355,7 +355,7 @@ class CogniacEdgeFlow(object):
     def get_aggregated_stats(self, start=None, end=None):
         """
         Returns total detections and pixels processed 
-        between start and end timestamp.
+        between start and end timestamp (default: last 5 minutes)
 
         start (float)    filter by last update 
                          timestamp > start (seconds since epoch)
