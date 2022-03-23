@@ -352,36 +352,43 @@ class CogniacEdgeFlow(object):
             url = resp['paging'].get('next')
 
 
-    def get_xput_stats(self, last_x_minutes=5):
+    def get_aggregated_stats(self, start=None, end=None):
         """
         Returns total detections and pixels processed in last x minutes.
 
         last_x_minutes(int)     report stats for last x minutes
         """
-        curr_time = time()
-        start_time = max(0, curr_time - int(last_x_minutes)*60)
-        status = self.status(subsystem_name='model_detections*',
-                             start=start_time,
-                             end=curr_time)
-
-        model_detections = 0
-        xput_media_pixels = 0
-        xput_gpu_pixels = 0
-        for s in status:
-            tenant_id = s['subsystem'].split('_')[2]
-            status = s['status'].get(tenant_id)
-            model_detections += status.get('model_detections', 0)
-            media_pixels = status.get('xput_media_pixels', 0)
-            gpu_pixels = status.get('xput_gpu_pixels', 0)
-
+        if end is None:
+            end = time()
+        if start is None:
+            start = end - 300
+        events = self.status(subsystem_name='model_detections*',
+                             start=start,
+                             end=end)
+        aggregated_stats = {'total':{}, 'app':{}}
+        total_model_detections = 0
+        total_aggregated_media_pixels = 0
+        total_aggregated_gpu_pixels = 0
+        for event in events:
+            app_id = event['subsystem'].split('_')[2]
+            if app_id not in aggregated_stats['app']:
+                aggregated_stats['app'][app_id] = {'model_detections': 0,
+                              'aggregated_media_pixels': 0,
+                              'aggregated_gpu_pixels': 0}
+            event_status = event['status'].get(app_id)
+            model_detections = event_status.get('model_detections', 0)
+            media_pixels = event_status.get('aggregated_media_pixels', 0)
+            gpu_pixels = event_status.get('aggregated_gpu_pixels', 0)
             if gpu_pixels:
-                xput_media_pixels += media_pixels
-                xput_gpu_pixels += gpu_pixels
-
-        xput_stats = {
-                        'minutes': int((curr_time - start_time)/60),
-                        'model_detections': model_detections,
-                        'xput_media_pixels': xput_media_pixels,
-                        'xput_gpu_pixels': xput_gpu_pixels
-                      }
-        return xput_stats
+                aggregated_stats['app'][app_id]['aggregated_media_pixels'] += media_pixels
+                aggregated_stats['app'][app_id]['aggregated_gpu_pixels'] += gpu_pixels
+                aggregated_stats['app'][app_id]['model_detections'] += model_detections
+                total_model_detections += model_detections
+                total_aggregated_media_pixels += media_pixels
+                total_aggregated_gpu_pixels += gpu_pixels
+        aggregated_stats['start_timestamp'] = start
+        aggregated_stats['end_timestamp'] = end
+        aggregated_stats['total']['model_detections'] = total_model_detections
+        aggregated_stats['total']['aggregated_media_pixels'] = total_aggregated_media_pixels
+        aggregated_stats['total']['aggregated_gpu_pixels'] = total_aggregated_gpu_pixels
+        return aggregated_stats
