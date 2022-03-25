@@ -134,6 +134,8 @@ class CogniacConnection(object):
             self.url_prefix = url_prefix
         elif 'COG_URL_PREFIX' in os.environ:
             self.url_prefix = os.environ['COG_URL_PREFIX']
+        else:
+            self.url_prefix = DEFAULT_COG_URL_PREFIX
 
         self.url_prefix = self.__strip_url_version_num__(self.url_prefix)
         self.timeout = timeout
