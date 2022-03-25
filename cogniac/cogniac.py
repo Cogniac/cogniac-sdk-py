@@ -177,6 +177,18 @@ class CogniacConnection(object):
             # print "Using API endpoint from Tenant:", self.tenant.region
             self.url_prefix = 'https://' + self.tenant.region
 
+    @staticmethod
+    def __strip_url_version_num__(url_prefix):
+        """Return a cogniac URL without the version number and slash from the begining of the path componet.
+        """
+        m = re.search(r'/\d+(/)?$', url_prefix)
+        # Strip API version number and tailing '/' from URL prefix.
+        if m is not None:
+            url_prefix = url_prefix[0:m.span()[0]]
+        if url_prefix.endswith('/'):
+            url_prefix = url_prefix[0:-1]
+        return url_prefix
+
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __authenticate(self):
         #  Authenticate to the cogniac system using a username and password or an API KEY
