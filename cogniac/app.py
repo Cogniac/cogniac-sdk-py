@@ -43,7 +43,8 @@ class CogniacApplication(object):
                active=True,
                input_subjects=None,
                output_subjects=None,
-               app_managers=None):
+               app_managers=None,
+               target_execution_hardware=None):
         """
         Create a new CogniacApplication
 
@@ -55,6 +56,7 @@ class CogniacApplication(object):
         input_subjects ([CogniacSubjects]):  List of CogniacSubjects inputs to this application
         output_subjects ([CogniacSubjects]): List of CogniacSubjects outputs for this application
         app_managers ([String]):             List of email addresses authorized to be Application Managers
+        target_execution_hardware (String):  Name of the hardware to run the application on
         """
         data = dict(name=name, active=active, type=application_type)
 
@@ -73,6 +75,9 @@ class CogniacApplication(object):
 
         if app_managers is not None:
             data['app_managers'] = app_managers
+
+        if target_execution_hardware is not None:
+            data['target_execution_hardware'] = target_execution_hardware
 
         resp = connection._post("/1/applications", json=data)
 
