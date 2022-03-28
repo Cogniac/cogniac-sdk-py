@@ -339,7 +339,8 @@ class CogniacConnection(object):
                            active=True,
                            input_subjects=None,
                            output_subjects=None,
-                           app_managers=None):
+                           app_managers=None,
+                           target_execution_hardware=None):
         """
         Create a new CogniacApplication
 
@@ -349,6 +350,7 @@ class CogniacConnection(object):
         active (Boolean):                    Application operational state
         input_subjects ([CogniacSubjects]):  List of CogniacSubjects inputs to this application
         output_subjects ([CogniacSubjects]): List of CogniacSubjects outputs for this application
+        target_execution_hardware (String):  Name of application's hardware target
         """
         return CogniacApplication.create(self,
                                          name=name,
@@ -357,7 +359,8 @@ class CogniacConnection(object):
                                          active=active,
                                          input_subjects=input_subjects,
                                          output_subjects=output_subjects,
-                                         app_managers=app_managers)
+                                         app_managers=app_managers,
+                                         target_execution_hardware=target_execution_hardware)
 
     def get_all_subjects(self, public_read=False, public_write=False):
         """
