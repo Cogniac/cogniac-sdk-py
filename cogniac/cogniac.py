@@ -352,7 +352,8 @@ class CogniacConnection(object):
                            active=True,
                            input_subjects=None,
                            output_subjects=None,
-                           app_managers=None):
+                           app_managers=None,
+                           app_type_config=None):
         """
         Create a new CogniacApplication
 
@@ -362,6 +363,7 @@ class CogniacConnection(object):
         active (Boolean):                    Application operational state
         input_subjects ([CogniacSubjects]):  List of CogniacSubjects inputs to this application
         output_subjects ([CogniacSubjects]): List of CogniacSubjects outputs for this application
+        app_type_config ({String: Any}):     Dict containing parameters specific to the app's type
         """
         return CogniacApplication.create(self,
                                          name=name,
@@ -370,7 +372,8 @@ class CogniacConnection(object):
                                          active=active,
                                          input_subjects=input_subjects,
                                          output_subjects=output_subjects,
-                                         app_managers=app_managers)
+                                         app_managers=app_managers,
+                                         app_type_config=app_type_config)
 
     def get_all_subjects(self, public_read=False, public_write=False):
         """
