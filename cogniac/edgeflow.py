@@ -310,12 +310,21 @@ class CogniacEdgeFlow(object):
             event['trigger_domain_unit'] = trigger_domain_unit
         self._cc._post("/1/gateways/%s/event/trigger_camera_capture" % self.gateway_id, json=event)
 
-    def status(self, subsystem_name=None, start=None, end=None, reverse=True, limit=None):
+    def status(self,
+               subsystem_name=None,
+               start=None,
+               end=None,
+               reverse=True,
+               limit=None,
+               sort=None):
         """
-        Yields EdgeFlow status, optionally only for a particular subsytem, sorted by timestamp.
+        Yields EdgeFlow status, optionally only for a particular subsytem,
+         sorted by timestamp.
 
-        start (float)          filter by last update timestamp > start (seconds since epoch)
-        end (float)            filter by last update timestamp < end   (seconds since epoch)
+        start (float)          filter by last update timestamp > start
+                               (seconds since epoch)
+        end (float)            filter by last update timestamp < end
+                               (seconds since epoch)
         reverse (bool)         reverse the sorting order: sort high to low
         limit (int)            yield maximum of limit results
         """
@@ -331,9 +340,13 @@ class CogniacEdgeFlow(object):
             args.append('limit=%d' % min(limit, 100))  # api support max limit of 100
 
         if subsystem_name:
-            url = "/1/gateways/%s/status/%s?" % (self.gateway_id, subsystem_name)
+            url = "/1/gateways/%s/status/%s?" % (self.gateway_id,
+                                                 subsystem_name)
         else:
             url = "/1/gateways/%s/status?" % self.gateway_id
+        
+        if sort:
+            args.append("sort=%s" % sort)
 
         url += "&".join(args)
 
@@ -351,7 +364,6 @@ class CogniacEdgeFlow(object):
                     return
             url = resp['paging'].get('next')
 
-
     def get_aggregated_stats(self, start=None, end=None):
         """
         Returns total detections and pixels processed 
@@ -362,37 +374,50 @@ class CogniacEdgeFlow(object):
         end (float)      filter by last update
                          timestamp < end   (seconds since epoch)
         """
+        REPORTING_PERIOD_SECONDS = int(os.environ.get(
+                                        'REPORTING_PERIOD_SECONDS', 15))
+
         if end is None:
             end = time()
         if start is None:
             start = end - 300
+        start = start - (start % REPORTING_PERIOD_SECONDS)
+        end = end - (end % REPORTING_PERIOD_SECONDS)
         events = self.status(subsystem_name='model_detections*',
-                             start=start,
-                             end=end)
-        aggregated_stats = {'total':{}, 'app':{}}
+                             sort='edgeflow_timestamp')
+
+        aggregated_stats = {'total': {}, 'app': {}}
         total_model_detections = 0
         total_aggregated_media_pixels = 0
         total_aggregated_gpu_pixels = 0
         for event in events:
-            app_id = event['subsystem'].split('_')[2]
-            if app_id not in aggregated_stats['app']:
-                aggregated_stats['app'][app_id] = {'model_detections': 0,
-                              'aggregated_media_pixels': 0,
-                              'aggregated_gpu_pixels': 0}
-            event_status = event['status'].get(app_id)
-            model_detections = event_status.get('model_detections', 0)
-            media_pixels = event_status.get('aggregated_media_pixels', 0)
-            gpu_pixels = event_status.get('aggregated_gpu_pixels', 0)
-            if gpu_pixels:
-                aggregated_stats['app'][app_id]['aggregated_media_pixels'] += media_pixels
-                aggregated_stats['app'][app_id]['aggregated_gpu_pixels'] += gpu_pixels
-                aggregated_stats['app'][app_id]['model_detections'] += model_detections
-                total_model_detections += model_detections
-                total_aggregated_media_pixels += media_pixels
-                total_aggregated_gpu_pixels += gpu_pixels
+            ef_timestamp = event['timestamp']
+            if ef_timestamp > start and ef_timestamp <= end:
+                app_id = event['subsystem'].split('_')[2]
+                event_status = event['status'].get(app_id)
+                model_detections = event_status.get('model_detections', 0)
+                media_pixels = event_status.get('aggregated_media_pixels', 0)
+                gpu_pixels = event_status.get('aggregated_gpu_pixels', 0)
+                if gpu_pixels and app_id not in aggregated_stats['app']:
+                    aggregated_stats['app'][app_id] = {
+                                        'model_detections': 0,
+                                        'aggregated_media_pixels': 0,
+                                        'aggregated_gpu_pixels': 0}
+                if gpu_pixels:
+                    app_stats = aggregated_stats['app'][app_id]
+                    app_stats['aggregated_media_pixels'] += media_pixels
+                    app_stats['aggregated_gpu_pixels'] += gpu_pixels
+                    app_stats['model_detections'] += model_detections
+                    total_model_detections += model_detections
+                    total_aggregated_media_pixels += media_pixels
+                    total_aggregated_gpu_pixels += gpu_pixels
+            elif ef_timestamp < start:
+                break
+        total_stats = {
+            'model_detections': total_model_detections,
+            'aggregated_media_pixels': total_aggregated_media_pixels,
+            'aggregated_gpu_pixels': total_aggregated_gpu_pixels}
+        aggregated_stats['total'].update(total_stats)
         aggregated_stats['start_timestamp'] = start
         aggregated_stats['end_timestamp'] = end
-        aggregated_stats['total']['model_detections'] = total_model_detections
-        aggregated_stats['total']['aggregated_media_pixels'] = total_aggregated_media_pixels
-        aggregated_stats['total']['aggregated_gpu_pixels'] = total_aggregated_gpu_pixels
         return aggregated_stats
