@@ -28,6 +28,8 @@ from .edgeflow import CogniacEdgeFlow
 
 from .network_camera import CogniacNetworkCamera
 
+DEFAULT_COG_URL_PREFIX = "https://api.cogniac.io/"
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,7 +79,7 @@ class CogniacConnection(object):
                  api_key=None,
                  tenant_id=None,
                  timeout=60,
-                 url_prefix="https://api.cogniac.io/"):
+                 url_prefix=None):
         """
         Create an authenticated CogniacConnection with the following credentials:
 
@@ -127,16 +129,15 @@ class CogniacConnection(object):
             except:
                 raise Exception("No Cogniac Credentials. Specify username and password or set COG_USER, COG_PASS or COG_API_KEY environment variables.")
 
-        if 'COG_URL_PREFIX' in os.environ:
-            url_prefix = os.environ['COG_URL_PREFIX']
-        m = re.search(r'/\d+(/)?$', url_prefix)
-        # Strip API version number and tailing '/' from URL prefix.
-        if m is not None:
-            url_prefix = url_prefix[0:m.span()[0]]
-        if url_prefix.endswith('/'):
-            url_prefix = url_prefix[0:-1]
+        self.url_prefix = None
+        if url_prefix is not None:
+            self.url_prefix = url_prefix
+        elif 'COG_URL_PREFIX' in os.environ:
+            self.url_prefix = os.environ['COG_URL_PREFIX']
+        else:
+            self.url_prefix = DEFAULT_COG_URL_PREFIX
 
-        self.url_prefix = url_prefix
+        self.url_prefix = self.__strip_url_version_num__(self.url_prefix)
         self.timeout = timeout
 
         logger.info("Connecting to Cogniac system at %s" % url_prefix)
@@ -176,6 +177,18 @@ class CogniacConnection(object):
             # use tenant object's specified region preference
             # print "Using API endpoint from Tenant:", self.tenant.region
             self.url_prefix = 'https://' + self.tenant.region
+
+    @staticmethod
+    def __strip_url_version_num__(url_prefix):
+        """Return a cogniac URL without the version number and slash from the begining of the path componet.
+        """
+        m = re.search(r'/\d+(/)?$', url_prefix)
+        # Strip API version number and tailing '/' from URL prefix.
+        if m is not None:
+            url_prefix = url_prefix[0:m.span()[0]]
+        if url_prefix.endswith('/'):
+            url_prefix = url_prefix[0:-1]
+        return url_prefix
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def __authenticate(self):
