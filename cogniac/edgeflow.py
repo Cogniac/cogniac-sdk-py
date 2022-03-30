@@ -384,6 +384,8 @@ class CogniacEdgeFlow(object):
         start = start - (start % REPORTING_PERIOD_SECONDS)
         end = end - (end % REPORTING_PERIOD_SECONDS)
         events = self.status(subsystem_name='model_detections*',
+                             start=start,
+                             end=end,
                              sort='edgeflow_timestamp')
 
         aggregated_stats = {'total': {}, 'app': {}}
@@ -391,28 +393,24 @@ class CogniacEdgeFlow(object):
         total_aggregated_media_pixels = 0
         total_aggregated_gpu_pixels = 0
         for event in events:
-            ef_timestamp = event['timestamp']
-            if ef_timestamp > start and ef_timestamp <= end:
-                app_id = event['subsystem'].split('_')[2]
-                event_status = event['status'].get(app_id)
-                model_detections = event_status.get('model_detections', 0)
-                media_pixels = event_status.get('aggregated_media_pixels', 0)
-                gpu_pixels = event_status.get('aggregated_gpu_pixels', 0)
-                if gpu_pixels and app_id not in aggregated_stats['app']:
-                    aggregated_stats['app'][app_id] = {
-                                        'model_detections': 0,
-                                        'aggregated_media_pixels': 0,
-                                        'aggregated_gpu_pixels': 0}
-                if gpu_pixels:
-                    app_stats = aggregated_stats['app'][app_id]
-                    app_stats['aggregated_media_pixels'] += media_pixels
-                    app_stats['aggregated_gpu_pixels'] += gpu_pixels
-                    app_stats['model_detections'] += model_detections
-                    total_model_detections += model_detections
-                    total_aggregated_media_pixels += media_pixels
-                    total_aggregated_gpu_pixels += gpu_pixels
-            elif ef_timestamp < start:
-                break
+            app_id = event['subsystem'].split('_')[2]
+            event_status = event['status'].get(app_id)
+            model_detections = event_status.get('model_detections', 0)
+            media_pixels = event_status.get('aggregated_media_pixels', 0)
+            gpu_pixels = event_status.get('aggregated_gpu_pixels', 0)
+            if gpu_pixels and app_id not in aggregated_stats['app']:
+                aggregated_stats['app'][app_id] = {
+                                    'model_detections': 0,
+                                    'aggregated_media_pixels': 0,
+                                    'aggregated_gpu_pixels': 0}
+            if gpu_pixels:
+                app_stats = aggregated_stats['app'][app_id]
+                app_stats['aggregated_media_pixels'] += media_pixels
+                app_stats['aggregated_gpu_pixels'] += gpu_pixels
+                app_stats['model_detections'] += model_detections
+                total_model_detections += model_detections
+                total_aggregated_media_pixels += media_pixels
+                total_aggregated_gpu_pixels += gpu_pixels
         total_stats = {
             'model_detections': total_model_detections,
             'aggregated_media_pixels': total_aggregated_media_pixels,
