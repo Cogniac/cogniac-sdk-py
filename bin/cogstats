@@ -50,4 +50,3 @@ for ef in efs:
                                                 v['aggregated_gpu_pixels']))
     print('\tStart Time: {}'.format(stats['start_timestamp']))
     print('\tEnd Time: {}'.format(stats['end_timestamp']))
-    print('\n')
