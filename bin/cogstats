@@ -1,0 +1,52 @@
+#!/usr/bin/env python
+
+import cogniac
+import argparse
+
+parser = argparse.ArgumentParser()
+parser._action_groups.pop()
+required = parser.add_argument_group('required arguments')
+optional = parser.add_argument_group('optional arguments')
+required.add_argument('-t', '--tenant_id', required=True)
+optional.add_argument('-g', '--gateway_id', nargs='?', default=None)
+optional.add_argument('-s', '--start_timestamp',
+                      nargs='?', type=float, default=None)
+optional.add_argument('-e', '--end_timestamp',
+                      nargs='?', type=float, default=None)
+args = parser.parse_args()
+
+tenant_id = args.tenant_id
+start = args.start_timestamp
+end = args.end_timestamp
+cc = cogniac.CogniacConnection(tenant_id=tenant_id)
+
+efs = []
+if args.gateway_id:
+    efs.append(cc.get_edgeflow(args.gateway_id))
+else:
+    efs = cc.get_all_edgeflows()
+
+for ef in efs:
+    stats = ef.get_aggregated_stats(start=start, end=end)
+
+    print('='*50)
+    print(r'EdgeFlow: {}({})'.format(ef.name, ef.gateway_id))
+    print('-'*40)
+    print('\tTotal Detections')
+    print('\t\tModel Detections: {}'.format(
+                    stats['total']['model_detections']))
+    print('\t\tAggregated Media Pixel Count: {}'.format(
+                    stats['total']['aggregated_media_pixels']))
+    print('\t\tAggregated GPU Pixel Count: {}'.format(
+                    stats['total']['aggregated_gpu_pixels']))
+    if stats.get('app'):
+        apps = stats['app']
+        for aid, v in apps.items():
+            print('\tApp ID: {}'.format(aid))
+            print('\t\tModel Detections: {}'.format(v['model_detections']))
+            print('\t\tAggregated Media Pixel Count: {}'.format(
+                                                v['aggregated_media_pixels']))
+            print('\t\tAggregated GPU Pixel Count: {}'.format(
+                                                v['aggregated_gpu_pixels']))
+    print('\tStart Time: {}'.format(stats['start_timestamp']))
+    print('\tEnd Time: {}'.format(stats['end_timestamp']))

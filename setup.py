@@ -9,5 +9,5 @@ setup(name='cogniac',
       author = 'Cogniac Corporation',
       author_email = 'support@cogniac.co',
       url = 'https://github.com/Cogniac/cogniac-sdk-py',
-      scripts=['bin/icogniac', 'bin/cogupload'],
+      scripts=['bin/icogniac', 'bin/cogupload', 'bin/cogstats'],
       install_requires=['requests', 'retrying', 'tabulate', 'six'])
