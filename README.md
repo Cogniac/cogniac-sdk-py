@@ -177,5 +177,10 @@ cogupload
      usage: cogupload <subject_uid> <directory_name>
 
 
+cogstats
+
+    A utility to get aggregated pixel counts and number of detections made in a time window. Default time window is last 5 minutes.
+    usage: cogstats -t TENANT_ID [-g GATEWAY_ID] [-s START_TIMESTAMP] [-e END_TIMESTAMP]
+
 ## Support
 Please email us at support@cogniac.co with your feedback and thoughts about this library.
