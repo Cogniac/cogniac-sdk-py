@@ -248,7 +248,7 @@ class CogniacApplication(object):
         feedback_response = {'media_id': media_id,
                              'subjects': subjects}
 
-        self._cc._post("/1/applications/%s/feedback" % self.application_id, json=feedback_response)
+        self._cc._post("/21/applications/%s/feedback" % self.application_id, json=feedback_response)
 
     ##
     #  list of models released
