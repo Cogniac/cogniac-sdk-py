@@ -418,6 +418,7 @@ class CogniacApplication(object):
                     return
             url = resp['paging'].get('next')
 
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def accumulate_usage(self, start, end):
         """
         return single cummulative app usage record for start to end epoch times
@@ -427,6 +428,7 @@ class CogniacApplication(object):
         data = resp.json()['data']
         return data[0] if len(data) else None
 
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def usage(self, start, end):
         """
         yield sparse app usage records in order between start and end epoch times
@@ -443,6 +445,59 @@ class CogniacApplication(object):
             for record in resp['data']:
                 yield record
             url = resp['paging'].get('next')
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def register_evaluation_metrics(self,
+                                    name,
+                                    detection_thresholds=None,
+                                    iou_threshold=None,
+                                    pixel_distance_tolerance=None,
+                                    count_tolerance=None):
+        evaluation_metrics = dict(name=name)
+        # evaluation_metrics = {"name": name}
+        if detection_thresholds:
+            evaluation_metrics['detection_thresholds'] = detection_thresholds
+        if iou_threshold:
+            evaluation_metrics['iou_threshold'] = iou_threshold
+        if pixel_distance_tolerance:
+            evaluation_metrics['pixel_distance_tolerance'] = pixel_distance_tolerance
+        if count_tolerance:
+            evaluation_metrics['count_tolerance'] = count_tolerance
+
+        req = "/22/applications/%s/evaluation_metrics/register" % self.application_id
+        print('='*20)
+        print(evaluation_metrics)
+        print('='*20)
+        resp = self._cc._post("/22/applications/%s/evaluation_metrics/register" % self.application_id, json={'request':evaluation_metrics})
+        return resp.json()
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def update_evaluation_metrics(self,
+                                  evaluation_metric_hash,
+                                  detection_thresholds=None,
+                                  iou_threshold=None,
+                                  pixel_distance_tolerance=None,
+                                  count_tolerance=None):
+        evaluation_metrics = {
+            'evaluation_metric_hash': evaluation_metric_hash,
+            'detection_thresholds': detection_thresholds,
+            'iou_threshold': iou_threshold,
+            'pixel_distance_tolerance': pixel_distance_tolerance,
+            'count_tolerance': count_tolerance
+        }
+        resp = self._cc._post("/22/applications/%s/evaluation_metrics/update" % self.application_id, json={'payload': evaluation_metrics})
+        return resp.json()
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def delete_evaluation_metrics(self, evaluation_metrich_hash):
+        data = {'evaluation_metric_hash': evaluation_metrich_hash}
+        resp = self._cc._post("/22/applications/%s/evaluation_metrics/delete" % self.application_id, json=data)
+        return resp.json()
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def get_evaluation_metrics(self):
+        resp = self._cc._get("/22/applications/%s/evaluation_metrics/get" % self.application_id)
+        return resp.json()['evaluation_metrics']
 
     class _CogniacAppTypeConfig(object):
         def __init__(self, app, app_type_config_dict):
