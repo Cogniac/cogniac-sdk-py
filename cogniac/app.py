@@ -495,9 +495,17 @@ class CogniacApplication(object):
         return resp.json()
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def set_primary_release_metric(self, evaluation_metric_hash):
+        data = {
+            'evaluation_metric_hash': evaluation_metric_hash
+        }
+        resp = self._cc._post("/22/applications/%s/evaluation_metrics/set_primary" % self.application_id, json=data)
+        return resp.json()
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def get_evaluation_metrics(self):
         resp = self._cc._get("/22/applications/%s/evaluation_metrics/get" % self.application_id)
-        return resp.json()['evaluation_metrics']
+        return resp.json()
 
     class _CogniacAppTypeConfig(object):
         def __init__(self, app, app_type_config_dict):
