@@ -282,15 +282,16 @@ class CogniacConnection(object):
         return resp
 
     @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
-    def _post(self, url, timeout=None, **kwargs):
+    def _post(self, url, ignore_version=False, timeout=None, **kwargs):
         """
         wrap requests session to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
             # Prepend /1/ version if no version is specified in the URL (backward compatibility).
-            m = re.search(r'^/\d+(/)?', url)
-            if m is None:
-                url = '/1' + url
+            if ignore_version is True:
+                m = re.search(r'^/\d+(/)?', url)
+                if m is None:
+                    url = '/1' + url
 
             url = self.url_prefix + url
         if timeout is None:
