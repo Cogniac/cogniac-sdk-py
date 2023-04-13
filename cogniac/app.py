@@ -500,12 +500,7 @@ class CogniacApplication(object):
         }
         set_primary_url = self.evaluation_metrics_api_url + '/set_primary'
         resp = self._cc._post(set_primary_url, json=data)
-        return resp.json()
-
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def get_evaluation_metrics(self):
-        resp = self._cc._get("/22/applications/%s/evaluation_metrics/get" % self.application_id)
-        return resp.json()
+        return resp
 
     class _CogniacAppTypeConfig(object):
         def __init__(self, app, app_type_config_dict):
