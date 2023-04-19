@@ -448,6 +448,13 @@ class CogniacApplication(object):
             url = resp['paging'].get('next')
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def register_default_evaluation_metrics(self,
+                                            name):
+        register_url = self.evaluation_metrics_api_url + '/register_default'
+        resp = self._cc._post(register_url, json={'name': name})
+        return resp.json()
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def register_evaluation_metrics(self,
                                     name,
                                     detection_thresholds=None,
