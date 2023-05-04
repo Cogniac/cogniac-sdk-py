@@ -447,60 +447,75 @@ class CogniacApplication(object):
                 yield record
             url = resp['paging'].get('next')
 
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def evaluation_metrics_post(self, data):
+        resp = self._cc._post(self.evaluation_metrics_api_url, json=data)
+        return resp.json()
+
+
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def register_evaluation_metrics(self,
                                     name,
                                     detection_thresholds=None,
                                     iou_threshold=None,
                                     pixel_distance_tolerance=None,
-                                    count_tolerance=None):
-        evaluation_metrics = dict(name=name)
-        if detection_thresholds:
-            evaluation_metrics['detection_thresholds'] = detection_thresholds
-        if iou_threshold:
-            evaluation_metrics['iou_threshold'] = iou_threshold
-        if pixel_distance_tolerance:
-            evaluation_metrics['pixel_distance_tolerance'] = pixel_distance_tolerance
-        if count_tolerance:
-            evaluation_metrics['count_tolerance'] = count_tolerance
-
-        register_url = self.evaluation_metrics_api_url + '/register'
-        resp = self._cc._post(register_url, json=evaluation_metrics)
-        return resp.json()
+                                    count_tolerance=None,
+                                    user_tag=None):
+        data = {
+            'name': name,
+            'detection_thresholds': detection_thresholds,
+            'iou_threshold': iou_threshold,
+            'pixel_distance_tolerance': pixel_distance_tolerance,
+            'count_tolerance': count_tolerance,
+            'user_tag': user_tag,
+            'active': 1
+        }
+        
+        response = self.evaluation_metrics_post(data)
+        return response
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def update_evaluation_metrics(self,
-                                  evaluation_metric_hash,
+    def set_primary_release_metric(self,
+                                   name,
+                                   detection_thresholds=None,
+                                   iou_threshold=None,
+                                   pixel_distance_tolerance=None,
+                                   count_tolerance=None,
+                                   user_tag=None):
+        data = {
+            'name': name,
+            'detection_thresholds': detection_thresholds,
+            'iou_threshold': iou_threshold,
+            'pixel_distance_tolerance': pixel_distance_tolerance,
+            'count_tolerance': count_tolerance,
+            'user_tag': user_tag,
+            'active': 1,
+            'primary': 1
+        }
+        
+        response = self.evaluation_metrics_post(data)
+        return response
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def delete_evaluation_metrics(self,
+                                  name,
                                   detection_thresholds=None,
                                   iou_threshold=None,
                                   pixel_distance_tolerance=None,
                                   count_tolerance=None):
-        evaluation_metrics = {
-            'evaluation_metric_hash': evaluation_metric_hash,
+        data = {
+            'name': name,
             'detection_thresholds': detection_thresholds,
             'iou_threshold': iou_threshold,
             'pixel_distance_tolerance': pixel_distance_tolerance,
-            'count_tolerance': count_tolerance
+            'count_tolerance': count_tolerance,
+            'active': 0,
         }
-        update_url = self.evaluation_metrics_api_url + '/update'
-        resp = self._cc._post(update_url, json=evaluation_metrics)
-        return resp.json()
+        
+        response = self.evaluation_metrics_post(data)
+        return response
 
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def delete_evaluation_metrics(self, evaluation_metrich_hash):
-        data = {'evaluation_metric_hash': evaluation_metrich_hash}
-        delete_url = self.evaluation_metrics_api_url + '/delete'
-        resp = self._cc._post(delete_url, json=data)
-        return resp
-
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
-    def set_primary_release_metric(self, evaluation_metric_hash):
-        data = {
-            'evaluation_metric_hash': evaluation_metric_hash
-        }
-        set_primary_url = self.evaluation_metrics_api_url + '/set_primary'
-        resp = self._cc._post(set_primary_url, json=data)
-        return resp
 
     class _CogniacAppTypeConfig(object):
         def __init__(self, app, app_type_config_dict):
