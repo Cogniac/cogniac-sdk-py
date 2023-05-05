@@ -503,7 +503,8 @@ class CogniacApplication(object):
                                   detection_thresholds=None,
                                   iou_threshold=None,
                                   pixel_distance_tolerance=None,
-                                  count_tolerance=None):
+                                  count_tolerance=None,
+                                  user_tag=None):
         data = {
             'name': name,
             'detection_thresholds': detection_thresholds,
@@ -511,6 +512,7 @@ class CogniacApplication(object):
             'pixel_distance_tolerance': pixel_distance_tolerance,
             'count_tolerance': count_tolerance,
             'active': 0,
+            'user_tag': user_tag
         }
         
         response = self.evaluation_metrics_post(data)
