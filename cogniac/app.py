@@ -128,6 +128,9 @@ class CogniacApplication(object):
         self._cc = connection
         self._app_keys = application_dict.keys()
         self.__parse_app_dict__(application_dict)
+        evaluation_metrics_api_url = '/22/applications/{}/evaluation_metrics'.format(self.application_id)
+        eval_metrics = self._cc._get(evaluation_metrics_api_url)
+        self.evaluation_metrics = eval_metrics.json()
 
     def __parse_app_dict__(self, application_dict):
         for k, v in application_dict.items():
@@ -418,6 +421,7 @@ class CogniacApplication(object):
                     return
             url = resp['paging'].get('next')
 
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def accumulate_usage(self, start, end):
         """
         return single cummulative app usage record for start to end epoch times
@@ -427,6 +431,7 @@ class CogniacApplication(object):
         data = resp.json()['data']
         return data[0] if len(data) else None
 
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def usage(self, start, end):
         """
         yield sparse app usage records in order between start and end epoch times
@@ -443,6 +448,78 @@ class CogniacApplication(object):
             for record in resp['data']:
                 yield record
             url = resp['paging'].get('next')
+
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def evaluation_metrics_post(self, data):
+        url = '/22/applications/{}/evaluation_metrics'.format(self.application_id)
+        resp = self._cc._post(url, json=data)
+        return resp.json()
+
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def register_evaluation_metrics(self,
+                                    name,
+                                    detection_thresholds=None,
+                                    iou_threshold=None,
+                                    pixel_distance_tolerance=None,
+                                    count_tolerance=None,
+                                    user_tag=None):
+        data = {
+            'name': name,
+            'detection_thresholds': detection_thresholds,
+            'iou_threshold': iou_threshold,
+            'pixel_distance_tolerance': pixel_distance_tolerance,
+            'count_tolerance': count_tolerance,
+            'user_tag': user_tag,
+            'active': 1
+        }
+        
+        response = self.evaluation_metrics_post(data)
+        return response
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def set_primary_release_metric(self,
+                                   name,
+                                   detection_thresholds=None,
+                                   iou_threshold=None,
+                                   pixel_distance_tolerance=None,
+                                   count_tolerance=None,
+                                   user_tag=None):
+        data = {
+            'name': name,
+            'detection_thresholds': detection_thresholds,
+            'iou_threshold': iou_threshold,
+            'pixel_distance_tolerance': pixel_distance_tolerance,
+            'count_tolerance': count_tolerance,
+            'user_tag': user_tag,
+            'active': 1,
+            'primary': 1
+        }
+        
+        response = self.evaluation_metrics_post(data)
+        return response
+
+    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    def delete_evaluation_metrics(self,
+                                  name,
+                                  detection_thresholds=None,
+                                  iou_threshold=None,
+                                  pixel_distance_tolerance=None,
+                                  count_tolerance=None,
+                                  user_tag=None):
+        data = {
+            'name': name,
+            'detection_thresholds': detection_thresholds,
+            'iou_threshold': iou_threshold,
+            'pixel_distance_tolerance': pixel_distance_tolerance,
+            'count_tolerance': count_tolerance,
+            'active': 0,
+            'user_tag': user_tag
+        }
+        
+        response = self.evaluation_metrics_post(data)
+        return response
 
     class _CogniacAppTypeConfig(object):
         def __init__(self, app, app_type_config_dict):
