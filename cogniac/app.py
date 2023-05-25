@@ -128,7 +128,9 @@ class CogniacApplication(object):
         self._cc = connection
         self._app_keys = application_dict.keys()
         self.__parse_app_dict__(application_dict)
-        self.evaluation_metrics_api_url = '/22/applications/{}/evaluation_metrics'.format(self.application_id)
+        evaluation_metrics_api_url = '/22/applications/{}/evaluation_metrics'.format(self.application_id)
+        eval_metrics = self._cc._get(evaluation_metrics_api_url)
+        self.evaluation_metrics = eval_metrics.json()
 
     def __parse_app_dict__(self, application_dict):
         for k, v in application_dict.items():
@@ -450,7 +452,8 @@ class CogniacApplication(object):
 
     @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
     def evaluation_metrics_post(self, data):
-        resp = self._cc._post(self.evaluation_metrics_api_url, json=data)
+        url = '/22/applications/{}/evaluation_metrics'.format(self.application_id)
+        resp = self._cc._post(url, json=data)
         return resp.json()
 
 
@@ -517,7 +520,6 @@ class CogniacApplication(object):
         
         response = self.evaluation_metrics_post(data)
         return response
-
 
     class _CogniacAppTypeConfig(object):
         def __init__(self, app, app_type_config_dict):
