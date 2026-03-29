@@ -62,10 +62,11 @@ URLs are version-prefixed (e.g., `/1/tenants`, `/21/users/current`). `CogniacCon
 
 ## `cog` CLI Tool
 
-Agent-friendly CLI that outputs JSON to stdout. Errors are JSON on stderr. Auth is via env vars (`COG_USER`/`COG_PASS` or `COG_API_KEY`, plus `COG_TENANT`).
+Agent-friendly CLI. JSON output by default, `--format table` for human-readable. Auth via env vars (`COG_USER`/`COG_PASS` or `COG_API_KEY`, plus `COG_TENANT`).
 
-Commands:
+Read commands:
 ```
+cog auth                    # check credentials and connectivity
 cog tenant                  # current tenant info
 cog tenants                 # list all authorized tenants (no COG_TENANT needed)
 cog apps list               # list all applications
@@ -78,11 +79,17 @@ cog media get <id>          # get specific media
 cog media search            # search: --md5, --filename, --external-media-id, --domain-unit, --limit
 cog edgeflows list          # list all edgeflows
 cog edgeflows get <id>      # get specific edgeflow
+cog edgeflows status <id>   # status events: --subsystem, --limit
 cog cameras list            # list all cameras
 cog cameras get <id>        # get specific camera
-cog edgeflows status <id>   # status events: --subsystem, --limit
 cog version                 # API version info
-cog auth                    # check credentials and connectivity
+```
+
+Write commands:
+```
+cog subjects create <name>              # --description, --external-id
+cog subjects associate <uid> <media_id> # --consensus (True/False/Sidelined/None)
+cog media upload <filename>             # --subject-uid, --external-media-id, --domain-unit, --meta-tags
 ```
 
 Implementation is in `cogniac/cli.py`. Entry point registered in `setup.py` via `console_scripts`.
