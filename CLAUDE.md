@@ -60,6 +60,30 @@ URLs are version-prefixed (e.g., `/1/tenants`, `/21/users/current`). `CogniacCon
 
 `cogniac/__init__.py` re-exports all public classes. New entity classes must be added there to be importable as `from cogniac import ClassName`.
 
+## `cog` CLI Tool
+
+Agent-friendly CLI that outputs JSON to stdout. Errors are JSON on stderr. Auth is via env vars (`COG_USER`/`COG_PASS` or `COG_API_KEY`, plus `COG_TENANT`).
+
+Commands:
+```
+cog tenant                  # current tenant info
+cog tenants                 # list all authorized tenants (no COG_TENANT needed)
+cog apps list               # list all applications
+cog apps get <id>           # get specific application
+cog subjects list           # list all subjects
+cog subjects get <uid>      # get specific subject
+cog subjects search         # search: --prefix, --similar, --name, --ids, --limit
+cog media get <id>          # get specific media
+cog media search            # search: --md5, --filename, --external-media-id, --domain-unit, --limit
+cog edgeflows list          # list all edgeflows
+cog edgeflows get <id>      # get specific edgeflow
+cog cameras list            # list all cameras
+cog cameras get <id>        # get specific camera
+cog version                 # API version info
+```
+
+Implementation is in `cogniac/cli.py`. Entry point registered in `setup.py` via `console_scripts`.
+
 ## Version
 
 Package version is set in `setup.py` (line 6, `version` variable). Bump it there for releases.
