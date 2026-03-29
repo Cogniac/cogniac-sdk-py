@@ -73,13 +73,16 @@ cog apps get <id>           # get specific application
 cog subjects list           # list all subjects
 cog subjects get <uid>      # get specific subject
 cog subjects search         # search: --prefix, --similar, --name, --ids, --limit
+cog subjects media <uid>    # list media associations: --limit, --consensus, --probability-lower/upper
 cog media get <id>          # get specific media
 cog media search            # search: --md5, --filename, --external-media-id, --domain-unit, --limit
 cog edgeflows list          # list all edgeflows
 cog edgeflows get <id>      # get specific edgeflow
 cog cameras list            # list all cameras
 cog cameras get <id>        # get specific camera
+cog edgeflows status <id>   # status events: --subsystem, --limit
 cog version                 # API version info
+cog auth                    # check credentials and connectivity
 ```
 
 Implementation is in `cogniac/cli.py`. Entry point registered in `setup.py` via `console_scripts`.

@@ -11,13 +11,16 @@ Usage:
     cog subjects list
     cog subjects get <subject_uid>
     cog subjects search [--prefix P] [--name N] [--similar S] [--ids ID ...] [--limit L]
+    cog subjects media <subject_uid> [--limit L] [--consensus C] [--probability-lower P] [--probability-upper P]
     cog media get <media_id>
     cog media search [--md5 M] [--filename F] [--external-media-id E] [--domain-unit D] [--limit L]
     cog edgeflows list
     cog edgeflows get <edgeflow_id>
     cog cameras list
     cog cameras get <network_camera_id>
+    cog edgeflows status <edgeflow_id> [--subsystem S] [--limit L]
     cog version
+    cog auth
 
 Copyright (C) 2016 Cogniac Corporation.
 """
@@ -133,6 +136,21 @@ def cmd_subjects_search(args):
     output_json([obj_to_dict(s) for s in subjects])
 
 
+def cmd_subjects_media(args):
+    cc = get_connection()
+    try:
+        subject = cc.get_subject(args.subject_uid)
+        associations = subject.media_associations(
+            probability_lower=args.probability_lower,
+            probability_upper=args.probability_upper,
+            consensus=args.consensus,
+            limit=args.limit,
+        )
+        output_json([a for a in associations])
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
 def cmd_media_get(args):
     cc = get_connection()
     try:
@@ -184,9 +202,54 @@ def cmd_cameras_get(args):
         error_exit("ClientError", str(e))
 
 
+def cmd_edgeflows_status(args):
+    cc = get_connection()
+    try:
+        edgeflow = cc.get_edgeflow(args.edgeflow_id)
+        events = edgeflow.status(
+            subsystem_name=args.subsystem,
+            limit=args.limit,
+        )
+        output_json([e for e in events])
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
 def cmd_version(args):
     cc = get_connection()
     output_json(cc.get_version())
+
+
+def cmd_auth(args):
+    """Check that credentials are valid without making a full connection."""
+    # Check env vars first
+    has_api_key = 'COG_API_KEY' in os.environ
+    has_user_pass = 'COG_USER' in os.environ and 'COG_PASS' in os.environ
+    has_tenant = 'COG_TENANT' in os.environ
+
+    if not has_api_key and not has_user_pass:
+        error_exit("AuthError", "No credentials found. Set COG_API_KEY or COG_USER+COG_PASS environment variables.")
+
+    result = {
+        "auth_method": "api_key" if has_api_key else "user_pass",
+        "tenant_set": has_tenant,
+    }
+
+    if has_tenant:
+        result["tenant_id"] = os.environ['COG_TENANT']
+
+    # Validate credentials by listing tenants
+    url_prefix = os.environ.get('COG_URL_PREFIX', 'https://api.cogniac.io/')
+    try:
+        tenants = CogniacConnection.get_all_authorized_tenants(url_prefix=url_prefix)
+        result["valid"] = True
+        result["tenant_count"] = len(tenants.get('tenants', []))
+        result["url_prefix"] = url_prefix
+    except Exception as e:
+        result["valid"] = False
+        result["detail"] = str(e)
+
+    output_json(result)
 
 
 # -- Parser construction --
@@ -232,6 +295,14 @@ def build_parser():
     p.add_argument('subject_uid', help='Subject UID')
     p.set_defaults(func=cmd_subjects_get)
 
+    p = subjects_sub.add_parser('media', help='List media associations for a subject')
+    p.add_argument('subject_uid', help='Subject UID')
+    p.add_argument('--limit', type=int, default=100, help='Max results (default: 100)')
+    p.add_argument('--consensus', choices=['True', 'False', 'Sidelined'], help='Filter by consensus')
+    p.add_argument('--probability-lower', dest='probability_lower', type=float, help='Min probability')
+    p.add_argument('--probability-upper', dest='probability_upper', type=float, help='Max probability')
+    p.set_defaults(func=cmd_subjects_media)
+
     p = subjects_sub.add_parser('search', help='Search subjects')
     p.add_argument('--prefix', help='Subject name prefix')
     p.add_argument('--similar', help='Semantically similar text')
@@ -267,6 +338,12 @@ def build_parser():
     p.add_argument('edgeflow_id', help='EdgeFlow ID (gateway_id)')
     p.set_defaults(func=cmd_edgeflows_get)
 
+    p = ef_sub.add_parser('status', help='Get EdgeFlow status events')
+    p.add_argument('edgeflow_id', help='EdgeFlow ID (gateway_id)')
+    p.add_argument('--subsystem', help='Filter by subsystem (e.g. model_detections, ifconfig, ping)')
+    p.add_argument('--limit', type=int, default=10, help='Max results (default: 10)')
+    p.set_defaults(func=cmd_edgeflows_status)
+
     # cog cameras
     cam_parser = subparsers.add_parser('cameras', help='Network cameras')
     cam_sub = cam_parser.add_subparsers(dest='cameras_command')
@@ -277,6 +354,10 @@ def build_parser():
     p = cam_sub.add_parser('get', help='Get a specific camera')
     p.add_argument('network_camera_id', help='Network camera ID')
     p.set_defaults(func=cmd_cameras_get)
+
+    # cog auth
+    p = subparsers.add_parser('auth', help='Check credentials and connectivity')
+    p.set_defaults(func=cmd_auth)
 
     return parser
 
