@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
+from setuptools import setup
 
 setup(name='cogniac',
       version='2.0.16',
@@ -10,4 +10,9 @@ setup(name='cogniac',
       author_email = 'support@cogniac.co',
       url = 'https://github.com/Cogniac/cogniac-sdk-py',
       scripts=['bin/icogniac', 'bin/cogupload', 'bin/cogstats'],
+      entry_points={
+          'console_scripts': [
+              'cog=cogniac.cli:main',
+          ],
+      },
       install_requires=['requests', 'retrying', 'tabulate', 'six'])
