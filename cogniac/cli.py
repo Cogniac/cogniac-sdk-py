@@ -363,6 +363,15 @@ def cmd_auth(args):
     output(result, args)
 
 
+def cmd_user(args):
+    """Show current user info including system roles."""
+    cc = get_connection()
+    resp = cc.session.get(cc.url_prefix + '/1/users/current')
+    resp.raise_for_status()
+    user = resp.json()
+    output(user, args, 'user')
+
+
 # -- Write command handlers --
 
 def cmd_subjects_create(args):
@@ -558,6 +567,10 @@ def build_parser():
     # cog auth
     p = subparsers.add_parser('auth', help='Check credentials and connectivity')
     p.set_defaults(func=cmd_auth)
+
+    # cog user
+    p = subparsers.add_parser('user', help='Show current user info and system roles')
+    p.set_defaults(func=cmd_user)
 
     return parser
 
