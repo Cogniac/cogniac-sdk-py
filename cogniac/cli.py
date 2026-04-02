@@ -19,6 +19,9 @@ Read commands:
     cog edgeflows status <edgeflow_id> [--subsystem S] [--limit L]
     cog cameras list
     cog cameras get <network_camera_id>
+    cog deployments list
+    cog deployments get <deployment_group_id>
+    cog workflows get <workflow_id>
     cog version
     cog auth
 
@@ -58,6 +61,8 @@ _TABLE_COLUMNS = {
     'edgeflow':  ['gateway_id', 'name', 'model', 'description'],
     'camera':    ['network_camera_id', 'camera_name', 'url', 'active'],
     'media_assoc': ['media_id', 'subject_uid', 'probability', 'consensus', 'updated_at'],
+    'deployment': ['deployment_group_id', 'name', 'target_workflow_id', 'current_workflow_id'],
+    'workflow':   ['workflow_id', 'name', 'tenant_id', 'created_at', 'created_by'],
 }
 
 
@@ -288,6 +293,41 @@ def cmd_cameras_get(args):
         error_exit("ClientError", str(e))
 
 
+def cmd_deployments_list(args):
+    cc = get_connection()
+    try:
+        resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant_id}/deploymentGroups", timeout=30)
+        resp.raise_for_status()
+        groups = json.loads(resp.text).get('data', [])
+        output(groups, args, 'deployment')
+    except Exception as e:
+        error_exit("Error", str(e))
+
+
+def cmd_deployments_get(args):
+    cc = get_connection()
+    try:
+        resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant_id}/deploymentGroups", timeout=30)
+        resp.raise_for_status()
+        groups = json.loads(resp.text).get('data', [])
+        match = [g for g in groups if g.get('deployment_group_id') == args.deployment_group_id]
+        if not match:
+            error_exit("NotFound", f"Deployment group {args.deployment_group_id} not found")
+        output(match[0], args, 'deployment')
+    except Exception as e:
+        error_exit("Error", str(e))
+
+
+def cmd_workflows_get(args):
+    cc = get_connection()
+    try:
+        resp = cc.session.get(f"{cc.url_prefix}/1/workflows/{args.workflow_id}", timeout=30)
+        resp.raise_for_status()
+        output(json.loads(resp.text), args, 'workflow')
+    except Exception as e:
+        error_exit("Error", str(e))
+
+
 def cmd_version(args):
     cc = get_connection()
     output(cc.get_version(), args)
@@ -495,6 +535,25 @@ def build_parser():
     p = cam_sub.add_parser('get', help='Get a specific camera')
     p.add_argument('network_camera_id', help='Network camera ID')
     p.set_defaults(func=cmd_cameras_get)
+
+    # cog deployments
+    dep_parser = subparsers.add_parser('deployments', help='Deployment groups')
+    dep_sub = dep_parser.add_subparsers(dest='deployments_command')
+
+    p = dep_sub.add_parser('list', help='List all deployment groups')
+    p.set_defaults(func=cmd_deployments_list)
+
+    p = dep_sub.add_parser('get', help='Get a specific deployment group')
+    p.add_argument('deployment_group_id', help='Deployment group ID')
+    p.set_defaults(func=cmd_deployments_get)
+
+    # cog workflows
+    wf_parser = subparsers.add_parser('workflows', help='Workflows')
+    wf_sub = wf_parser.add_subparsers(dest='workflows_command')
+
+    p = wf_sub.add_parser('get', help='Get a specific workflow')
+    p.add_argument('workflow_id', help='Workflow ID')
+    p.set_defaults(func=cmd_workflows_get)
 
     # cog auth
     p = subparsers.add_parser('auth', help='Check credentials and connectivity')
