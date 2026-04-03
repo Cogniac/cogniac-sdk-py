@@ -12,7 +12,7 @@ setup(name='cogniac',
       scripts=['bin/icogniac', 'bin/cogupload', 'bin/cogstats'],
       entry_points={
           'console_scripts': [
-              'cog=cogniac.cli:main',
+              'cogniac=cogniac.cli:main',
           ],
       },
       install_requires=['requests', 'retrying', 'tabulate', 'six'])
