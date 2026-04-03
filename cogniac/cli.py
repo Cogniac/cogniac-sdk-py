@@ -367,20 +367,6 @@ def cmd_auth(args):
 
 def cmd_user(args):
     """Show current user info including system roles."""
-    # /1/users/current requires a tenant-scoped Bearer token.
-    # If COG_TENANT is not set, pick the first available tenant.
-    if 'COG_TENANT' not in os.environ:
-        url_prefix = os.environ.get('COG_URL_PREFIX', 'https://api.cogniac.io/')
-        try:
-            result = CogniacConnection.get_all_authorized_tenants(url_prefix=url_prefix)
-            tenants = result.get('tenants', [])
-            if not tenants:
-                error_exit("AuthError", "No authorized tenants found.")
-                return
-            os.environ['COG_TENANT'] = tenants[0]['tenant_id']
-        except Exception as e:
-            error_exit("AuthError", str(e))
-            return
     cc = get_connection()
     resp = cc.session.get(cc.url_prefix + '/1/users/current')
     resp.raise_for_status()
