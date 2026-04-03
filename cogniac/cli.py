@@ -43,8 +43,10 @@ import os
 
 from tabulate import tabulate
 
+import requests
+
 from .cogniac import CogniacConnection
-from .common import CredentialError, ServerError, ClientError
+from .common import CredentialError, ServerError, ClientError, raise_errors
 
 # Attributes set by SDK internals, not from the API response
 _INTERNAL_ATTRS = frozenset([
@@ -296,7 +298,7 @@ def cmd_cameras_get(args):
 def cmd_deployments_list(args):
     cc = get_connection()
     try:
-        resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant_id}/deploymentGroups", timeout=30)
+        resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant.tenant_id}/deploymentGroups", timeout=30)
         resp.raise_for_status()
         groups = json.loads(resp.text).get('data', [])
         output(groups, args, 'deployment')
@@ -307,7 +309,7 @@ def cmd_deployments_list(args):
 def cmd_deployments_get(args):
     cc = get_connection()
     try:
-        resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant_id}/deploymentGroups", timeout=30)
+        resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant.tenant_id}/deploymentGroups", timeout=30)
         resp.raise_for_status()
         groups = json.loads(resp.text).get('data', [])
         match = [g for g in groups if g.get('deployment_group_id') == args.deployment_group_id]
@@ -361,6 +363,14 @@ def cmd_auth(args):
         result["detail"] = str(e)
 
     output(result, args)
+
+
+def cmd_user(args):
+    """Show current user info including system roles."""
+    cc = get_connection()
+    resp = cc.session.get(cc.url_prefix + '/1/users/current')
+    resp.raise_for_status()
+    output(resp.json(), args, 'user')
 
 
 # -- Write command handlers --
@@ -558,6 +568,10 @@ def build_parser():
     # cog auth
     p = subparsers.add_parser('auth', help='Check credentials and connectivity')
     p.set_defaults(func=cmd_auth)
+
+    # cog user
+    p = subparsers.add_parser('user', help='Show current user info and system roles')
+    p.set_defaults(func=cmd_user)
 
     return parser
 
