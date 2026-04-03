@@ -4,31 +4,31 @@ Cogniac CLI - Agent-friendly command-line interface to the Cogniac API.
 Outputs JSON (default) or table format. Errors are JSON on stderr.
 
 Read commands:
-    cog tenant
-    cog tenants
-    cog apps list
-    cog apps get <application_id>
-    cog subjects list
-    cog subjects get <subject_uid>
-    cog subjects search [--prefix P] [--name N] [--similar S] [--ids ID ...] [--limit L]
-    cog subjects media <subject_uid> [--limit L] [--consensus C] [--probability-lower P] [--probability-upper P]
-    cog media get <media_id>
-    cog media search [--md5 M] [--filename F] [--external-media-id E] [--domain-unit D] [--limit L]
-    cog edgeflows list
-    cog edgeflows get <edgeflow_id>
-    cog edgeflows status <edgeflow_id> [--subsystem S] [--limit L]
-    cog cameras list
-    cog cameras get <network_camera_id>
-    cog deployments list
-    cog deployments get <deployment_group_id>
-    cog workflows get <workflow_id>
-    cog version
-    cog auth
+    cogniac tenant
+    cogniac tenants
+    cogniac apps list
+    cogniac apps get <application_id>
+    cogniac subjects list
+    cogniac subjects get <subject_uid>
+    cogniac subjects search [--prefix P] [--name N] [--similar S] [--ids ID ...] [--limit L]
+    cogniac subjects media <subject_uid> [--limit L] [--consensus C] [--probability-lower P] [--probability-upper P]
+    cogniac media get <media_id>
+    cogniac media search [--md5 M] [--filename F] [--external-media-id E] [--domain-unit D] [--limit L]
+    cogniac edgeflows list
+    cogniac edgeflows get <edgeflow_id>
+    cogniac edgeflows status <edgeflow_id> [--subsystem S] [--limit L]
+    cogniac cameras list
+    cogniac cameras get <network_camera_id>
+    cogniac deployments list
+    cogniac deployments get <deployment_group_id>
+    cogniac workflows get <workflow_id>
+    cogniac version
+    cogniac auth
 
 Write commands:
-    cog subjects create <name> [--description D] [--external-id E]
-    cog subjects associate <subject_uid> <media_id> [--consensus C]
-    cog media upload <filename> [--subject-uid S] [--external-media-id E] [--domain-unit D] [--meta-tags T ...]
+    cogniac subjects create <name> [--description D] [--external-id E]
+    cogniac subjects associate <subject_uid> <media_id> [--consensus C]
+    cogniac media upload <filename> [--subject-uid S] [--external-media-id E] [--domain-unit D] [--meta-tags T ...]
 
 Global options:
     --format json|table  (default: json)
@@ -423,26 +423,26 @@ def cmd_media_upload(args):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        prog='cog',
+        prog='cogniac',
         description='Cogniac CLI - query and manage the Cogniac API (JSON or table output)',
     )
     parser.add_argument('--format', choices=['json', 'table'], default='json',
                         help='Output format (default: json)')
     subparsers = parser.add_subparsers(dest='command')
 
-    # cog tenant
+    # cogniac tenant
     p = subparsers.add_parser('tenant', help='Show current tenant info')
     p.set_defaults(func=cmd_tenant)
 
-    # cog tenants
+    # cogniac tenants
     p = subparsers.add_parser('tenants', help='List all authorized tenants')
     p.set_defaults(func=cmd_tenants)
 
-    # cog version
+    # cogniac version
     p = subparsers.add_parser('version', help='Show API version info')
     p.set_defaults(func=cmd_version)
 
-    # cog apps
+    # cogniac apps
     apps_parser = subparsers.add_parser('apps', help='Applications')
     apps_sub = apps_parser.add_subparsers(dest='apps_command')
 
@@ -453,7 +453,7 @@ def build_parser():
     p.add_argument('application_id', help='Application ID')
     p.set_defaults(func=cmd_apps_get)
 
-    # cog subjects
+    # cogniac subjects
     subjects_parser = subparsers.add_parser('subjects', help='Subjects')
     subjects_sub = subjects_parser.add_subparsers(dest='subjects_command')
 
@@ -494,7 +494,7 @@ def build_parser():
                    help='Consensus label (default: None)')
     p.set_defaults(func=cmd_subjects_associate)
 
-    # cog media
+    # cogniac media
     media_parser = subparsers.add_parser('media', help='Media')
     media_sub = media_parser.add_subparsers(dest='media_command')
 
@@ -518,7 +518,7 @@ def build_parser():
     p.add_argument('--meta-tags', dest='meta_tags', nargs='+', help='Metadata tags')
     p.set_defaults(func=cmd_media_upload)
 
-    # cog edgeflows
+    # cogniac edgeflows
     ef_parser = subparsers.add_parser('edgeflows', help='EdgeFlow devices')
     ef_sub = ef_parser.add_subparsers(dest='edgeflows_command')
 
@@ -535,7 +535,7 @@ def build_parser():
     p.add_argument('--limit', type=int, default=10, help='Max results (default: 10)')
     p.set_defaults(func=cmd_edgeflows_status)
 
-    # cog cameras
+    # cogniac cameras
     cam_parser = subparsers.add_parser('cameras', help='Network cameras')
     cam_sub = cam_parser.add_subparsers(dest='cameras_command')
 
@@ -546,7 +546,7 @@ def build_parser():
     p.add_argument('network_camera_id', help='Network camera ID')
     p.set_defaults(func=cmd_cameras_get)
 
-    # cog deployments
+    # cogniac deployments
     dep_parser = subparsers.add_parser('deployments', help='Deployment groups')
     dep_sub = dep_parser.add_subparsers(dest='deployments_command')
 
@@ -557,7 +557,7 @@ def build_parser():
     p.add_argument('deployment_group_id', help='Deployment group ID')
     p.set_defaults(func=cmd_deployments_get)
 
-    # cog workflows
+    # cogniac workflows
     wf_parser = subparsers.add_parser('workflows', help='Workflows')
     wf_sub = wf_parser.add_subparsers(dest='workflows_command')
 
@@ -565,11 +565,11 @@ def build_parser():
     p.add_argument('workflow_id', help='Workflow ID')
     p.set_defaults(func=cmd_workflows_get)
 
-    # cog auth
+    # cogniac auth
     p = subparsers.add_parser('auth', help='Check credentials and connectivity')
     p.set_defaults(func=cmd_auth)
 
-    # cog user
+    # cogniac user
     p = subparsers.add_parser('user', help='Show current user info and system roles')
     p.set_defaults(func=cmd_user)
 

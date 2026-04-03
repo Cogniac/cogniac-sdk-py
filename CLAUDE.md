@@ -60,36 +60,36 @@ URLs are version-prefixed (e.g., `/1/tenants`, `/21/users/current`). `CogniacCon
 
 `cogniac/__init__.py` re-exports all public classes. New entity classes must be added there to be importable as `from cogniac import ClassName`.
 
-## `cog` CLI Tool
+## `cogniac` CLI Tool
 
 Agent-friendly CLI. JSON output by default, `--format table` for human-readable. Auth via env vars (`COG_USER`/`COG_PASS` or `COG_API_KEY`, plus `COG_TENANT`).
 
 Read commands:
 ```
-cog auth                    # check credentials and connectivity
-cog tenant                  # current tenant info
-cog tenants                 # list all authorized tenants (no COG_TENANT needed)
-cog apps list               # list all applications
-cog apps get <id>           # get specific application
-cog subjects list           # list all subjects
-cog subjects get <uid>      # get specific subject
-cog subjects search         # search: --prefix, --similar, --name, --ids, --limit
-cog subjects media <uid>    # list media associations: --limit, --consensus, --probability-lower/upper
-cog media get <id>          # get specific media
-cog media search            # search: --md5, --filename, --external-media-id, --domain-unit, --limit
-cog edgeflows list          # list all edgeflows
-cog edgeflows get <id>      # get specific edgeflow
-cog edgeflows status <id>   # status events: --subsystem, --limit
-cog cameras list            # list all cameras
-cog cameras get <id>        # get specific camera
-cog version                 # API version info
+cogniac auth                    # check credentials and connectivity
+cogniac tenant                  # current tenant info
+cogniac tenants                 # list all authorized tenants (no COG_TENANT needed)
+cogniac apps list               # list all applications
+cogniac apps get <id>           # get specific application
+cogniac subjects list           # list all subjects
+cogniac subjects get <uid>      # get specific subject
+cogniac subjects search         # search: --prefix, --similar, --name, --ids, --limit
+cogniac subjects media <uid>    # list media associations: --limit, --consensus, --probability-lower/upper
+cogniac media get <id>          # get specific media
+cogniac media search            # search: --md5, --filename, --external-media-id, --domain-unit, --limit
+cogniac edgeflows list          # list all edgeflows
+cogniac edgeflows get <id>      # get specific edgeflow
+cogniac edgeflows status <id>   # status events: --subsystem, --limit
+cogniac cameras list            # list all cameras
+cogniac cameras get <id>        # get specific camera
+cogniac version                 # API version info
 ```
 
 Write commands:
 ```
-cog subjects create <name>              # --description, --external-id
-cog subjects associate <uid> <media_id> # --consensus (True/False/Sidelined/None)
-cog media upload <filename>             # --subject-uid, --external-media-id, --domain-unit, --meta-tags
+cogniac subjects create <name>              # --description, --external-id
+cogniac subjects associate <uid> <media_id> # --consensus (True/False/Sidelined/None)
+cogniac media upload <filename>             # --subject-uid, --external-media-id, --domain-unit, --meta-tags
 ```
 
 Implementation is in `cogniac/cli.py`. Entry point registered in `setup.py` via `console_scripts`.
