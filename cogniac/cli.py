@@ -298,7 +298,7 @@ def cmd_cameras_get(args):
 def cmd_deployments_list(args):
     cc = get_connection()
     try:
-        resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant_id}/deploymentGroups", timeout=30)
+        resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant.tenant_id}/deploymentGroups", timeout=30)
         resp.raise_for_status()
         groups = json.loads(resp.text).get('data', [])
         output(groups, args, 'deployment')
@@ -309,7 +309,7 @@ def cmd_deployments_list(args):
 def cmd_deployments_get(args):
     cc = get_connection()
     try:
-        resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant_id}/deploymentGroups", timeout=30)
+        resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant.tenant_id}/deploymentGroups", timeout=30)
         resp.raise_for_status()
         groups = json.loads(resp.text).get('data', [])
         match = [g for g in groups if g.get('deployment_group_id') == args.deployment_group_id]

@@ -146,23 +146,12 @@ class CogniacConnection(object):
             try:
                 tenant_id = os.environ['COG_TENANT']
             except:
-                if self.api_key:
-                    print("tenant_id must be explicitly specified when using api_key")
-                    raise Exception("Unspecified tenant")
-
-                # get list of user's tenants
-                tenants = CogniacConnection.get_all_authorized_tenants(username, password, url_prefix)['tenants']
-                if len(tenants) == 1:
-                    # only one choice -- automatically use that
-                    tenant_id = tenants[0]['tenant_id']
-                else:
-                    # try to be helpful and provider interactive user with a list of valid tenants
-                    print("\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:")
-                    tenants.sort(key=lambda x: x['name'])
-                    for tenant in tenants:
-                        print("%24s (%s)    export COG_TENANT='%s'" % (tenant['name'], tenant['tenant_id'], tenant['tenant_id']))
-                    print
-                    raise Exception("Unspecified tenant")
+                if not self.api_key:
+                    # For username/password: try to auto-select if only one tenant
+                    tenants = CogniacConnection.get_all_authorized_tenants(username, password, url_prefix)['tenants']
+                    if len(tenants) == 1:
+                        tenant_id = tenants[0]['tenant_id']
+                    # else: proceed without tenant; HTTP responses will signal if one is required
 
         self.tenant_id = tenant_id
 
@@ -170,13 +159,38 @@ class CogniacConnection(object):
         self.__authenticate()
 
         # get tenant and user objects associated with this connection
-        self.tenant = CogniacTenant.get(self)
+        if self.tenant_id is not None:
+            self._tenant = CogniacTenant.get(self)
+            if self._tenant.region is not None:
+                # use tenant object's specified region preference
+                self.url_prefix = 'https://' + self._tenant.region
+        else:
+            self._tenant = None
         self.user = CogniacUser.get(self)
 
-        if self.tenant.region is not None:
-            # use tenant object's specified region preference
-            # print "Using API endpoint from Tenant:", self.tenant.region
-            self.url_prefix = 'https://' + self.tenant.region
+    @property
+    def tenant(self):
+        if self._tenant is None:
+            self._require_tenant()
+        return self._tenant
+
+    @tenant.setter
+    def tenant(self, value):
+        self._tenant = value
+
+    def _require_tenant(self):
+        """Raise a helpful error listing available tenants when none is configured."""
+        try:
+            resp = self.session.get(self.url_prefix + "/1/users/current/tenants")
+            tenants = resp.json().get('tenants', [])
+        except Exception:
+            raise Exception("Unspecified tenant")
+        print("\nError: must specify tenant (e.g. export COG_TENANT=... ) from the following choices:")
+        tenants.sort(key=lambda x: x['name'])
+        for tenant in tenants:
+            print("%24s (%s)    export COG_TENANT='%s'" % (tenant['name'], tenant['tenant_id'], tenant['tenant_id']))
+        print()
+        raise Exception("Unspecified tenant")
 
     @staticmethod
     def __strip_url_version_num__(url_prefix):
