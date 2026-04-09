@@ -161,8 +161,8 @@ class CogniacConnection(object):
         # get tenant and user objects associated with this connection
         if self.tenant_id is not None:
             self._tenant = CogniacTenant.get(self)
-            if self._tenant.region is not None:
-                # use tenant object's specified region preference
+            if self._tenant.region is not None and url_prefix is None and 'COG_URL_PREFIX' not in os.environ:
+                # use tenant object's specified region preference unless explicitly overridden
                 self.url_prefix = 'https://' + self._tenant.region
         else:
             self._tenant = None

@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name='cogniac',
-      version='2.0.19',
+      version='2.0.20',
       description='Python SDK for Cogniac Public API',
       packages=['cogniac'],
       author = 'Cogniac Corporation',
