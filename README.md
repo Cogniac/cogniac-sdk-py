@@ -1,228 +1,150 @@
-Python SDK for Cogniac Public API
+# Cogniac Python SDK
+
+Python SDK for the Cogniac public API. Provides both synchronous and asynchronous (async/await) interfaces.
 
 Requires Python 3.11+
 
-This client library provides access to most of the common functionality of the Cogniac public API.
-Both synchronous and asynchronous (async/await) interfaces are available.
-
 ## Installation
+
+```bash
 pip install cogniac
+```
 
-## Usage
+## Configuration
 
-### Synchronous API
+Authentication is configured via environment variables or constructor arguments:
 
-The main entry point is the CogniacConnection object which is created as follows:
+| Variable | Description |
+|----------|-------------|
+| `COG_USER` | Cogniac username (usually an email address) |
+| `COG_PASS` | Cogniac password |
+| `COG_API_KEY` | API key (alternative to username/password) |
+| `COG_TENANT` | Tenant ID (required if user belongs to multiple tenants) |
+| `COG_URL_PREFIX` | API endpoint (default: `https://api.cogniac.io/`) |
+
+## Synchronous API
 
-        CogniacConnection(username=None,
-                          password=None,
-                          api_key=None,
-                          tenant_id=None,
-                          timeout=60,
-                          url_prefix="https://api.cogniac.io/")
+```python
+import cogniac
 
-        Create an authenticated CogniacConnection with the following credentials:
-        
-        username (String):            The Cogniac account username (usually an email address).
-                                      If username is None, then use the contents of the
-                                      COG_USER environment variable as the username.
+cc = cogniac.CogniacConnection()
 
-        password (String):            The associated Cogniac account password.
-                                      The password can also be supplied via the COG_PASS
-                                      environment variable.
+# Tenants and users
+tenant = cc.get_tenant()
+print(tenant.name)
 
-        api_key (String):             A Cogniac-issued API key that can be used as a substitute for
-                                      a username+password.  The api_key can also be supplied via the
-                                      COG_API_KEY environment variable.
+# Applications
+apps = cc.get_all_applications()
+app = cc.get_application(application_id)
 
-        tenant_id (String):           Cogniac tenant_id with which to assume credentials.
-                                      This is only required if the user is a member of multiple tenants.
-                                      If tenant_id is None, and the user is a member of multiple tenants
-                                      then use the contents of the COG_TENANT environment variable
-                                      will be used as the tenant.
+# Subjects
+subjects = cc.get_all_subjects()
+subject = cc.create_subject(name="my-subject", description="example")
+subject.description = "updated"  # auto-syncs to API
+subject.delete()
 
-        url_prefix (String):          Cogniac API url prefix.
-                                      Defaults to "https://api.cogniac.io/" for Cogniac CloudCore.
-                                      If you are accessing an 'on-prem' version of the Cogniac system,
-                                      please set this accordingly (e.g. 'https://your_company_name.local.cogniac.io/'
-                                      or a custom DNS prefix assigned by your internal IT.)
-                                      The url_prefix can alternatively be set via the COG_URL_PREFIX environment variable.
-                                      
-        If a user is a member of multiple tenants the user can retrieve his list of associated
-        tenants via the CogniacConnection.get_all_authorized_tenants() classmethod.
+# Media
+media = cc.create_media("image.jpg", meta_tags=["test"])
+fetched = cc.get_media(media.media_id)
+content = fetched.download()
 
-Environment Variables:
+# Paginated results via generators
+for detection in app.detections(limit=100):
+    print(detection)
+```
 
-    The CogniacConnection can be configured using the following environment variables:
+### Entity Classes
 
-    COG_USER               Cogniac system username (usually an email address)
-    COG_PASS               Cogniac user password
-    COG_API_KEY            Cogniac system API Key associated with an individual Cogniac system user
-                           (Alternative to username/password)
-    COG_TENANT             Cogniac system tenant_id
-    COG_URL_PREFIX         Cogniac system API end-point of the form "https://FQDN/API_VERSION"
+| Class | Description |
+|-------|-------------|
+| `CogniacConnection` | Authentication and HTTP session management |
+| `CogniacApplication` | Vision applications (detection, classification, etc.) |
+| `CogniacSubject` | Organizational groupings of media |
+| `CogniacMedia` | Image and video files |
+| `CogniacTenant` | Tenant (organization) management |
+| `CogniacUser` | User accounts and API keys |
+| `CogniacEdgeFlow` | Edge computing devices |
+| `CogniacNetworkCamera` | Network camera configuration |
+| `CogniacExternalResult` | External inspection results |
+| `CogniacOpsReview` | Operations review queue |
 
+## Async API
 
-CogniacConnection has a number of helper functions for working with Cogniac
-common Cogniac objects such as applications, subjects, and media:
-        
-    get_all_applications
-        return CogniacApplications for all applications belonging to the currently authenticated tenant
+The async interface mirrors the sync API. Use `AsyncCogniacConnection.create()` as an async factory:
 
-    get_application
-        return an existing CogniacApplication
+```python
+import asyncio
+import cogniac
 
-    create_application
-        Create a new CogniacApplication
+async def main():
+    async with await cogniac.AsyncCogniacConnection.create() as cc:
+        # List subjects
+        subjects = await cogniac.AsyncCogniacSubject.get_all(cc)
+        for s in subjects:
+            print(s.name, s.subject_uid)
 
-    get_all_subjects
-        return CogniacSubjects for all subjects belonging to the currently authenticated tenant
+        # Create and update
+        s = await cogniac.AsyncCogniacSubject.create(cc, name="my-subject")
+        await s.set(description="updated")  # explicit async setter
+        await s.delete()
 
-    get_subject
-        return an existing CogniacSubject
-        
-    create_subject
-        Create a CogniacSubject
+        # Async generators for paginated endpoints
+        apps = await cogniac.AsyncCogniacApplication.get_all(cc)
+        async for detection in apps[0].detections(limit=10):
+            print(detection)
 
-    get_media
-        return CogniacMedia object for an existing media item
-        
-    create_media
-        create a new Cogniac media item
+asyncio.run(main())
+```
 
-    get_tenant
-        return the currently authenticated CogniacTenant
+Every sync entity class has an async counterpart prefixed with `Async` (e.g., `AsyncCogniacSubject`, `AsyncCogniacMedia`).
 
+### Key Differences from Sync API
 
-CogniacApplication
+- **Connection**: `await AsyncCogniacConnection.create(...)` instead of `CogniacConnection(...)`
+- **Attribute updates**: `await subject.set(name="new")` instead of `subject.name = "new"` (batches multiple fields in one API call)
+- **Pagination**: `async for` with generators (`detections`, `media_associations`, `usage`, etc.)
+- **Cleanup**: supports `async with` context manager for automatic session cleanup
 
-    An object representing an Application in the Cogniac System.
-    
-    Applications are the main focus of activity within the Cogniac System.
+## CLI Tools
 
-    This class manages applications within the Cogniac System via the
-    Cogniac public API application endpoints.
+### `cogniac`
 
-    Create a new application with
-    CogniacConnection.create_application() or CogniacApplication.create()
+Agent-friendly CLI with JSON output (default) or `--format table`.
 
-    Get an existing application with
-    CogniacConnection.get_application() or CogniacApplication.get()
+```bash
+cogniac auth                            # check credentials
+cogniac tenant                          # current tenant info
+cogniac apps list                       # list applications
+cogniac subjects list                   # list subjects
+cogniac subjects search --prefix test   # search subjects
+cogniac media get <media_id>            # get media item
+cogniac edgeflows list                  # list edge devices
+```
 
-    Get all tenant's applications with
-    CogniacConnection.get_all_applications() or CogniacApplication.get_all()
+### `icogniac`
 
-    Writes to mutable CogniacApplication attributes are saved immediately via the Cogniac API.
+Interactive IPython shell with pre-loaded Cogniac connection:
 
+```bash
+icogniac [optional tenant name or ID]
+```
 
- CogniacSubject
- 
-    An object representing a Subject in the Cogniac System.
-    
-    Subjects are a central organizational mechanism in the Cogniac system.
-    A subject is any user-defined concept that is relevant to images or video.
-    More generally a subject can represent any logical grouping of images or video.
+### `cogupload`
 
-    Most Cogniac applications work by taking input media from user-defined subjects
-    and outputing those media to other user-defined subjects based on the content
-    of the media.
+Parallel media upload (24 threads) to a subject:
 
-    Create a new subject with
-    CogniacConnection.create_subject() or CogniacSubject.create()
+```bash
+cogupload <subject_uid> <directory>
+```
 
-    Get an existing subject with
-    CogniacConnection.get_subject() or CogniacSubject.get()
+### `cogstats`
 
-    Get all tenant's subject with
-    CogniacConnection.get_all_subjects() or CogniacSubject.get_all()
+EdgeFlow statistics aggregation:
 
-    Writes to mutable CogniacSubjects attributes are saved immediately via the Cogniac API.
-
-
-CogniacMedia
-
-    CogniacMedia objects contain metadata for media files that has been input into the Cogniac System.
-    New CogniacMedia can be created by specifying a local filename containing a still image or video.
-    Existing CogniacMedia can be retrieved by media_id.
-
-
-CogniacTenant
-
-    An object representing a Tenant in the Cogniac System
-
-
-Example Usage (Sync):
-
-        import cogniac
-
-        cc = cogniac.CogniacConnection()
-
-        print(cc.get_tenant())
-
-        print(cc.get_all_applications())
-
-        print(cc.get_all_subjects())
-
-
-### Async API
-
-The async interface mirrors the sync API using async/await. Use `AsyncCogniacConnection.create()` as an async factory:
-
-        import asyncio
-        import cogniac
-
-        async def main():
-            async with await cogniac.AsyncCogniacConnection.create() as cc:
-                subjects = await cogniac.AsyncCogniacSubject.get_all(cc)
-                for s in subjects:
-                    print(s.name, s.subject_uid)
-
-                # Create and update a subject
-                s = await cogniac.AsyncCogniacSubject.create(cc, name="my-subject")
-                await s.set(description="updated description")
-                await s.delete()
-
-                # Async generators for paginated endpoints
-                apps = await cogniac.AsyncCogniacApplication.get_all(cc)
-                async for detection in apps[0].detections(limit=10):
-                    print(detection)
-
-        asyncio.run(main())
-
-Async classes available:
-  AsyncCogniacConnection, AsyncCogniacApplication, AsyncCogniacSubject,
-  AsyncCogniacMedia, AsyncCogniacTenant, AsyncCogniacUser,
-  AsyncCogniacEdgeFlow, AsyncCogniacNetworkCamera,
-  AsyncCogniacExternalResult, AsyncCogniacOpsReview
-
-Key differences from sync API:
-  - Use `await AsyncCogniacConnection.create(...)` instead of `CogniacConnection(...)`
-  - Use `await subject.set(name="new")` instead of `subject.name = "new"`
-  - Use `async for` with paginated generators (detections, media_associations, etc.)
-  - Supports `async with` context manager for automatic cleanup
-
-or to run ipython with extra magic commands:
-
-        % icogniac [optional partial tenant name or tenant_id]
-
-        print cc.tenant_id
-                        
-        %media_detections <media_id>
-        
-        %media_subjects <media_id>
-
-
-cogupload
-
-     A utility for robust parallel upload of media to the Cogniac system. Currently this is suitable for uploading to an 'input' subject since it does not set the consensus flag.
-
-     usage: cogupload <subject_uid> <directory_name>
-
-
-cogstats
-
-    A utility to get aggregated pixel counts and number of detections made in a time window. Default time window is last 5 minutes.
-    usage: cogstats -t TENANT_ID [-g GATEWAY_ID] [-s START_TIMESTAMP] [-e END_TIMESTAMP]
+```bash
+cogstats -t TENANT_ID [-g GATEWAY_ID] [-s START] [-e END]
+```
 
 ## Support
-Please email us at support@cogniac.co with your feedback and thoughts about this library.
+
+Please email support@cogniac.co with feedback.
