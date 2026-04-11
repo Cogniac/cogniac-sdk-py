@@ -234,15 +234,21 @@ def cmd_media_get(args):
     cc = get_connection()
     try:
         media = cc.get_media(args.media_id)
+        if args.download:
+            # --download flag: behave like 'cogniac media download'
+            args.output = args.download if args.download is not True else None
+            args.media_id = media.media_id
+            return cmd_media_download(args, media=media)
         output(obj_to_dict(media), args, 'media')
     except ClientError as e:
         error_exit("ClientError", str(e))
 
 
-def cmd_media_download(args):
+def cmd_media_download(args, media=None):
     cc = get_connection()
     try:
-        media = cc.get_media(args.media_id)
+        if media is None:
+            media = cc.get_media(args.media_id)
         ext = (media.media_format or 'bin').lower()
         if ext == 'jpeg':
             ext = 'jpg'
@@ -514,6 +520,8 @@ def build_parser():
 
     p = media_sub.add_parser('get', help='Get a specific media item')
     p.add_argument('media_id', help='Media ID')
+    p.add_argument('--download', '-d', nargs='?', const=True, default=False,
+                   metavar='FILE', help='Download media file (optionally specify output path)')
     p.set_defaults(func=cmd_media_get)
 
     p = media_sub.add_parser('download', help='Download media file to disk')
