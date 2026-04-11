@@ -1,13 +1,17 @@
 Python SDK for Cogniac Public API
 
-Supported Python versions: Python 2.7 and Python 3
+Requires Python 3.11+
 
 This client library provides access to most of the common functionality of the Cogniac public API.
+Both synchronous and asynchronous (async/await) interfaces are available.
 
 ## Installation
 pip install cogniac
 
 ## Usage
+
+### Synchronous API
+
 The main entry point is the CogniacConnection object which is created as follows:
 
         CogniacConnection(username=None,
@@ -147,17 +151,55 @@ CogniacTenant
     An object representing a Tenant in the Cogniac System
 
 
-Example Usage:
+Example Usage (Sync):
 
         import cogniac
 
         cc = cogniac.CogniacConnection()
 
-        print cc.get_tenant()
+        print(cc.get_tenant())
 
-        print cc.get_all_applications()
+        print(cc.get_all_applications())
 
-        print cc.get_all_subjects()
+        print(cc.get_all_subjects())
+
+
+### Async API
+
+The async interface mirrors the sync API using async/await. Use `AsyncCogniacConnection.create()` as an async factory:
+
+        import asyncio
+        import cogniac
+
+        async def main():
+            async with await cogniac.AsyncCogniacConnection.create() as cc:
+                subjects = await cogniac.AsyncCogniacSubject.get_all(cc)
+                for s in subjects:
+                    print(s.name, s.subject_uid)
+
+                # Create and update a subject
+                s = await cogniac.AsyncCogniacSubject.create(cc, name="my-subject")
+                await s.set(description="updated description")
+                await s.delete()
+
+                # Async generators for paginated endpoints
+                apps = await cogniac.AsyncCogniacApplication.get_all(cc)
+                async for detection in apps[0].detections(limit=10):
+                    print(detection)
+
+        asyncio.run(main())
+
+Async classes available:
+  AsyncCogniacConnection, AsyncCogniacApplication, AsyncCogniacSubject,
+  AsyncCogniacMedia, AsyncCogniacTenant, AsyncCogniacUser,
+  AsyncCogniacEdgeFlow, AsyncCogniacNetworkCamera,
+  AsyncCogniacExternalResult, AsyncCogniacOpsReview
+
+Key differences from sync API:
+  - Use `await AsyncCogniacConnection.create(...)` instead of `CogniacConnection(...)`
+  - Use `await subject.set(name="new")` instead of `subject.name = "new"`
+  - Use `async for` with paginated generators (detections, media_associations, etc.)
+  - Supports `async with` context manager for automatic cleanup
 
 or to run ipython with extra magic commands:
 
