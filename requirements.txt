@@ -1,4 +1,0 @@
-retrying
-requests
-six
-tabulate

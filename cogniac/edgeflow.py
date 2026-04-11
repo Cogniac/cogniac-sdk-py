@@ -7,12 +7,8 @@ Copyright (C) 2016 Cogniac Corporation
 import os
 import re
 from time import time
-import six
-import requests
-from retrying import retry
-from requests.packages.urllib3 import Retry
-from requests.adapters import HTTPAdapter
-
+import httpx
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from .common import server_error, raise_errors
 from .media import file_creation_time
 
@@ -23,7 +19,6 @@ IP_REGEX = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(
 CLOUDFLOW_PREFIX = "cloudflow.cogniac.io"
 
 
-@six.python_2_unicode_compatible
 class CogniacEdgeFlow(object):
     """
     CogniacEdgeFlow
@@ -51,7 +46,7 @@ class CogniacEdgeFlow(object):
     """
 
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def get(cls, connection, edgeflow_id):
         """
         Get a single EdgeFlow.
@@ -130,20 +125,13 @@ class CogniacEdgeFlow(object):
                     self.url_prefix = 'http://{}:8000'.format(self.ip_address)
 
     def __initialize(self):
-        self.session = requests.Session()
-
         self.__set_url_prefix()
 
         # Configure session with appropriate retries.
-        self.session.mount('https://', HTTPAdapter(
-            max_retries=Retry(connect=5,
-                              read=5,
-                              status=5,
-                              redirect=2,
-                              backoff_factor=.001,
-                              status_forcelist=(500, 502, 503, 504))))
+        transport = httpx.HTTPTransport(retries=5)
+        self.session = httpx.Client(transport=transport, follow_redirects=True)
 
-    @retry(stop_max_attempt_number=3, retry_on_exception=lambda e: isinstance(e, Exception))
+    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: isinstance(e, Exception)))
     def _get(self, url, timeout=None, **kwargs):
         """
         Wrapper method to retry an HTTP GET request if an Exception is raised
@@ -157,7 +145,7 @@ class CogniacEdgeFlow(object):
         raise_errors(resp)
         return resp
 
-    @retry(stop_max_attempt_number=3, retry_on_exception=lambda e: isinstance(e, Exception))
+    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(lambda e: isinstance(e, Exception)))
     def _post(self, url, timeout=None, **kwargs):
         """
         Wrapper method to retry an HTTP POST request if an Exception is raised
@@ -217,7 +205,7 @@ class CogniacEdgeFlow(object):
                 # set the unspecified media timestamp to the earliest file time we have
                 args['media_timestamp'] = file_creation_time(filename)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         def upload():
             if filename.startswith('http'):
                 raise Exception("The media file must be uploaded from local storage.")

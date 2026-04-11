@@ -4,16 +4,12 @@ CogniacExternalResult Object Client
 Copyright (C) 2016 Cogniac Corporation
 """
 
-from retrying import retry
-import six
-import sys
-from .common import server_error
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
 
 
 ##
 #  Cogniac External Result
 ##
-@six.python_2_unicode_compatible
 class CogniacExternalResult(object):
     """
     CogniacExternalResult
@@ -26,7 +22,7 @@ class CogniacExternalResult(object):
     #  create
     ##
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def create(cls,
                connection,
                result_type,
@@ -56,7 +52,7 @@ class CogniacExternalResult(object):
     #  get
     ##
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def get(cls,
             connection,
             external_result_id):
@@ -105,8 +101,7 @@ class CogniacExternalResult(object):
             if limit:
                 data['limit'] = limit
 
-        resp = connection._get("/1/externalResults", json=data)
-        print(resp.json())
+        resp = connection._get("/1/externalResults", params=data)
         subs = resp.json()['data']
         return [CogniacExternalResult(connection, s) for s in subs]
 
@@ -128,7 +123,7 @@ class CogniacExternalResult(object):
     ##
     #  delete
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def delete(self):
         """
         Delete the external result.

@@ -6,8 +6,7 @@ Copyright (C) 2016-2022 Cogniac Corporation
 from .common import *
 from hashlib import md5
 from os import stat, fstat, path, SEEK_END
-from retrying import retry
-from six.moves.urllib.parse import quote
+from urllib.parse import quote
 from time import time
 import platform
 
@@ -46,7 +45,7 @@ class CogniacMedia(object):
     """
 
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def get(cls, connection, media_id):
         """
         return a CogniacMedia object for an existing media item
@@ -236,7 +235,7 @@ class CogniacMedia(object):
             if fsize > 12 * 1024 * 1024:
                 return CogniacMedia._create_multipart(connection, filename, fp, fsize, args)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         def upload():
             if filename.startswith('http'):
                 files = None
@@ -274,7 +273,7 @@ class CogniacMedia(object):
 
         md5hash = md5_hexdigest(mfp)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         def post_data(data):
             resp = connection._post("/1/media/resumable", json=data)
             return resp.json()
@@ -288,7 +287,7 @@ class CogniacMedia(object):
         upload_session_id = rdata['upload_session_id']
         chunk_size = rdata['chunk_size']
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         def upload_chunk(chunk, chunk_no, upload_session_id):
 
             data = {'upload_phase':        'transfer',
@@ -322,7 +321,7 @@ class CogniacMedia(object):
         self._cc._delete("/1/media/%s" % self.media_id)
         self.__dict__.clear()
 
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def download(self, filep=None, timeout=60):
         """
         Download the media file and return as a string or write to a file.
@@ -334,10 +333,7 @@ class CogniacMedia(object):
         """
         url = self.media_url
 
-        stream = False
-        if filep is not None:
-            stream = True  # user requests output to file so stream potentially large results
-        resp = self._cc._get(url, stream=stream, timeout=timeout)
+        resp = self._cc._get(url, timeout=timeout)
         raise_errors(resp)
 
         if filep is None:  # return response all at once
@@ -346,15 +342,15 @@ class CogniacMedia(object):
             filep.seek(0)  # in case of retries
 
         # write response out to file
-        for chunk in resp.iter_content(chunk_size=512 * 1024):
-            if chunk:  # filter out keep-alive new chunks
+        for chunk in resp.iter_bytes(chunk_size=512 * 1024):
+            if chunk:
                 filep.write(chunk)
         filep.close()
 
     ##
     #  detections
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def detections(self, wait_capture_id=None):
         """
         return a list of detection dictionaries as follows for the specified media_id and this subject
@@ -387,7 +383,7 @@ class CogniacMedia(object):
     ##
     #  subjects
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def subjects(self):
         """
         return a list of subjects as follows for the specified media_id:

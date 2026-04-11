@@ -5,9 +5,6 @@ Copyright (C) 2016 Cogniac Corporation
 
 """
 
-import json
-import six
-from retrying import retry
 from .common import *
 
 
@@ -20,11 +17,10 @@ TENANT_BILLING_ROLE = "tenant_billing"
 ##
 #   CogniacTenant
 ##
-@six.python_2_unicode_compatible
 class CogniacTenant(object):
 
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def get(cls, connection):
         resp = connection._get("/1/tenants/current")
         return CogniacTenant(connection, resp.json())
@@ -84,7 +80,7 @@ class CogniacTenant(object):
 
         url = "/1/usage/summary?period=%s&start=%d&end=%d" % (period, start, end)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         def get_next(url):
             resp = self._cc._get(url)
             return resp.json()
