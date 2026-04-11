@@ -176,6 +176,8 @@ class AsyncCogniacApplication(object):
     def __setattr__(self, name, value):
         if name in self.immutable_keys:
             raise AttributeError("%s is immutable" % name)
+        if name in self.mutable_keys:
+            raise AttributeError("Use 'await app.set(%s=...)' to update server-managed attributes" % name)
         super(AsyncCogniacApplication, self).__setattr__(name, value)
 
     def __str__(self):
@@ -275,7 +277,7 @@ class AsyncCogniacApplication(object):
                     if previous_model_id is not None and model_id != previous_model_id:
                         return
                 previous_model_id = model_id
-            url = resp['paging'].get('next')
+            url = resp.get('paging', {}).get('next')
 
     ##
     #  detections
@@ -337,7 +339,7 @@ class AsyncCogniacApplication(object):
                 count += 1
                 if limit and count == limit:
                     return
-            url = resp['paging'].get('next')
+            url = resp.get('paging', {}).get('next')
 
     ##
     #  usage
@@ -357,7 +359,7 @@ class AsyncCogniacApplication(object):
             resp = await get_next(url)
             for record in resp['data']:
                 yield record
-            url = resp['paging'].get('next')
+            url = resp.get('paging', {}).get('next')
 
     ##
     #  accumulate_usage

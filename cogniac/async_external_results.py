@@ -95,7 +95,7 @@ class AsyncCogniacExternalResult(object):
             if limit:
                 data['limit'] = limit
 
-        resp = await connection._get("/1/externalResults", json=data)
+        resp = await connection._get("/1/externalResults", params=data)
         subs = resp.json()['data']
         return [AsyncCogniacExternalResult(connection, s) for s in subs]
 

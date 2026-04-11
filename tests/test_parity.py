@@ -41,3 +41,25 @@ class TestParity:
             async_version = await acc.get_version()
 
         assert sync_version == async_version
+
+    @pytest.mark.asyncio
+    async def test_get_tenant_parity(self, cc):
+        """Sync and async get tenant return the same tenant_id and name."""
+        sync_tenant = cc.get_tenant()
+
+        async with await cogniac.AsyncCogniacConnection.create() as acc:
+            async_tenant = await cogniac.AsyncCogniacTenant.get(acc)
+
+        assert sync_tenant.tenant_id == async_tenant.tenant_id
+        assert sync_tenant.name == async_tenant.name
+
+    @pytest.mark.asyncio
+    async def test_get_edgeflows_parity(self, cc):
+        """Sync and async get_all_edgeflows return the same gateway IDs."""
+        sync_ids = {ef.gateway_id for ef in cc.get_all_edgeflows()}
+
+        async with await cogniac.AsyncCogniacConnection.create() as acc:
+            async_efs = await cogniac.AsyncCogniacEdgeFlow.get_all(acc)
+            async_ids = {ef.gateway_id for ef in async_efs}
+
+        assert sync_ids == async_ids

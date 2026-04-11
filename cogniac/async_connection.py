@@ -31,7 +31,7 @@ class AsyncCogniacConnection(object):
 
     Or as an async context manager:
 
-        async with AsyncCogniacConnection.create(...) as cc:
+        async with await AsyncCogniacConnection.create(...) as cc:
             ...
     """
 
@@ -278,6 +278,23 @@ class AsyncCogniacConnection(object):
         return resp
 
     # ------------------------------------------------------------------
+    # Streaming
+    # ------------------------------------------------------------------
+
+    def _stream(self, method, url, timeout=None):
+        """Return an httpx async stream context manager for large downloads.
+
+        Usage:
+            async with connection._stream('GET', url) as resp:
+                async for chunk in resp.aiter_bytes():
+                    ...
+        """
+        url = self._build_url(url)
+        if timeout is None:
+            timeout = self.timeout
+        return self.session.stream(method, url, timeout=timeout)
+
+    # ------------------------------------------------------------------
     # Convenience
     # ------------------------------------------------------------------
 
@@ -291,7 +308,6 @@ class AsyncCogniacConnection(object):
         else:
             url = self.url_prefix + "/1/version"
         resp = await self._get(url)
-        raise_errors(resp)
         return resp.json()
 
 

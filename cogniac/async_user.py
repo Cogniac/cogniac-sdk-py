@@ -47,6 +47,8 @@ class AsyncCogniacUser(object):
         return "%s %s (%s)" % (self.given_name, self.surname, self.email)
 
     def __setattr__(self, name, value):
+        if name in mutable_keys:
+            raise AttributeError("Use 'await user.set(%s=...)' to update server-managed attributes" % name)
         super(AsyncCogniacUser, self).__setattr__(name, value)
 
     ##

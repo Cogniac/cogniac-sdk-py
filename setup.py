@@ -16,4 +16,4 @@ setup(name='cogniac',
           ],
       },
       python_requires='>=3.11',
-      install_requires=['httpx', 'tenacity', 'tabulate'])
+      install_requires=['httpx>=0.24.0', 'tenacity>=8.0.0', 'tabulate'])

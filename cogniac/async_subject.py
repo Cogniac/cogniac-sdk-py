@@ -105,7 +105,7 @@ class AsyncCogniacSubject(object):
     ##
     @classmethod
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    async def search(cls, connection, ids=[], prefix=None, similar=None, name=None,
+    async def search(cls, connection, ids=None, prefix=None, similar=None, name=None,
                      tenant_owned=True, public_read=False, public_write=False, limit=10):
         """
         Search AsyncCogniacSubjects by batch subject IDs, prefix, or semantic similarity
@@ -131,7 +131,7 @@ class AsyncCogniacSubject(object):
         if public_write:
             args.append("public_read_write=True")
 
-        if len(ids):
+        if ids:
             args.append('ids=%s' % (',').join(ids))
         elif prefix:
             args.append('prefix=%s' % prefix)
@@ -203,6 +203,8 @@ class AsyncCogniacSubject(object):
     def __setattr__(self, name, value):
         if name in self.immutable_keys:
             raise AttributeError("%s is immutable" % name)
+        if name in self.mutable_keys:
+            raise AttributeError("Use 'await subject.set(%s=...)' to update server-managed attributes" % name)
         super(AsyncCogniacSubject, self).__setattr__(name, value)
 
     def __str__(self):
@@ -349,4 +351,4 @@ class AsyncCogniacSubject(object):
                 count += 1
                 if limit and count == limit:
                     return
-            url = resp['paging'].get('next')
+            url = resp.get('paging', {}).get('next')

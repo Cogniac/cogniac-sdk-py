@@ -37,6 +37,23 @@ class TestAsyncAppRead:
             assert isinstance(pending, int)
 
     @pytest.mark.asyncio
+    async def test_app_immutable_raises(self):
+        async with await cogniac.AsyncCogniacConnection.create() as cc:
+            apps = await cogniac.AsyncCogniacApplication.get_all(cc)
+            app = apps[0]
+            with pytest.raises(AttributeError):
+                app.application_id = "bad"
+
+    @pytest.mark.asyncio
+    async def test_app_mutable_guard_raises(self):
+        """Assigning to a mutable key should raise, directing user to set()."""
+        async with await cogniac.AsyncCogniacConnection.create() as cc:
+            apps = await cogniac.AsyncCogniacApplication.get_all(cc)
+            app = apps[0]
+            with pytest.raises(AttributeError, match="set"):
+                app.name = "should-not-work"
+
+    @pytest.mark.asyncio
     async def test_detections_generator(self):
         async with await cogniac.AsyncCogniacConnection.create() as cc:
             apps = await cogniac.AsyncCogniacApplication.get_all(cc)

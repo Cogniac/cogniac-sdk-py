@@ -61,7 +61,7 @@ class CogniacConnection(object):
             try:
                 username = os.environ['COG_USER']
                 password = os.environ['COG_PASS']
-            except:
+            except KeyError:
                 raise Exception("No Cogniac Credentials. Try setting COG_USER and COG_PASS environment.")
 
         resp = httpx.get(url_prefix + "/1/users/current/tenants", auth=(username, password))
@@ -121,7 +121,7 @@ class CogniacConnection(object):
                 password = os.environ['COG_PASS']
                 self.username = username
                 self.password = password
-            except:
+            except KeyError:
                 raise Exception("No Cogniac Credentials. Specify username and password or set COG_USER, COG_PASS or COG_API_KEY environment variables.")
 
         self.url_prefix = None
@@ -140,7 +140,7 @@ class CogniacConnection(object):
         if tenant_id is None:
             try:
                 tenant_id = os.environ['COG_TENANT']
-            except:
+            except KeyError:
                 if not self.api_key:
                     # For username/password: try to auto-select if only one tenant
                     tenants = CogniacConnection.get_all_authorized_tenants(username, password, url_prefix)['tenants']
@@ -516,7 +516,6 @@ class CogniacConnection(object):
         else:
             url = self.url_prefix + "/1/version"
         resp = self._get(url)
-        raise_errors(resp)
         return resp.json()
 
     def get_all_cameras(self):

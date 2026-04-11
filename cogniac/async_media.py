@@ -4,6 +4,7 @@ Async CogniacMedia Object Client
 Copyright (C) 2016-2022 Cogniac Corporation
 """
 
+import asyncio
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors
 from .media import file_creation_time
 from hashlib import md5
@@ -129,6 +130,8 @@ class AsyncCogniacMedia(object):
     def __setattr__(self, name, value):
         if name in immutable_keys:
             raise AttributeError("%s is immutable" % name)
+        if name in mutable_keys:
+            raise AttributeError("Use 'await media.set(%s=...)' to update server-managed attributes" % name)
         super(AsyncCogniacMedia, self).__setattr__(name, value)
 
     ##
@@ -236,12 +239,12 @@ class AsyncCogniacMedia(object):
         else:
             if 'media_timestamp' not in args:
                 if fp is None:
-                    args['media_timestamp'] = file_creation_time(filename)
+                    args['media_timestamp'] = await asyncio.to_thread(file_creation_time, filename)
                 else:
                     args['media_timestamp'] = time()
 
             if fp is None:
-                fsize = stat(filename).st_size
+                fsize = (await asyncio.to_thread(stat, filename)).st_size
             else:
                 fp.seek(0, SEEK_END)
                 fsize = fp.tell()
@@ -253,13 +256,13 @@ class AsyncCogniacMedia(object):
         @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         async def upload():
             if filename.startswith('http'):
-                files = None
+                resp = await connection._post("/1/media", data=args)
             elif fp is not None:
                 fp.seek(0)  # for the retry win
-                files = {filename: fp}
+                resp = await connection._post("/1/media", data=args, files={filename: fp})
             else:
-                files = {filename: open(filename, 'rb')}
-            resp = await connection._post("/1/media", data=args, files=files)
+                with open(filename, 'rb') as f:
+                    resp = await connection._post("/1/media", data=args, files={filename: f})
             return resp
 
         resp = await upload()
@@ -284,51 +287,57 @@ class AsyncCogniacMedia(object):
                     return md.hexdigest()
                 md.update(block)
 
+        close_mfp = False
         if mfp is None:
             mfp = open(filename, 'rb')
+            close_mfp = True
         else:
             mfp.seek(0)
 
-        md5hash = md5_hexdigest(mfp)
+        try:
+            md5hash = await asyncio.to_thread(md5_hexdigest, mfp)
 
-        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-        async def post_data(data):
-            resp = await connection._post("/1/media/resumable", json=data)
-            return resp.json()
+            @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+            async def post_data(data):
+                resp = await connection._post("/1/media/resumable", json=data)
+                return resp.json()
 
-        data = {'upload_phase': 'start',
-                'file_size':    filesize,
-                'filename':     filename,
-                'md5':          md5hash}
+            data = {'upload_phase': 'start',
+                    'file_size':    filesize,
+                    'filename':     filename,
+                    'md5':          md5hash}
 
-        rdata = await post_data(data)
-        upload_session_id = rdata['upload_session_id']
-        chunk_size = rdata['chunk_size']
+            rdata = await post_data(data)
+            upload_session_id = rdata['upload_session_id']
+            chunk_size = rdata['chunk_size']
 
-        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-        async def upload_chunk(chunk, chunk_no, upload_session_id):
-            data = {'upload_phase':        'transfer',
-                    'upload_session_id':   upload_session_id,
-                    'video_file_chunk_no': chunk_no}
-            files = {'file': chunk}
-            resp = await connection._post("/1/media/resumable", data=data, files=files)
-            return resp.json()
+            @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+            async def upload_chunk(chunk, chunk_no, upload_session_id):
+                data = {'upload_phase':        'transfer',
+                        'upload_session_id':   upload_session_id,
+                        'video_file_chunk_no': chunk_no}
+                files = {'file': chunk}
+                resp = await connection._post("/1/media/resumable", data=data, files=files)
+                return resp.json()
 
-        idx = 1
-        mfp.seek(0)
-        while True:
-            chunk = mfp.read(chunk_size)
-            if not chunk:
-                break
-            await upload_chunk(chunk, idx, upload_session_id)
-            idx += 1
+            idx = 1
+            mfp.seek(0)
+            while True:
+                chunk = await asyncio.to_thread(mfp.read, chunk_size)
+                if not chunk:
+                    break
+                await upload_chunk(chunk, idx, upload_session_id)
+                idx += 1
 
-        # perform the final finish phase post with the user args
-        data = {'upload_phase':      'finish',
-                'upload_session_id': upload_session_id}
-        data.update(args)
-        rdata = await post_data(data)
-        return AsyncCogniacMedia(connection, rdata)
+            # perform the final finish phase post with the user args
+            data = {'upload_phase':      'finish',
+                    'upload_session_id': upload_session_id}
+            data.update(args)
+            rdata = await post_data(data)
+            return AsyncCogniacMedia(connection, rdata)
+        finally:
+            if close_mfp:
+                mfp.close()
 
     ##
     #  delete
@@ -355,19 +364,15 @@ class AsyncCogniacMedia(object):
         """
         url = self.media_url
 
-        resp = await self._cc._get(url, timeout=timeout)
-        raise_errors(resp)
-
         if filep is None:
+            resp = await self._cc._get(url, timeout=timeout)
             return resp.content
-        else:
-            filep.seek(0)  # in case of retries
 
-        # write response out to file
-        for chunk in resp.iter_bytes(chunk_size=512 * 1024):
-            if chunk:
+        filep.seek(0)  # in case of retries
+        async with self._cc._stream('GET', url, timeout=timeout) as resp:
+            raise_errors(resp)
+            async for chunk in resp.aiter_bytes(chunk_size=512 * 1024):
                 filep.write(chunk)
-        filep.close()
 
     ##
     #  detections

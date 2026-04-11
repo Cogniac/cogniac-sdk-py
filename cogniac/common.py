@@ -46,13 +46,13 @@ def raise_errors(response):
     raise ServerError or ClientError based on requests response as appropriate
     """
     if response.status_code >= 500:
-        msg = "ServerError (%d): %s" % (response.status_code, response.content)
+        msg = "ServerError (%d): %s" % (response.status_code, response.text)
         raise ServerError(msg)
 
     if response.status_code == 401:
-        msg = "Invalid username password credentials (%d): %s" % (response.status_code, response.content)
+        msg = "Invalid username password credentials (%d): %s" % (response.status_code, response.text)
         raise CredentialError(msg)
 
     if response.status_code >= 400:
-        msg = "ClientError (%d): %s" % (response.status_code, response.content)
+        msg = "ClientError (%d): %s" % (response.status_code, response.text)
         raise ClientError(msg, response.status_code)

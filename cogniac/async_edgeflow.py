@@ -68,17 +68,31 @@ class AsyncCogniacEdgeFlow(object):
             super(AsyncCogniacEdgeFlow, self).__setattr__(k, v)
 
     def __setattr__(self, name, value):
-        if name not in self._edgeflow_keys:
+        if name.startswith('_') or name not in self._edgeflow_keys:
             super(AsyncCogniacEdgeFlow, self).__setattr__(name, value)
             return
-        # Block sync writes to edgeflow-key attributes; store locally only
-        super(AsyncCogniacEdgeFlow, self).__setattr__(name, value)
+        raise AttributeError("Use 'await edgeflow.set(%s=...)' to update server-managed attributes" % name)
 
     def __str__(self):
         return "%s (%s)" % (self.name, self.gateway_id)
 
     def __repr__(self):
         return self.__str__()
+
+    ##
+    #  set
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def set(self, **kwargs):
+        """
+        Update edgeflow attributes via a single POST call.
+
+        Example:
+            await edgeflow.set(name="new name")
+        """
+        resp = await self._cc._post("/1/gateways/%s" % self.gateway_id, json=kwargs)
+        for k, v in resp.json().items():
+            super(AsyncCogniacEdgeFlow, self).__setattr__(k, v)
 
     # -------------------------------------------------------------------------
     #
@@ -139,7 +153,7 @@ class AsyncCogniacEdgeFlow(object):
                 count += 1
                 if limit and count == limit:
                     return
-            url = resp['paging'].get('next')
+            url = resp.get('paging', {}).get('next')
 
     ##
     #  get_aggregated_stats

@@ -1,4 +1,3 @@
-retrying
-requests
-six
+httpx>=0.24.0
+tenacity>=8.0.0
 tabulate

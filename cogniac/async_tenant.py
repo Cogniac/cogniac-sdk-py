@@ -6,6 +6,8 @@ Copyright (C) 2016 Cogniac Corporation
 
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
 
+mutable_keys = ['name', 'description']
+immutable_keys = ['tenant_id', 'created_at', 'created_by', 'modified_at', 'modified_by']
 
 TENANT_ADMIN_ROLE = "tenant_admin"
 TENANT_USER_ROLE = "tenant_user"
@@ -51,11 +53,12 @@ class AsyncCogniacTenant(object):
         return self.__str__()
 
     def __setattr__(self, name, value):
-        if name not in self._tenant_keys:
+        if name.startswith('_') or name not in self._tenant_keys:
             super(AsyncCogniacTenant, self).__setattr__(name, value)
             return
-        # Block sync writes to tenant-key attributes; use async set() instead
-        super(AsyncCogniacTenant, self).__setattr__(name, value)
+        if name in mutable_keys:
+            raise AttributeError("Use 'await tenant.set(%s=...)' to update server-managed attributes" % name)
+        raise AttributeError("%s is immutable" % name)
 
     ##
     #  set
@@ -63,11 +66,19 @@ class AsyncCogniacTenant(object):
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     async def set(self, **kwargs):
         """
-        Update tenant attributes via a single POST call.
+        Update mutable tenant attributes via a single POST call.
+
+        Accepted keys: name, description
 
         Example:
             await tenant.set(name="new tenant name")
         """
+        for key in kwargs:
+            if key in immutable_keys:
+                raise AttributeError("%s is immutable" % key)
+            if key not in mutable_keys:
+                raise AttributeError("%s is not a recognized mutable attribute" % key)
+
         resp = await self._cc._post("/1/tenants/%s" % self.tenant_id, json=kwargs)
         for k, v in resp.json().items():
             super(AsyncCogniacTenant, self).__setattr__(k, v)
@@ -160,4 +171,4 @@ class AsyncCogniacTenant(object):
             resp = await get_next(url)
             for record in resp['data']:
                 yield record
-            url = resp['paging'].get('next')
+            url = resp.get('paging', {}).get('next')

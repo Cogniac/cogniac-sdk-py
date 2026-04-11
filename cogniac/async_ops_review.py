@@ -144,7 +144,8 @@ class AsyncCogniacOpsReview(object):
         @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         async def get_next(url):
             resp = await connection._get(url)
-            return [AsyncCogniacOpsReview(connection, s) for s in resp.json()['data']], resp.json()['paging']
+            rjson = resp.json()
+            return [AsyncCogniacOpsReview(connection, s) for s in rjson['data']], rjson.get('paging', {})
 
         count = 0
         while url:

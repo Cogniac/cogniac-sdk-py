@@ -171,6 +171,8 @@ class AsyncCogniacNetworkCamera(object):
     def __setattr__(self, name, value):
         if name in immutable_keys:
             raise AttributeError("%s is immutable" % name)
+        if name in mutable_keys:
+            raise AttributeError("Use 'await camera.set(%s=...)' to update server-managed attributes" % name)
         super(AsyncCogniacNetworkCamera, self).__setattr__(name, value)
 
     def __str__(self):

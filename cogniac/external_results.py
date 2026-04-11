@@ -101,8 +101,7 @@ class CogniacExternalResult(object):
             if limit:
                 data['limit'] = limit
 
-        resp = connection._get("/1/externalResults", json=data)
-        print(resp.json())
+        resp = connection._get("/1/externalResults", params=data)
         subs = resp.json()['data']
         return [CogniacExternalResult(connection, s) for s in subs]
 

@@ -62,6 +62,15 @@ class TestAsyncSubjectLifecycle:
                 await s.delete()
 
     @pytest.mark.asyncio
+    async def test_subject_mutable_guard_raises(self):
+        """Assigning to a mutable key should raise, directing user to set()."""
+        async with await cogniac.AsyncCogniacConnection.create() as cc:
+            subjects = await cogniac.AsyncCogniacSubject.get_all(cc)
+            s = subjects[0]
+            with pytest.raises(AttributeError, match="set"):
+                s.name = "should-not-work"
+
+    @pytest.mark.asyncio
     async def test_media_associations_generator(self):
         async with await cogniac.AsyncCogniacConnection.create() as cc:
             subjects = await cogniac.AsyncCogniacSubject.get_all(cc)
