@@ -11,7 +11,7 @@ Published on PyPI as `cogniac`. Requires Python 3.11+.
 ## Build and Install
 
 ```bash
-pip install -e .          # Development install
+uv sync                   # Development install (deps + dev tools)
 pip install cogniac       # From PyPI
 ```
 
@@ -137,8 +137,8 @@ cogniac subjects associate <uid> <media_id> # --consensus (True/False/Sidelined/
 cogniac media upload <filename>             # --subject-uid, --external-media-id, --domain-unit, --meta-tags
 ```
 
-Implementation is in `cogniac/cli.py`. Entry point registered in `setup.py` via `console_scripts`.
+Implementation is in `cogniac/cli.py`. Entry point registered in `pyproject.toml` via `[project.scripts]`.
 
 ## Version
 
-Package version is set in `setup.py` (line 6, `version` variable). Bump it there for releases.
+Package version is set in `pyproject.toml` (`[project] version`). Bump it there for releases.
