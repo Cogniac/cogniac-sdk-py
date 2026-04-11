@@ -43,8 +43,6 @@ import os
 
 from tabulate import tabulate
 
-import requests
-
 from .cogniac import CogniacConnection
 from .common import CredentialError, ServerError, ClientError, raise_errors
 

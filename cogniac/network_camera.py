@@ -4,10 +4,7 @@ Cogniac Network Camera Object Client
 Copyright (C) 2019 Cogniac Corporation
 """
 
-from retrying import retry
-import six
-import sys
-from .common import server_error
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
 
 camera_model_keys = ['last_pose_change_timestamp',
                      'resolution_h_px', 'resolution_v_px',
@@ -33,7 +30,6 @@ immutable_keys = ['network_camera_id', 'created_at',
 ##
 #  Cogniac Network Camera
 ##
-@six.python_2_unicode_compatible
 class CogniacNetworkCamera(object):
     """
     CogniacNetworkCamera
@@ -43,7 +39,7 @@ class CogniacNetworkCamera(object):
     #  create
     ##
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def create(cls,
                connection,
                name,
@@ -138,7 +134,7 @@ class CogniacNetworkCamera(object):
     #  get
     ##
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def get(cls,
             connection,
             network_camera_id):
@@ -168,7 +164,7 @@ class CogniacNetworkCamera(object):
     ##
     #  post
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def update(self,
                url=None,
                current_IP=None,
@@ -301,7 +297,7 @@ class CogniacNetworkCamera(object):
     ##
     #  delete
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def delete(self):
         """
         Delete the op review result.

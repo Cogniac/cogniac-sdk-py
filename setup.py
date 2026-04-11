@@ -15,4 +15,5 @@ setup(name='cogniac',
               'cogniac=cogniac.cli:main',
           ],
       },
-      install_requires=['requests', 'retrying', 'tabulate', 'six'])
+      python_requires='>=3.11',
+      install_requires=['httpx', 'tenacity', 'tabulate'])

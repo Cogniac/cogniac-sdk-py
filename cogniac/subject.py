@@ -4,10 +4,7 @@ CogniacSubject Object Client
 Copyright (C) 2016 Cogniac Corporation
 """
 
-from retrying import retry
 from .common import *
-import six
-import sys
 
 from .media import CogniacMedia
 
@@ -15,7 +12,6 @@ from .media import CogniacMedia
 ##
 #  CogniacSubject
 ##
-@six.python_2_unicode_compatible
 class CogniacSubject(object):
     """
     CogniacSubject
@@ -43,7 +39,7 @@ class CogniacSubject(object):
     #  create
     ##
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def create(cls,
                connection,
                name,
@@ -78,7 +74,7 @@ class CogniacSubject(object):
     #  get
     ##
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def get(cls,
             connection,
             subject_uid):
@@ -190,7 +186,7 @@ class CogniacSubject(object):
     ##
     #  delete
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def delete(self):
         """
         Delete the subject.
@@ -222,7 +218,7 @@ class CogniacSubject(object):
     ##
     #  create_reference_media
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def create_reference_media(self,
                                filename,
                                meta_tags=None,
@@ -311,7 +307,7 @@ class CogniacSubject(object):
                 # use the multipart interface for large files
                 return CogniacMedia._create_multipart(self.connection, filename, args)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         def upload():
             if filename.startswith('http'):
                 files = None
@@ -330,7 +326,7 @@ class CogniacSubject(object):
     ##
     #  dissassociate_media
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def disassociate_media(self,
                            media,
                            focus=None):
@@ -355,7 +351,7 @@ class CogniacSubject(object):
     ##
     #  associate_media
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def associate_media(self,
                         media,
                         focus=None,
@@ -488,7 +484,7 @@ class CogniacSubject(object):
         url = "/1/subjects/%s/media?" % self.subject_uid
         url += "&".join(args)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         def get_next(url):
             resp = self._cc._get(url)
             return resp.json()

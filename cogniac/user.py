@@ -5,8 +5,6 @@ Copyright (C) 2019 Cogniac Corporation
 
 """
 
-import json
-from retrying import retry
 from .common import *
 
 
@@ -19,7 +17,7 @@ mutable_keys = ['given_name', 'surname', 'title']
 class CogniacUser(object):
 
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def get(cls, connection):
         resp = connection._get("/1/users/current")
         return CogniacUser(connection, resp.json())

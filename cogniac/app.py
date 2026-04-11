@@ -4,12 +4,9 @@ CogniacApplication Object Client
 Copyright (C) 2016 Cogniac Corporation
 """
 
-from retrying import retry
-import six
-from .common import server_error
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
 
 
-@six.python_2_unicode_compatible
 class CogniacApplication(object):
     """
     CogniacApplication
@@ -34,7 +31,7 @@ class CogniacApplication(object):
     #  create
     ##
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def create(cls,
                connection,
                name,
@@ -87,7 +84,7 @@ class CogniacApplication(object):
     #  get
     ##
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def get(cls,
             connection,
             application_id):
@@ -141,7 +138,7 @@ class CogniacApplication(object):
     ##
     #  delete
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def delete(self):
         """
         Delete the application.
@@ -202,7 +199,7 @@ class CogniacApplication(object):
     ##
     #  pending_feedback
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def pending_feedback(self):
         """
         Return the integer number of feedback requests pending for this application.
@@ -214,7 +211,7 @@ class CogniacApplication(object):
     ##
     #  get_feedback
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def get_feedback(self, limit=10):
         """
         returns a list of  up to {limit} feedback request messages for the application
@@ -227,7 +224,7 @@ class CogniacApplication(object):
     ##
     #  post_feedback
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def post_feedback(self, media_id, subjects):
         """
         Provides feedback to the application for a given subject-media assocation; returns None.
@@ -254,7 +251,7 @@ class CogniacApplication(object):
     ##
     #  list of models released
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def models(self, start=None, end=None, limit=None, reverse=True):
         """
         return a list of models
@@ -276,7 +273,7 @@ class CogniacApplication(object):
         url = "/1/applications/%s/models?" % self.application_id
         url += "&".join(args)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         def get_next(url):
             resp = self._cc._get(url)
             return resp.json()
@@ -300,7 +297,7 @@ class CogniacApplication(object):
     ##
     #  model_name
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def model_name(self):
         """
         return the modelname for the current best model for this application
@@ -315,7 +312,7 @@ class CogniacApplication(object):
     ##
     #  download_model
     ##
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def download_model(self, model_id=None):
         """
         Download the current active model for this application to a file in the current working directory and
@@ -404,7 +401,7 @@ class CogniacApplication(object):
         url = "/1/applications/%s/detections?" % self.application_id
         url += "&".join(args)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
         def get_next(url):
             resp = self._cc._get(url)
             return resp.json()
@@ -434,7 +431,7 @@ class CogniacApplication(object):
         """
         url = "/1/usage/app/%s?start=%d&end=%d" % (self.application_id, start, end)
 
-        @retry(stop_max_attempt_number=8, wait_exponential_multiplier=5, retry_on_exception=server_error)
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.005), retry=retry_if_exception(server_error))
         def get_next(url):
             resp = self._cc._get(url)
             return resp.json()

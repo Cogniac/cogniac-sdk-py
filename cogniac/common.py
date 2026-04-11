@@ -4,7 +4,8 @@ Cogniac API common definitions
 Copyright (C) 2016 Cogniac Corporation
 """
 
-from requests.exceptions import ConnectionError
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
+from httpx import ConnectError
 
 
 class CredentialError(Exception):
@@ -37,7 +38,7 @@ def credential_error(exception):
 
 def server_error(exception):
     """Return True if we should retry (in this case when it's an ServerError, False otherwise"""
-    return isinstance(exception, ServerError) or isinstance(exception, ConnectionError)
+    return isinstance(exception, ServerError) or isinstance(exception, ConnectError)
 
 
 def raise_errors(response):

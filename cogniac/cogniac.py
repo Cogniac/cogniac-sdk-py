@@ -9,14 +9,9 @@ Copyright (C) 2016 Cogniac Corporation.
 import logging
 import os
 import re
-import requests
-import six
+import httpx
 import sys
-from retrying import retry
-from requests.auth import HTTPBasicAuth
-from requests.packages.urllib3 import Retry
-from requests.adapters import HTTPAdapter
-
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from .common import server_error, raise_errors, CredentialError, credential_error
 
 from .app     import CogniacApplication
@@ -50,14 +45,14 @@ class CogniacConnection(object):
     """
 
     @classmethod
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def get_all_authorized_tenants(cls, username=None, password=None, url_prefix="https://api.cogniac.io/"):
         """
         return the list of valid tenants for the specified user credentials and url_prefix
         """
         if 'COG_API_KEY' in os.environ:
-            resp = requests.get(url_prefix + "/1/users/current/tenants",
-                                headers={"Authorization": "Key %s" % os.environ['COG_API_KEY']})
+            resp = httpx.get(url_prefix + "/1/users/current/tenants",
+                             headers={"Authorization": "Key %s" % os.environ['COG_API_KEY']})
             raise_errors(resp)
             return resp.json()
 
@@ -69,7 +64,7 @@ class CogniacConnection(object):
             except:
                 raise Exception("No Cogniac Credentials. Try setting COG_USER and COG_PASS environment.")
 
-        resp = requests.get(url_prefix + "/1/users/current/tenants", auth=HTTPBasicAuth(username, password))
+        resp = httpx.get(url_prefix + "/1/users/current/tenants", auth=(username, password))
         raise_errors(resp)
         return resp.json()
 
@@ -181,7 +176,7 @@ class CogniacConnection(object):
     def _require_tenant(self):
         """Raise a helpful error listing available tenants when none is configured."""
         try:
-            resp = self.session.get(self.url_prefix + "/1/users/current/tenants")
+            resp = self.session.get(self.url_prefix + "/1/users/current/tenants", follow_redirects=True)
             tenants = resp.json().get('tenants', [])
         except Exception:
             raise Exception("Unspecified tenant")
@@ -204,54 +199,47 @@ class CogniacConnection(object):
             url_prefix = url_prefix[0:-1]
         return url_prefix
 
-    @retry(stop_max_attempt_number=8, wait_exponential_multiplier=500, retry_on_exception=server_error)
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def __authenticate(self):
         #  Authenticate to the cogniac system using a username and password or an API KEY
         #  Save the http Authorization headers that can be used for subsequent http requests to the cogniac API.
         tenant_data = {"tenant_id": self.tenant_id}
         if self.api_key:
             # trade API KEY for user+tenant token
-            resp = requests.get(self.url_prefix + "/1/token",
-                                params=tenant_data,
-                                headers={"Authorization": "Key %s" % self.api_key},
-                                timeout=self.timeout)
+            resp = httpx.get(self.url_prefix + "/1/token",
+                             params=tenant_data,
+                             headers={"Authorization": "Key %s" % self.api_key},
+                             timeout=self.timeout)
         else:
             # trade username/password for user+tenant token
 
             # https://staging.cogniac.io/21/users/mfa/status
-            resp = requests.get(self.url_prefix + "/21/users/mfa/status",
-                                auth=HTTPBasicAuth(self.username, self.password),
-                                timeout=self.timeout)
+            resp = httpx.get(self.url_prefix + "/21/users/mfa/status",
+                             auth=(self.username, self.password),
+                             timeout=self.timeout)
             raise_errors(resp)
 
             mfa_status = resp.json()
             if mfa_status.get('totp') == 'active':
                 try:
-                    totp = six.moves.input('Multi-Factor Authentication is required. Enter OTP: ')
+                    totp = input('Multi-Factor Authentication is required. Enter OTP: ')
                 except KeyboardInterrupt:
                     sys.exit()
                 tenant_data['otp'] = totp
 
-            resp = requests.get(self.url_prefix + "/1/token",
-                                params=tenant_data,
-                                auth=HTTPBasicAuth(self.username, self.password),
-                                timeout=self.timeout)
+            resp = httpx.get(self.url_prefix + "/1/token",
+                             params=tenant_data,
+                             auth=(self.username, self.password),
+                             timeout=self.timeout)
 
         raise_errors(resp)
 
         token = resp.json()
         headers = {"Authorization": "Bearer %s" % token['access_token']}
-        self.session = requests.Session()
-        # configure session with appropriate retries
-        self.session.mount('https://', HTTPAdapter(max_retries=Retry(connect=5,
-                                                                     read=5,
-                                                                     status=5,
-                                                                     redirect=2,
-                                                                     backoff_factor=.001,
-                                                                     status_forcelist=(500, 502, 503, 504))))
-        self.session.headers.update(headers)
+        transport = httpx.HTTPTransport(retries=5)
+        self.session = httpx.Client(transport=transport, headers=headers, follow_redirects=True)
 
-    @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
+    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
     def _head(self, url, timeout=None, **kwargs):
         """
         wrap requests session to re-authenticate on credential expiration
@@ -273,10 +261,10 @@ class CogniacConnection(object):
             raise
         return resp
 
-    @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
+    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
     def _get(self, url, timeout=None, **kwargs):
         """
-        wrap requests session to re-authenticate on credential expiration
+        wrap httpx client to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
             # Prepend /1/ version if no version is specified in the URL (backward compatibility).
@@ -287,6 +275,7 @@ class CogniacConnection(object):
             url = self.url_prefix + url
         if timeout is None:
             timeout = self.timeout
+        kwargs.pop('stream', None)  # httpx handles streaming differently
         try:
             resp = self.session.get(url, timeout=timeout, **kwargs)
             raise_errors(resp)
@@ -295,7 +284,7 @@ class CogniacConnection(object):
             raise
         return resp
 
-    @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
+    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
     def _post(self, url, timeout=None, **kwargs):
         """
         wrap requests session to re-authenticate on credential expiration
@@ -317,10 +306,10 @@ class CogniacConnection(object):
             raise
         return resp
 
-    @retry(stop_max_attempt_number=3, retry_on_exception=credential_error)
+    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
     def _delete(self, url, timeout=None, **kwargs):
         """
-        wrap requests session to re-authenticate on credential expiration
+        wrap httpx client to re-authenticate on credential expiration
         """
         if not url.startswith("http"):
             # Prepend /1/ version if no version is specified in the URL (backward compatibility).
@@ -332,7 +321,8 @@ class CogniacConnection(object):
         if timeout is None:
             timeout = self.timeout
         try:
-            resp = self.session.delete(url, timeout=timeout, **kwargs)
+            # use request() instead of delete() to support json/content body
+            resp = self.session.request('DELETE', url, timeout=timeout, **kwargs)
             raise_errors(resp)
         except CredentialError:
             self.__authenticate()
