@@ -61,6 +61,24 @@ Common patterns (both sync and async):
 Sync-only: `__setattr__` override auto-POSTs mutable attribute changes.
 Async-only: explicit `await entity.set(key=value)` method (can batch multiple fields in one call).
 
+### Media Download
+
+Both `CogniacMedia.download()` and `AsyncCogniacMedia.download()` accept an optional `filep` argument. This must be an **open file object** (opened in `"wb"` mode), not a file path string. Passing a string will raise `AttributeError: 'str' object has no attribute 'seek'`. If `filep` is omitted, the method returns the media content as bytes.
+
+```python
+# Sync
+media = cc.get_media(media_id)
+with open("out.jpg", "wb") as f:
+    media.download(f)
+
+# Async
+media = await AsyncCogniacMedia.get(cc, media_id)
+with open("out.jpg", "wb") as f:
+    await media.download(f)
+```
+
+For CLI usage, prefer `cogniac media download <media_id> -o out.jpg`.
+
 ### Error Handling and Retry
 
 `common.py` defines three error types mapped to HTTP status codes:
@@ -101,7 +119,8 @@ cogniac subjects list           # list all subjects
 cogniac subjects get <uid>      # get specific subject
 cogniac subjects search         # search: --prefix, --similar, --name, --ids, --limit
 cogniac subjects media <uid>    # list media associations: --limit, --consensus, --probability-lower/upper
-cogniac media get <id>          # get specific media
+cogniac media get <id>          # get specific media metadata
+cogniac media download <id>     # download media file to <id>.<ext>; use -o for custom path
 cogniac media search            # search: --md5, --filename, --external-media-id, --domain-unit, --limit
 cogniac edgeflows list          # list all edgeflows
 cogniac edgeflows get <id>      # get specific edgeflow

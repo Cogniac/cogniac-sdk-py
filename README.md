@@ -46,7 +46,9 @@ subject.delete()
 # Media
 media = cc.create_media("image.jpg", meta_tags=["test"])
 fetched = cc.get_media(media.media_id)
-content = fetched.download()
+image_bytes = fetched.download()          # returns bytes
+with open("out.jpg", "wb") as f:          # or write to file
+    fetched.download(f)                   # takes open file object, NOT a path string
 
 # Paginated results via generators
 for detection in app.detections(limit=100):
@@ -88,6 +90,12 @@ async def main():
         await s.set(description="updated")  # explicit async setter
         await s.delete()
 
+        # Download media
+        media = await cogniac.AsyncCogniacMedia.get(cc, media_id)
+        image_bytes = await media.download()      # returns bytes
+        with open("out.jpg", "wb") as f:           # or write to file
+            await media.download(f)                # takes open file object, NOT a path string
+
         # Async generators for paginated endpoints
         apps = await cogniac.AsyncCogniacApplication.get_all(cc)
         async for detection in apps[0].detections(limit=10):
@@ -117,7 +125,8 @@ cogniac tenant                          # current tenant info
 cogniac apps list                       # list applications
 cogniac subjects list                   # list subjects
 cogniac subjects search --prefix test   # search subjects
-cogniac media get <media_id>            # get media item
+cogniac media get <media_id>            # get media metadata
+cogniac media download <media_id> -o f  # download media to file
 cogniac edgeflows list                  # list edge devices
 ```
 
