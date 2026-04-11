@@ -11,8 +11,9 @@ Published on PyPI as `cogniac`. Requires Python 3.11+.
 ## Build and Install
 
 ```bash
-uv sync                   # Development install (deps + dev tools)
-pip install cogniac       # From PyPI
+uv sync                                    # Development install (deps + dev tools)
+uv tool install --reinstall -e .           # Install cogniac CLI globally for current user
+pip install cogniac                        # From PyPI (end users)
 ```
 
 ## Testing
