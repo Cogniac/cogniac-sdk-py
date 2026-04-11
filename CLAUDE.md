@@ -6,36 +6,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python SDK for the Cogniac enterprise AI computer vision platform. Provides a client library (`cogniac` package) and CLI tools (`icogniac`, `cogupload`, `cogstats`) for interacting with the Cogniac API.
 
-Published on PyPI as `cogniac`. Supports Python 2.7 and 3.x (uses `six` for compatibility).
+Published on PyPI as `cogniac`. Requires Python 3.11+.
 
 ## Build and Install
 
 ```bash
 pip install -e .          # Development install
-python setup.py install   # Standard install
 pip install cogniac       # From PyPI
 ```
 
-No test suite, linter configuration, or CI/CD pipeline exists in this repo.
+## Testing
+
+Integration tests run against a live Cogniac tenant. Requires credentials via env vars.
+
+```bash
+COG_TENANT='w26eek85g3o1' pytest tests/ -v
+```
+
+No CI/CD pipeline exists in this repo.
 
 ## Architecture
 
-### Connection and Authentication
+### Sync and Async APIs
 
-`CogniacConnection` (cogniac.py) is the entry point for all API interaction. It manages authentication (username/password or API key), bearer token lifecycle, MFA/OTP handling, and HTTP session with automatic retry. All entity classes hold a `_cc` reference to the connection.
+The SDK provides both synchronous and asynchronous interfaces. The sync API uses `httpx.Client`; the async API uses `httpx.AsyncClient`.
+
+**Sync**: `CogniacConnection` (cogniac.py) is the entry point. Attribute assignment on entities auto-syncs to the API via `__setattr__`.
+
+**Async**: `AsyncCogniacConnection` (async_connection.py) is the async entry point. Created via `await AsyncCogniacConnection.create(...)`. Attribute updates use explicit `await entity.set(key=value)` instead of `__setattr__`.
 
 Environment variables: `COG_USER`, `COG_PASS`, `COG_API_KEY`, `COG_TENANT`, `COG_URL_PREFIX` (default `https://api.cogniac.io/`).
 
 ### Entity Classes
 
-Each API resource is a class with the same patterns:
+Each API resource has a sync class and an async counterpart:
 
-- **Factory classmethods** for construction: `get(connection, id)`, `get_all(connection)`, `create(connection, ...)`
-- **Mutable/immutable key separation**: each class defines `mutable_keys` and `immutable_keys` lists
-- **Auto-sync on set**: `__setattr__` is overridden so setting a mutable attribute immediately POSTs to the API
-- **Pagination**: generator patterns using `paging.next` from API responses
+| Sync | Async | File(s) |
+|------|-------|---------|
+| `CogniacApplication` | `AsyncCogniacApplication` | app.py / async_app.py |
+| `CogniacSubject` | `AsyncCogniacSubject` | subject.py / async_subject.py |
+| `CogniacMedia` | `AsyncCogniacMedia` | media.py / async_media.py |
+| `CogniacTenant` | `AsyncCogniacTenant` | tenant.py / async_tenant.py |
+| `CogniacUser` | `AsyncCogniacUser` | user.py / async_user.py |
+| `CogniacEdgeFlow` | `AsyncCogniacEdgeFlow` | edgeflow.py / async_edgeflow.py |
+| `CogniacNetworkCamera` | `AsyncCogniacNetworkCamera` | network_camera.py / async_network_camera.py |
+| `CogniacExternalResult` | `AsyncCogniacExternalResult` | external_results.py / async_external_results.py |
+| `CogniacOpsReview` | `AsyncCogniacOpsReview` | ops_review.py / async_ops_review.py |
 
-Entity classes: `CogniacApplication` (app.py), `CogniacSubject` (subject.py), `CogniacMedia` (media.py), `CogniacTenant` (tenant.py), `CogniacUser` (user.py), `CogniacEdgeFlow` (edgeflow.py), `CogniacNetworkCamera` (network_camera.py), `CogniacExternalResult` (external_results.py), `CogniacOpsReview` (ops_review.py).
+Common patterns (both sync and async):
+- **Factory classmethods**: `get(connection, id)`, `get_all(connection)`, `create(connection, ...)`
+- **Mutable/immutable key separation**: each class defines which attributes can be updated
+- **Pagination**: sync generators / async generators using `paging.next` from API responses
+
+Sync-only: `__setattr__` override auto-POSTs mutable attribute changes.
+Async-only: explicit `await entity.set(key=value)` method (can batch multiple fields in one call).
 
 ### Error Handling and Retry
 
@@ -44,11 +68,11 @@ Entity classes: `CogniacApplication` (app.py), `CogniacSubject` (subject.py), `C
 - `ServerError` (5xx) — exponential backoff retry (500ms multiplier, 8 attempts)
 - `ClientError` (4xx) — not retried
 
-The `@retry` decorator from the `retrying` library is used on connection methods. Connection errors are treated as retryable (same as server errors).
+The `@retry` decorator from `tenacity` is used on connection and entity methods. It works transparently on both sync and async functions. Connection errors (`httpx.ConnectError`) are treated as retryable (same as server errors).
 
 ### API URL Versioning
 
-URLs are version-prefixed (e.g., `/1/tenants`, `/21/users/current`). `CogniacConnection` strips and re-prefixes versions when constructing request URLs. When adding new endpoints, follow the existing `url_prefix + "/N/" + path` pattern.
+URLs are version-prefixed (e.g., `/1/tenants`, `/21/users/current`). Connection classes strip and re-prefix versions when constructing request URLs. When adding new endpoints, follow the existing `url_prefix + "/N/" + path` pattern.
 
 ### CLI Tools (bin/)
 
@@ -56,9 +80,11 @@ URLs are version-prefixed (e.g., `/1/tenants`, `/21/users/current`). `CogniacCon
 - `cogupload` — Parallel (24-thread) media upload to a subject with infinite retry on server errors
 - `cogstats` — EdgeFlow device statistics aggregation
 
+The CLI uses the sync API only.
+
 ### Package Exports
 
-`cogniac/__init__.py` re-exports all public classes. New entity classes must be added there to be importable as `from cogniac import ClassName`.
+`cogniac/__init__.py` re-exports all public classes (sync and async). New entity classes must be added there to be importable as `from cogniac import ClassName`.
 
 ## `cogniac` CLI Tool
 
