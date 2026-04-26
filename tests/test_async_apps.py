@@ -64,3 +64,43 @@ class TestAsyncAppRead:
                 if len(dets) > 0:
                     return
             pytest.skip("No apps with detections found")
+
+    @pytest.mark.asyncio
+    async def test_evaluation_metrics(self):
+        async with await cogniac.AsyncCogniacConnection.create() as cc:
+            apps = await cogniac.AsyncCogniacApplication.get_all(cc)
+            for app in apps:
+                metrics = await app.evaluation_metrics()
+                items = metrics.get('data', metrics) if isinstance(metrics, dict) else metrics
+                if isinstance(items, list) and len(items) > 0:
+                    m = items[0]
+                    assert 'evaluation_metric_hash' in m
+                    assert 'evaluation_metric' in m
+                    assert 'name' in m['evaluation_metric']
+                    return
+            pytest.skip("No apps with evaluation metrics configured")
+
+    @pytest.mark.asyncio
+    async def test_leaderboard(self):
+        async with await cogniac.AsyncCogniacConnection.create() as cc:
+            apps = await cogniac.AsyncCogniacApplication.get_all(cc)
+            for app in apps:
+                result = await app.leaderboard()
+                if isinstance(result, dict) and 'snapshot' in result:
+                    assert result.get('app_id') == app.application_id
+                    assert 'primary_evaluation_metric_hash' in result
+                    assert isinstance(result['snapshot'], list)
+                    return
+            pytest.skip("No app with a ready leaderboard snapshot found")
+
+    @pytest.mark.asyncio
+    async def test_leaderboard_validates_args(self):
+        async with await cogniac.AsyncCogniacConnection.create() as cc:
+            apps = await cogniac.AsyncCogniacApplication.get_all(cc)
+            app = apps[0]
+            with pytest.raises(ValueError):
+                await app.leaderboard(set_assignment='bogus')
+            with pytest.raises(ValueError):
+                await app.leaderboard(snapshot_type='bogus')
+            with pytest.raises(ValueError):
+                await app.leaderboard(eval_metrics='bogus')
