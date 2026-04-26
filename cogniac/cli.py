@@ -8,6 +8,8 @@ Read commands:
     cogniac tenants
     cogniac apps list
     cogniac apps get <application_id>
+    cogniac apps leaderboard <application_id> [--set-assignment validation|training] [--snapshot-type regular|int8] [--eval-metrics primary|all]
+    cogniac apps eval-metrics list <application_id>
     cogniac subjects list
     cogniac subjects get <subject_uid>
     cogniac subjects search [--prefix P] [--name N] [--similar S] [--ids ID ...] [--limit L]
@@ -64,6 +66,8 @@ _TABLE_COLUMNS = {
     'media_assoc': ['media_id', 'subject_uid', 'probability', 'consensus', 'updated_at'],
     'deployment': ['deployment_group_id', 'name', 'target_workflow_id', 'current_workflow_id'],
     'workflow':   ['workflow_id', 'name', 'tenant_id', 'created_at', 'created_by'],
+    'leaderboard': ['rank', 'model_id', 'model_runtime_image', 'model_image_id'],
+    'eval_metric': ['evaluation_metric_hash', 'name', 'primary', 'active', 'user_tag'],
 }
 
 
@@ -167,6 +171,62 @@ def cmd_apps_get(args):
     try:
         app = cc.get_application(args.application_id)
         output(obj_to_dict(app), args, 'app')
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_apps_leaderboard(args):
+    cc = get_connection()
+    try:
+        app = cc.get_application(args.application_id)
+        result = app.leaderboard(
+            set_assignment=args.set_assignment,
+            snapshot_type=args.snapshot_type,
+            eval_metrics=args.eval_metrics,
+        )
+        fmt = getattr(args, 'format', 'json')
+        if fmt == 'table':
+            snapshot = result.get('snapshot') if isinstance(result, dict) else None
+            if not snapshot:
+                # 202 / not-yet-available case — fall back to JSON so the message is visible
+                print(json.dumps(result, indent=2, default=str))
+                return
+            rows = []
+            for entry in snapshot:
+                rows.append({
+                    'rank': entry.get('primary_metric_rank', ''),
+                    'model_id': entry.get('model_id', ''),
+                    'model_runtime_image': entry.get('model_runtime_image', ''),
+                    'model_image_id': entry.get('model_image_id', ''),
+                })
+            output(rows, args, 'leaderboard')
+        else:
+            output(result, args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_apps_eval_metrics_list(args):
+    cc = get_connection()
+    try:
+        app = cc.get_application(args.application_id)
+        metrics = app.evaluation_metrics()
+        items = metrics.get('data', metrics) if isinstance(metrics, dict) else metrics
+        fmt = getattr(args, 'format', 'json')
+        if fmt == 'table' and isinstance(items, list):
+            rows = []
+            for m in items:
+                em = m.get('evaluation_metric', {}) if isinstance(m, dict) else {}
+                rows.append({
+                    'evaluation_metric_hash': m.get('evaluation_metric_hash', ''),
+                    'name': em.get('name', ''),
+                    'primary': m.get('primary', ''),
+                    'active': m.get('active', ''),
+                    'user_tag': m.get('user_tag', ''),
+                })
+            output(rows, args, 'eval_metric')
+        else:
+            output(items, args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -472,6 +532,27 @@ def build_parser():
     p = apps_sub.add_parser('get', help='Get a specific application')
     p.add_argument('application_id', help='Application ID')
     p.set_defaults(func=cmd_apps_get)
+
+    p = apps_sub.add_parser('leaderboard',
+                            help='Show the most recent ranked candidate-model snapshot for an application')
+    p.add_argument('application_id', help='Application ID')
+    p.add_argument('--set-assignment', dest='set_assignment',
+                   choices=['validation', 'training'], default='validation',
+                   help='Set assignment to evaluate against (default: validation)')
+    p.add_argument('--snapshot-type', dest='snapshot_type',
+                   choices=['regular', 'int8'], default='regular',
+                   help='Snapshot type (default: regular)')
+    p.add_argument('--eval-metrics', dest='eval_metrics',
+                   choices=['primary', 'all'], default='primary',
+                   help='Return primary metric only or all active metrics (default: primary)')
+    p.set_defaults(func=cmd_apps_leaderboard)
+
+    p = apps_sub.add_parser('eval-metrics',
+                            help='Evaluation metrics configured for an application')
+    em_sub = p.add_subparsers(dest='eval_metrics_command')
+    p2 = em_sub.add_parser('list', help='List active evaluation metrics for an application')
+    p2.add_argument('application_id', help='Application ID')
+    p2.set_defaults(func=cmd_apps_eval_metrics_list)
 
     # cogniac subjects
     subjects_parser = subparsers.add_parser('subjects', help='Subjects')

@@ -342,6 +342,50 @@ class AsyncCogniacApplication(object):
             url = resp.get('paging', {}).get('next')
 
     ##
+    #  leaderboard
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def leaderboard(self,
+                          set_assignment='validation',
+                          snapshot_type='regular',
+                          eval_metrics='primary'):
+        """
+        Return the most recent ranked snapshot of candidate models for this application,
+        evaluated under the application's active evaluation metrics.
+
+        set_assignment (str):  'validation' (default) or 'training'
+        snapshot_type (str):   'regular' (default) or 'int8'
+        eval_metrics (str):    'primary' (default) for the primary metric only, or 'all'
+                               for results across all active metrics
+        """
+        for arg, val, choices in [
+                ('set_assignment', set_assignment, ('validation', 'training')),
+                ('snapshot_type', snapshot_type, ('regular', 'int8')),
+                ('eval_metrics', eval_metrics, ('primary', 'all'))]:
+            if val not in choices:
+                raise ValueError("%s must be one of %s" % (arg, choices))
+
+        url = "/22/applications/%s/leaderboard/recent_consensus_snapshot" % self.application_id
+        params = {
+            'set_assignment': set_assignment,
+            'snapshot_type': snapshot_type,
+            'eval_metrics': eval_metrics,
+        }
+        resp = await self._cc._get(url, params=params)
+        return resp.json()
+
+    ##
+    #  evaluation_metrics
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def evaluation_metrics(self):
+        """
+        Return the list of active evaluation metrics for this application.
+        """
+        resp = await self._cc._get("/22/applications/%s/evaluation_metrics" % self.application_id)
+        return resp.json()
+
+    ##
     #  usage
     ##
     async def usage(self, start, end):
