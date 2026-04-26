@@ -116,6 +116,8 @@ cogniac tenant                  # current tenant info
 cogniac tenants                 # list all authorized tenants (no COG_TENANT needed)
 cogniac apps list               # list all applications
 cogniac apps get <id>           # get specific application
+cogniac apps leaderboard <id>   # ranked candidate-model snapshot: --set-assignment, --snapshot-type, --eval-metrics, --top, --full
+cogniac apps eval-metrics <id>  # active evaluation metrics for an app (table shows weighted vs unweighted)
 cogniac subjects list           # list all subjects
 cogniac subjects get <uid>      # get specific subject
 cogniac subjects search         # search: --prefix, --similar, --name, --ids, --limit
