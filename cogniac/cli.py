@@ -8,8 +8,8 @@ Read commands:
     cogniac tenants
     cogniac apps list
     cogniac apps get <application_id>
-    cogniac apps leaderboard <application_id> [--set-assignment validation|training] [--snapshot-type regular|int8] [--eval-metrics primary|all]
-    cogniac apps eval-metrics list <application_id>
+    cogniac apps leaderboard <application_id> [--set-assignment validation|training] [--snapshot-type regular|int8] [--eval-metrics primary|all] [--top N] [--full]
+    cogniac apps eval-metrics <application_id>
     cogniac subjects list
     cogniac subjects get <subject_uid>
     cogniac subjects search [--prefix P] [--name N] [--similar S] [--ids ID ...] [--limit L]
@@ -66,8 +66,8 @@ _TABLE_COLUMNS = {
     'media_assoc': ['media_id', 'subject_uid', 'probability', 'consensus', 'updated_at'],
     'deployment': ['deployment_group_id', 'name', 'target_workflow_id', 'current_workflow_id'],
     'workflow':   ['workflow_id', 'name', 'tenant_id', 'created_at', 'created_by'],
-    'leaderboard': ['rank', 'model_id', 'model_runtime_image', 'model_image_id'],
-    'eval_metric': ['evaluation_metric_hash', 'name', 'primary', 'active', 'user_tag'],
+    'leaderboard': ['rank', 'model_id', 'F1', 'precision', 'recall', 'TP', 'FP', 'FN', 'model_image_id'],
+    'eval_metric': ['evaluation_metric_hash', 'name', 'primary', 'active', 'weighted', 'user_tag'],
 }
 
 
@@ -175,6 +175,30 @@ def cmd_apps_get(args):
         error_exit("ClientError", str(e))
 
 
+def _round_metric(v):
+    """Round metric floats to 4 decimals for display; pass through non-floats."""
+    return round(v, 4) if isinstance(v, float) else v
+
+
+def _strip_subj_results(snapshot):
+    """Return a deep-ish copy of snapshot entries with per-subject breakdowns dropped."""
+    brief = []
+    for entry in snapshot:
+        e = dict(entry)
+        results = e.get('results')
+        if isinstance(results, dict):
+            new_results = {}
+            for h, v in results.items():
+                if isinstance(v, dict) and isinstance(v.get('result'), dict):
+                    inner = {k: val for k, val in v['result'].items() if k != 'subj_results'}
+                    new_results[h] = {**v, 'result': inner}
+                else:
+                    new_results[h] = v
+            e['results'] = new_results
+        brief.append(e)
+    return brief
+
+
 def cmd_apps_leaderboard(args):
     cc = get_connection()
     try:
@@ -185,22 +209,48 @@ def cmd_apps_leaderboard(args):
             eval_metrics=args.eval_metrics,
         )
         fmt = getattr(args, 'format', 'json')
+        snapshot = result.get('snapshot') if isinstance(result, dict) else None
+        primary_hash = result.get('primary_evaluation_metric_hash') if isinstance(result, dict) else None
+        top = getattr(args, 'top', None)
+
         if fmt == 'table':
-            snapshot = result.get('snapshot') if isinstance(result, dict) else None
             if not snapshot:
-                # 202 / not-yet-available case — fall back to JSON so the message is visible
+                # 202 / not-yet-available — fall back to JSON so the message is visible
                 print(json.dumps(result, indent=2, default=str))
                 return
             rows = []
             for entry in snapshot:
+                app_res = (entry.get('results', {})
+                                .get(primary_hash, {})
+                                .get('result', {})
+                                .get('app_results', {})) if primary_hash else {}
                 rows.append({
                     'rank': entry.get('primary_metric_rank', ''),
                     'model_id': entry.get('model_id', ''),
-                    'model_runtime_image': entry.get('model_runtime_image', ''),
+                    'F1': _round_metric(app_res.get('F1', '')),
+                    'precision': _round_metric(app_res.get('precision', '')),
+                    'recall': _round_metric(app_res.get('recall', '')),
+                    'TP': app_res.get('TP', ''),
+                    'FP': app_res.get('FP', ''),
+                    'FN': app_res.get('FN', ''),
                     'model_image_id': entry.get('model_image_id', ''),
                 })
+            if top:
+                rows = rows[:top]
             output(rows, args, 'leaderboard')
+            return
+
+        # JSON output: brief by default, --full for raw
+        if not args.full and snapshot:
+            brief = dict(result)
+            brief['snapshot'] = _strip_subj_results(snapshot)
+            if top:
+                brief['snapshot'] = brief['snapshot'][:top]
+            output(brief, args)
         else:
+            if top and snapshot:
+                result = dict(result)
+                result['snapshot'] = snapshot[:top]
             output(result, args)
     except ClientError as e:
         error_exit("ClientError", str(e))
@@ -217,11 +267,14 @@ def cmd_apps_eval_metrics_list(args):
             rows = []
             for m in items:
                 em = m.get('evaluation_metric', {}) if isinstance(m, dict) else {}
+                weights = em.get('subject_weights') or {}
+                weighted = bool(weights) and len(set(weights.values())) > 1
                 rows.append({
                     'evaluation_metric_hash': m.get('evaluation_metric_hash', ''),
                     'name': em.get('name', ''),
                     'primary': m.get('primary', ''),
                     'active': m.get('active', ''),
+                    'weighted': weighted,
                     'user_tag': m.get('user_tag', ''),
                 })
             output(rows, args, 'eval_metric')
@@ -545,14 +598,16 @@ def build_parser():
     p.add_argument('--eval-metrics', dest='eval_metrics',
                    choices=['primary', 'all'], default='primary',
                    help='Return primary metric only or all active metrics (default: primary)')
+    p.add_argument('--top', type=int, default=None,
+                   help='Show only the top N ranked models (default: all returned)')
+    p.add_argument('--full', action='store_true',
+                   help='Include per-subject metric breakdowns in JSON output (omitted by default)')
     p.set_defaults(func=cmd_apps_leaderboard)
 
     p = apps_sub.add_parser('eval-metrics',
-                            help='Evaluation metrics configured for an application')
-    em_sub = p.add_subparsers(dest='eval_metrics_command')
-    p2 = em_sub.add_parser('list', help='List active evaluation metrics for an application')
-    p2.add_argument('application_id', help='Application ID')
-    p2.set_defaults(func=cmd_apps_eval_metrics_list)
+                            help='List active evaluation metrics for an application')
+    p.add_argument('application_id', help='Application ID')
+    p.set_defaults(func=cmd_apps_eval_metrics_list)
 
     # cogniac subjects
     subjects_parser = subparsers.add_parser('subjects', help='Subjects')
