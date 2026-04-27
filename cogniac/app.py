@@ -416,6 +416,61 @@ class CogniacApplication(object):
                     return
             url = resp['paging'].get('next')
 
+    ##
+    #  leaderboard
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def leaderboard(self,
+                    set_assignment='validation',
+                    snapshot_type='regular',
+                    eval_metrics='primary'):
+        """
+        Return the most recent ranked snapshot of candidate models for this application,
+        evaluated under the application's active evaluation metrics.
+
+        set_assignment (str):  'validation' (default) or 'training'
+        snapshot_type (str):   'regular' (default) or 'int8'
+        eval_metrics (str):    'primary' (default) for the primary metric only, or 'all'
+                               for results across all active metrics
+
+        Returns the raw response dict including:
+            app_id, leaderboard_timestamp, snapshot (list of ranked candidate models),
+            evaluation_metrics, primary_evaluation_metric_hash,
+            consensus_release_id, consensus_release_timestamp.
+
+        If results are not yet available, returns a dict {'message': ...} from the
+        202 response (e.g., when no consensus snapshot exists yet for the metric).
+        """
+        for arg, val, choices in [
+                ('set_assignment', set_assignment, ('validation', 'training')),
+                ('snapshot_type', snapshot_type, ('regular', 'int8')),
+                ('eval_metrics', eval_metrics, ('primary', 'all'))]:
+            if val not in choices:
+                raise ValueError("%s must be one of %s" % (arg, choices))
+
+        url = "/22/applications/%s/leaderboard/recent_consensus_snapshot" % self.application_id
+        params = {
+            'set_assignment': set_assignment,
+            'snapshot_type': snapshot_type,
+            'eval_metrics': eval_metrics,
+        }
+        resp = self._cc._get(url, params=params)
+        return resp.json()
+
+    ##
+    #  evaluation_metrics
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def evaluation_metrics(self):
+        """
+        Return the list of active evaluation metrics for this application.
+
+        Each entry includes the metric hash, name, parameters (e.g., subject weights),
+        active flag, primary flag, and user_tag.
+        """
+        resp = self._cc._get("/22/applications/%s/evaluation_metrics" % self.application_id)
+        return resp.json()
+
     def accumulate_usage(self, start, end):
         """
         return single cummulative app usage record for start to end epoch times

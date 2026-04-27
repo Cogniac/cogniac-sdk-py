@@ -123,6 +123,8 @@ Agent-friendly CLI with JSON output (default) or `--format table`.
 cogniac auth                            # check credentials
 cogniac tenant                          # current tenant info
 cogniac apps list                       # list applications
+cogniac apps leaderboard <id>           # ranked candidate-model snapshot
+cogniac apps eval-metrics <id>          # active evaluation metrics
 cogniac subjects list                   # list subjects
 cogniac subjects search --prefix test   # search subjects
 cogniac media get <media_id>            # get media metadata
