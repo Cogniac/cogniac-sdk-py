@@ -256,8 +256,7 @@ class AsyncCogniacSubject(object):
         if consensus == 'None' and probability is None:
             data['uncal_prob'] = .99
 
-        if probability is not None:
-            assert(consensus == 'None')
+        if probability is not None and consensus == 'None':
             data['uncal_prob'] = probability
 
         if enable_wait_result:
