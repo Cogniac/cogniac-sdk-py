@@ -43,10 +43,16 @@ import argparse
 import json
 import sys
 import os
+from importlib.metadata import version as _pkg_version, PackageNotFoundError
 
 from tabulate import tabulate
 
 from .cogniac import CogniacConnection
+
+try:
+    __pkg_version__ = _pkg_version("cogniac")
+except PackageNotFoundError:
+    __pkg_version__ = "unknown"
 from .common import CredentialError, ServerError, ClientError, raise_errors
 
 # Attributes set by SDK internals, not from the API response
@@ -572,6 +578,9 @@ def build_parser():
                         help='Output format (default: json)')
     parser.add_argument('--tenant', default=None,
                         help='Tenant ID to use for this invocation (overrides COG_TENANT)')
+    parser.add_argument('--version', action='version',
+                        version=f'cogniac {__pkg_version__}',
+                        help='Show installed cogniac package version and exit')
     subparsers = parser.add_subparsers(dest='command')
 
     # cogniac tenant
