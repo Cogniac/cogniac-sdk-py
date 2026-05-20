@@ -107,7 +107,7 @@ The CLI uses the sync API only.
 
 ## `cogniac` CLI Tool
 
-Agent-friendly CLI. JSON output by default, `--format table` for human-readable. Auth via env vars (`COG_USER`/`COG_PASS` or `COG_API_KEY`, plus `COG_TENANT`).
+Agent-friendly CLI. JSON output by default, `--format table` for human-readable. Auth via env vars (`COG_USER`/`COG_PASS` or `COG_API_KEY`, plus `COG_TENANT`). The tenant can also be specified per-invocation with the top-level `--tenant <tenant_id>` flag, which overrides `COG_TENANT`.
 
 Read commands:
 ```

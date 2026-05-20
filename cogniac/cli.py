@@ -128,9 +128,15 @@ def error_exit(error_type, detail, exit_code=1):
     sys.exit(exit_code)
 
 
-def get_connection():
-    """Create an authenticated CogniacConnection, or exit with JSON error."""
+def get_connection(args=None):
+    """Create an authenticated CogniacConnection, or exit with JSON error.
+
+    If args has a non-empty `tenant` attribute, it overrides COG_TENANT.
+    """
+    tenant_id = getattr(args, 'tenant', None) if args is not None else None
     try:
+        if tenant_id:
+            return CogniacConnection(tenant_id=tenant_id)
         return CogniacConnection()
     except CredentialError as e:
         error_exit("CredentialError", str(e))
@@ -141,7 +147,7 @@ def get_connection():
 # -- Read command handlers --
 
 def cmd_tenant(args):
-    cc = get_connection()
+    cc = get_connection(args)
     output(obj_to_dict(cc.tenant), args, 'tenant')
 
 
@@ -161,13 +167,13 @@ def cmd_tenants(args):
 
 
 def cmd_apps_list(args):
-    cc = get_connection()
+    cc = get_connection(args)
     apps = cc.get_all_applications()
     output([obj_to_dict(a) for a in apps], args, 'app')
 
 
 def cmd_apps_get(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         app = cc.get_application(args.application_id)
         output(obj_to_dict(app), args, 'app')
@@ -200,7 +206,7 @@ def _strip_subj_results(snapshot):
 
 
 def cmd_apps_leaderboard(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         app = cc.get_application(args.application_id)
         result = app.leaderboard(
@@ -257,7 +263,7 @@ def cmd_apps_leaderboard(args):
 
 
 def cmd_apps_eval_metrics_list(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         app = cc.get_application(args.application_id)
         metrics = app.evaluation_metrics()
@@ -285,13 +291,13 @@ def cmd_apps_eval_metrics_list(args):
 
 
 def cmd_subjects_list(args):
-    cc = get_connection()
+    cc = get_connection(args)
     subjects = cc.get_all_subjects()
     output([obj_to_dict(s) for s in subjects], args, 'subject')
 
 
 def cmd_subjects_get(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         subject = cc.get_subject(args.subject_uid)
         output(obj_to_dict(subject), args, 'subject')
@@ -300,7 +306,7 @@ def cmd_subjects_get(args):
 
 
 def cmd_subjects_search(args):
-    cc = get_connection()
+    cc = get_connection(args)
     ids = args.ids if args.ids else []
     subjects = cc.search_subjects(
         ids=ids,
@@ -313,7 +319,7 @@ def cmd_subjects_search(args):
 
 
 def cmd_subjects_media(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         subject = cc.get_subject(args.subject_uid)
         associations = subject.media_associations(
@@ -344,7 +350,7 @@ def cmd_subjects_media(args):
 
 
 def cmd_media_get(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         media = cc.get_media(args.media_id)
         if args.download:
@@ -358,7 +364,7 @@ def cmd_media_get(args):
 
 
 def cmd_media_download(args, media=None):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         if media is None:
             media = cc.get_media(args.media_id)
@@ -374,7 +380,7 @@ def cmd_media_download(args, media=None):
 
 
 def cmd_media_search(args):
-    cc = get_connection()
+    cc = get_connection(args)
     results = cc.search_media(
         md5=args.md5,
         filename=args.filename,
@@ -386,13 +392,13 @@ def cmd_media_search(args):
 
 
 def cmd_edgeflows_list(args):
-    cc = get_connection()
+    cc = get_connection(args)
     edgeflows = cc.get_all_edgeflows()
     output([obj_to_dict(e) for e in edgeflows], args, 'edgeflow')
 
 
 def cmd_edgeflows_get(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         edgeflow = cc.get_edgeflow(args.edgeflow_id)
         output(obj_to_dict(edgeflow), args, 'edgeflow')
@@ -401,7 +407,7 @@ def cmd_edgeflows_get(args):
 
 
 def cmd_edgeflows_status(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         edgeflow = cc.get_edgeflow(args.edgeflow_id)
         events = edgeflow.status(
@@ -414,13 +420,13 @@ def cmd_edgeflows_status(args):
 
 
 def cmd_cameras_list(args):
-    cc = get_connection()
+    cc = get_connection(args)
     cameras = cc.get_all_cameras()
     output([obj_to_dict(c) for c in cameras], args, 'camera')
 
 
 def cmd_cameras_get(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         camera = cc.get_camera(args.network_camera_id)
         output(obj_to_dict(camera), args, 'camera')
@@ -429,7 +435,7 @@ def cmd_cameras_get(args):
 
 
 def cmd_deployments_list(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant.tenant_id}/deploymentGroups", timeout=30)
         resp.raise_for_status()
@@ -440,7 +446,7 @@ def cmd_deployments_list(args):
 
 
 def cmd_deployments_get(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         resp = cc.session.get(f"{cc.url_prefix}/1/tenants/{cc.tenant.tenant_id}/deploymentGroups", timeout=30)
         resp.raise_for_status()
@@ -454,7 +460,7 @@ def cmd_deployments_get(args):
 
 
 def cmd_workflows_get(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         resp = cc.session.get(f"{cc.url_prefix}/1/workflows/{args.workflow_id}", timeout=30)
         resp.raise_for_status()
@@ -464,7 +470,7 @@ def cmd_workflows_get(args):
 
 
 def cmd_version(args):
-    cc = get_connection()
+    cc = get_connection(args)
     output(cc.get_version(), args)
 
 
@@ -472,18 +478,21 @@ def cmd_auth(args):
     """Check that credentials are valid without making a full connection."""
     has_api_key = 'COG_API_KEY' in os.environ
     has_user_pass = 'COG_USER' in os.environ and 'COG_PASS' in os.environ
-    has_tenant = 'COG_TENANT' in os.environ
+    flag_tenant = getattr(args, 'tenant', None)
+    env_tenant = os.environ.get('COG_TENANT')
+    effective_tenant = flag_tenant or env_tenant
 
     if not has_api_key and not has_user_pass:
         error_exit("AuthError", "No credentials found. Set COG_API_KEY or COG_USER+COG_PASS environment variables.")
 
     result = {
         "auth_method": "api_key" if has_api_key else "user_pass",
-        "tenant_set": has_tenant,
+        "tenant_set": effective_tenant is not None,
     }
 
-    if has_tenant:
-        result["tenant_id"] = os.environ['COG_TENANT']
+    if effective_tenant:
+        result["tenant_id"] = effective_tenant
+        result["tenant_source"] = "flag" if flag_tenant else "env"
 
     url_prefix = os.environ.get('COG_URL_PREFIX', 'https://api.cogniac.io/')
     try:
@@ -500,7 +509,7 @@ def cmd_auth(args):
 
 def cmd_user(args):
     """Show current user info including system roles."""
-    cc = get_connection()
+    cc = get_connection(args)
     resp = cc.session.get(cc.url_prefix + '/1/users/current')
     resp.raise_for_status()
     output(resp.json(), args, 'user')
@@ -509,7 +518,7 @@ def cmd_user(args):
 # -- Write command handlers --
 
 def cmd_subjects_create(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         subject = cc.create_subject(
             name=args.name,
@@ -522,7 +531,7 @@ def cmd_subjects_create(args):
 
 
 def cmd_subjects_associate(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         subject = cc.get_subject(args.subject_uid)
         result = subject.associate_media(
@@ -535,7 +544,7 @@ def cmd_subjects_associate(args):
 
 
 def cmd_media_upload(args):
-    cc = get_connection()
+    cc = get_connection(args)
     try:
         media = cc.create_media(
             filename=args.filename,
@@ -561,6 +570,8 @@ def build_parser():
     )
     parser.add_argument('--format', choices=['json', 'table'], default='json',
                         help='Output format (default: json)')
+    parser.add_argument('--tenant', default=None,
+                        help='Tenant ID to use for this invocation (overrides COG_TENANT)')
     subparsers = parser.add_subparsers(dest='command')
 
     # cogniac tenant
