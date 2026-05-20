@@ -576,8 +576,9 @@ def build_parser():
     )
     parser.add_argument('--format', choices=['json', 'table'], default='json',
                         help='Output format (default: json)')
-    parser.add_argument('--tenant', default=None,
-                        help='Tenant ID to use for this invocation (overrides COG_TENANT)')
+    parser.add_argument('--tenant', '--tenant_id', default=None,
+                        help='Tenant ID to use for this invocation (overrides COG_TENANT). '
+                             '`--tenant_id` is an alias for ergonomics.')
     parser.add_argument('--version', action='version',
                         version=f'cogniac {__pkg_version__}',
                         help='Show installed cogniac package version and exit')
