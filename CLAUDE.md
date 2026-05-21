@@ -111,7 +111,7 @@ Agent-friendly CLI. JSON output by default, `--format table` for human-readable.
 
 Read commands:
 ```
-cogniac auth                    # check credentials and connectivity
+cogniac auth                    # check credentials; with --tenant/COG_TENANT, also verifies a session can be minted
 cogniac tenant                  # current tenant info
 cogniac tenants                 # list all authorized tenants (no COG_TENANT needed)
 cogniac apps list               # list all applications

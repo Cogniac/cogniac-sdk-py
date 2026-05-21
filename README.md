@@ -120,7 +120,7 @@ Every sync entity class has an async counterpart prefixed with `Async` (e.g., `A
 Agent-friendly CLI with JSON output (default) or `--format table`.
 
 ```bash
-cogniac auth                            # check credentials
+cogniac auth                            # check credentials (add --tenant <id> to verify a session)
 cogniac tenant                          # current tenant info
 cogniac apps list                       # list applications
 cogniac apps leaderboard <id>           # ranked candidate-model snapshot

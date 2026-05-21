@@ -481,7 +481,8 @@ def cmd_version(args):
 
 
 def cmd_auth(args):
-    """Check that credentials are valid without making a full connection."""
+    """Check credentials. If a tenant is specified (via --tenant or COG_TENANT),
+    also verify that a real session can be minted against it via /1/token."""
     has_api_key = 'COG_API_KEY' in os.environ
     has_user_pass = 'COG_USER' in os.environ and 'COG_PASS' in os.environ
     flag_tenant = getattr(args, 'tenant', None)
@@ -501,14 +502,29 @@ def cmd_auth(args):
         result["tenant_source"] = "flag" if flag_tenant else "env"
 
     url_prefix = os.environ.get('COG_URL_PREFIX', 'https://api.cogniac.io/')
+    result["url_prefix"] = url_prefix
     try:
         tenants = CogniacConnection.get_all_authorized_tenants(url_prefix=url_prefix)
-        result["valid"] = True
         result["tenant_count"] = len(tenants.get('tenants', []))
-        result["url_prefix"] = url_prefix
     except Exception as e:
         result["valid"] = False
         result["detail"] = str(e)
+        output(result, args)
+        return
+
+    if effective_tenant:
+        try:
+            CogniacConnection(tenant_id=effective_tenant, url_prefix=url_prefix)
+            result["valid"] = True
+        except Exception as e:
+            result["valid"] = False
+            result["detail"] = str(e)
+    else:
+        result["valid"] = True
+        result["note"] = (
+            "Credentials valid. List tenants with `cogniac tenants`, then pass "
+            "--tenant <id> (or set COG_TENANT) to work with the specified tenant."
+        )
 
     output(result, args)
 
@@ -750,7 +766,7 @@ def build_parser():
     p.set_defaults(func=cmd_workflows_get)
 
     # cogniac auth
-    p = subparsers.add_parser('auth', help='Check credentials and connectivity')
+    p = subparsers.add_parser('auth', help='Check credentials; if --tenant/COG_TENANT is set, verify a session can be minted')
     p.set_defaults(func=cmd_auth)
 
     # cogniac user
