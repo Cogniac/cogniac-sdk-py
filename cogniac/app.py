@@ -225,7 +225,7 @@ class CogniacApplication(object):
     #  post_feedback
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    def post_feedback(self, media_id, subjects):
+    def post_feedback(self, media_id, subjects, focus=None):
         """
         Provides feedback to the application for a given subject-media assocation; returns None.
 
@@ -237,6 +237,12 @@ class CogniacApplication(object):
             app_data_type (String):    (Optional) Type of extra app-specific data for certain app types
             app_data (Object):         (Optional) Additional, app-specific, subject-media association data
 
+        focus (dict, optional):        Focus within the media this feedback applies to. Required when
+                                       the output subject's labels carry per-ROI focus (e.g. box_detection
+                                       apps or focus-aware classifiers). Shape:
+                                       {'box': {'x0': int, 'x1': int, 'y0': int, 'y1': int}}
+                                       (and/or 'frame' for video). Note: a 'focus' key placed inside a
+                                       subject dict is NOT read by the server — it must be passed here.
         """
         # add media_id to each subject-media association dict
         # TODO: deprecate this
@@ -245,6 +251,8 @@ class CogniacApplication(object):
 
         feedback_response = {'media_id': media_id,
                              'subjects': subjects}
+        if focus is not None:
+            feedback_response['focus'] = focus
 
         self._cc._post("/21/applications/%s/feedback" % self.application_id, json=feedback_response)
 
