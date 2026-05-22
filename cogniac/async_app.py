@@ -214,7 +214,7 @@ class AsyncCogniacApplication(object):
     #  post_feedback
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    async def post_feedback(self, media_id, subjects):
+    async def post_feedback(self, media_id, subjects, focus=None):
         """
         Provide feedback to the application for a given subject-media association.
 
@@ -224,12 +224,21 @@ class AsyncCogniacApplication(object):
             result (str):         One of 'True', 'False', 'Sidelined'
             app_data_type (str):  (Optional) type of extra app-specific data
             app_data (Object):    (Optional) additional app-specific data
+
+        focus (dict, optional):   Focus within the media this feedback applies to. Required when
+                                  the output subject's labels carry per-ROI focus (e.g. box_detection
+                                  apps or focus-aware classifiers). Shape:
+                                  {'box': {'x0': int, 'x1': int, 'y0': int, 'y1': int}}
+                                  (and/or 'frame' for video). Note: a 'focus' key placed inside a
+                                  subject dict is NOT read by the server — it must be passed here.
         """
         for s in subjects:
             s['media_id'] = media_id
 
         feedback_response = {'media_id': media_id,
                              'subjects': subjects}
+        if focus is not None:
+            feedback_response['focus'] = focus
 
         await self._cc._post("/21/applications/%s/feedback" % self.application_id, json=feedback_response)
 
