@@ -167,7 +167,7 @@ def cmd_tenant(args):
 
 
 def cmd_tenants(args):
-    url_prefix = os.environ.get('COG_URL_PREFIX', 'https://api.cogniac.io/')
+    url_prefix = os.environ.get('COG_URL_PREFIX') or stored_url_prefix() or DEFAULT_COG_URL_PREFIX
     try:
         result = CogniacConnection.get_all_authorized_tenants(url_prefix=url_prefix)
         fmt = getattr(args, 'format', 'json')

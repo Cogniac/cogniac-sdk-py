@@ -100,7 +100,7 @@ def login(url_prefix=None, open_browser=True, timeout=300, out=sys.stderr):
             code = params.get('code')
             if err:
                 result['error'] = "consent page reported: %s" % err
-            elif recv_state != state:
+            elif not secrets.compare_digest(recv_state or "", state):
                 result['error'] = "state mismatch (possible CSRF); login rejected"
             elif not code:
                 result['error'] = "no credential returned by consent page"
@@ -138,9 +138,6 @@ def login(url_prefix=None, open_browser=True, timeout=300, out=sys.stderr):
 
     try:
         finished = done.wait(timeout)
-    except KeyboardInterrupt:
-        server.shutdown()
-        raise
     finally:
         server.shutdown()
 
