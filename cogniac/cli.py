@@ -28,6 +28,11 @@ Read commands:
     cogniac version
     cogniac auth
 
+Auth commands:
+    cogniac auth                    # check credentials (env vars or stored login)
+    cogniac auth login [--no-browser]   # browser login; stores per-user API key at ~/.config/cogniac/credentials
+    cogniac auth logout             # remove the stored login credential
+
 Write commands:
     cogniac subjects create <name> [--description D] [--external-id E]
     cogniac subjects associate <subject_uid> <media_id> [--consensus C]
@@ -47,7 +52,11 @@ from importlib.metadata import version as _pkg_version, PackageNotFoundError
 
 from tabulate import tabulate
 
-from .cogniac import CogniacConnection
+from .cogniac import CogniacConnection, DEFAULT_COG_URL_PREFIX
+from .credentials import (
+    stored_api_key, stored_url_prefix, save_credentials,
+    delete_credentials, credentials_path,
+)
 
 try:
     __pkg_version__ = _pkg_version("cogniac")
@@ -158,7 +167,7 @@ def cmd_tenant(args):
 
 
 def cmd_tenants(args):
-    url_prefix = os.environ.get('COG_URL_PREFIX', 'https://api.cogniac.io/')
+    url_prefix = os.environ.get('COG_URL_PREFIX') or stored_url_prefix() or DEFAULT_COG_URL_PREFIX
     try:
         result = CogniacConnection.get_all_authorized_tenants(url_prefix=url_prefix)
         fmt = getattr(args, 'format', 'json')
@@ -485,23 +494,33 @@ def cmd_auth(args):
     also verify that a real session can be minted against it via /1/token."""
     has_api_key = 'COG_API_KEY' in os.environ
     has_user_pass = 'COG_USER' in os.environ and 'COG_PASS' in os.environ
+    has_stored = stored_api_key() is not None
     flag_tenant = getattr(args, 'tenant', None)
     env_tenant = os.environ.get('COG_TENANT')
     effective_tenant = flag_tenant or env_tenant
 
-    if not has_api_key and not has_user_pass:
-        error_exit("AuthError", "No credentials found. Set COG_API_KEY or COG_USER+COG_PASS environment variables.")
+    if not has_api_key and not has_user_pass and not has_stored:
+        error_exit("AuthError", "No credentials found. Run `cogniac auth login`, or set COG_API_KEY or COG_USER+COG_PASS environment variables.")
+
+    if has_api_key:
+        auth_method = "api_key"
+    elif has_user_pass:
+        auth_method = "user_pass"
+    else:
+        auth_method = "stored_login"
 
     result = {
-        "auth_method": "api_key" if has_api_key else "user_pass",
+        "auth_method": auth_method,
         "tenant_set": effective_tenant is not None,
     }
+    if auth_method == "stored_login":
+        result["credentials_path"] = credentials_path()
 
     if effective_tenant:
         result["tenant_id"] = effective_tenant
         result["tenant_source"] = "flag" if flag_tenant else "env"
 
-    url_prefix = os.environ.get('COG_URL_PREFIX', 'https://api.cogniac.io/')
+    url_prefix = os.environ.get('COG_URL_PREFIX') or stored_url_prefix() or DEFAULT_COG_URL_PREFIX
     result["url_prefix"] = url_prefix
     try:
         tenants = CogniacConnection.get_all_authorized_tenants(url_prefix=url_prefix)
@@ -526,6 +545,59 @@ def cmd_auth(args):
             "--tenant <id> (or set COG_TENANT) to work with the specified tenant."
         )
 
+    output(result, args)
+
+
+def cmd_auth_login(args):
+    """Authenticate via the browser (loopback redirect) and store a per-user
+    API key at ~/.config/cogniac/credentials so future invocations need no
+    environment setup."""
+    import datetime
+    import socket
+    from .auth_login import login
+
+    url_prefix = os.environ.get('COG_URL_PREFIX') or stored_url_prefix() or DEFAULT_COG_URL_PREFIX
+    try:
+        api_key, url_prefix = login(url_prefix, open_browser=not getattr(args, 'no_browser', False))
+    except KeyboardInterrupt:
+        error_exit("LoginCancelled", "Login cancelled.")
+    except Exception as e:
+        error_exit("LoginError", str(e))
+
+    try:
+        hostname = socket.gethostname()
+    except Exception:
+        hostname = None
+    label = "cogniac CLI %s %s" % (hostname or "", datetime.date.today().isoformat())
+    path = save_credentials(api_key, url_prefix=url_prefix,
+                            label=label.strip(),
+                            hostname=hostname,
+                            created_at=datetime.datetime.now().isoformat(timespec='seconds'))
+
+    result = {"status": "logged_in", "credentials_path": path, "url_prefix": url_prefix}
+    # Best-effort verification that the freshly-minted key works; report identity if so.
+    try:
+        import httpx
+        resp = httpx.get(url_prefix + "/1/users/current/tenants",
+                         headers={"Authorization": "Key %s" % api_key}, timeout=30,
+                         follow_redirects=True)
+        raise_errors(resp)
+        result["tenant_count"] = len(resp.json().get('tenants', []))
+        result["verified"] = True
+    except Exception as e:
+        result["verified"] = False
+        result["detail"] = str(e)
+    output(result, args)
+
+
+def cmd_auth_logout(args):
+    """Remove the stored login credential."""
+    removed = delete_credentials()
+    result = {
+        "status": "logged_out" if removed else "not_logged_in",
+        "credentials_path": credentials_path(),
+        "removed": removed,
+    }
     output(result, args)
 
 
@@ -765,9 +837,23 @@ def build_parser():
     p.add_argument('workflow_id', help='Workflow ID')
     p.set_defaults(func=cmd_workflows_get)
 
-    # cogniac auth
-    p = subparsers.add_parser('auth', help='Check credentials; if --tenant/COG_TENANT is set, verify a session can be minted')
-    p.set_defaults(func=cmd_auth)
+    # cogniac auth [login|logout]
+    auth_parser = subparsers.add_parser(
+        'auth',
+        help='Check credentials, or log in/out. Bare `cogniac auth` checks credentials; '
+             'if --tenant/COG_TENANT is set, verifies a session can be minted')
+    # bare `cogniac auth` (no subcommand) keeps the existing credential-check behavior
+    auth_parser.set_defaults(func=cmd_auth)
+    auth_sub = auth_parser.add_subparsers(dest='auth_command')
+
+    p = auth_sub.add_parser('login',
+                            help='Log in via the browser and store a per-user API key (~/.config/cogniac/credentials)')
+    p.add_argument('--no-browser', dest='no_browser', action='store_true',
+                   help='Do not auto-open a browser; just print the login URL')
+    p.set_defaults(func=cmd_auth_login)
+
+    p = auth_sub.add_parser('logout', help='Remove the stored login credential')
+    p.set_defaults(func=cmd_auth_logout)
 
     # cogniac user
     p = subparsers.add_parser('user', help='Show current user info and system roles')

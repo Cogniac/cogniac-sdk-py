@@ -12,6 +12,7 @@ import re
 import httpx
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from .common import server_error, raise_errors, CredentialError, credential_error
+from .credentials import stored_api_key, stored_url_prefix
 
 DEFAULT_COG_URL_PREFIX = "https://api.cogniac.io/"
 
@@ -83,21 +84,27 @@ class AsyncCogniacConnection(object):
             self.password = password
         elif 'COG_API_KEY' in os.environ:
             self.api_key = os.environ['COG_API_KEY']
+        elif 'COG_USER' in os.environ and 'COG_PASS' in os.environ:
+            self.username = os.environ['COG_USER']
+            self.password = os.environ['COG_PASS']
+        elif stored_api_key() is not None:
+            # fall back to a credential stored by `cogniac auth login`
+            self.api_key = stored_api_key()
         else:
-            try:
-                self.username = os.environ['COG_USER']
-                self.password = os.environ['COG_PASS']
-            except KeyError:
-                raise Exception(
-                    "No Cogniac Credentials. Specify username and password "
-                    "or set COG_USER, COG_PASS or COG_API_KEY environment variables."
-                )
+            raise Exception(
+                "No Cogniac Credentials. Specify username and password, "
+                "set COG_USER, COG_PASS or COG_API_KEY environment variables, "
+                "or run `cogniac auth login`."
+            )
 
         # --- url prefix ---
         if url_prefix is not None:
             self.url_prefix = url_prefix
         elif 'COG_URL_PREFIX' in os.environ:
             self.url_prefix = os.environ['COG_URL_PREFIX']
+        elif stored_url_prefix() is not None:
+            # adopt the url_prefix recorded by `cogniac auth login`
+            self.url_prefix = stored_url_prefix()
         else:
             self.url_prefix = DEFAULT_COG_URL_PREFIX
 

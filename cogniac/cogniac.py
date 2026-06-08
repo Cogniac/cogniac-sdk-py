@@ -13,6 +13,7 @@ import httpx
 import sys
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from .common import server_error, raise_errors, CredentialError, credential_error
+from .credentials import stored_api_key, stored_url_prefix
 
 from .app     import CogniacApplication
 from .subject import CogniacSubject
@@ -50,9 +51,15 @@ class CogniacConnection(object):
         """
         return the list of valid tenants for the specified user credentials and url_prefix
         """
-        if 'COG_API_KEY' in os.environ:
+        api_key = os.environ.get('COG_API_KEY')
+        has_env_userpass = 'COG_USER' in os.environ and 'COG_PASS' in os.environ
+        if api_key is None and username is None and password is None and not has_env_userpass:
+            # fall back to a stored `cogniac auth login` credential
+            # (only after explicit args and COG_USER/COG_PASS env, per documented precedence)
+            api_key = stored_api_key()
+        if api_key is not None:
             resp = httpx.get(url_prefix + "/1/users/current/tenants",
-                             headers={"Authorization": "Key %s" % os.environ['COG_API_KEY']})
+                             headers={"Authorization": "Key %s" % api_key})
             raise_errors(resp)
             return resp.json()
 
@@ -62,7 +69,7 @@ class CogniacConnection(object):
                 username = os.environ['COG_USER']
                 password = os.environ['COG_PASS']
             except KeyError:
-                raise Exception("No Cogniac Credentials. Try setting COG_USER and COG_PASS environment.")
+                raise Exception("No Cogniac Credentials. Try setting COG_USER and COG_PASS environment, or run `cogniac auth login`.")
 
         resp = httpx.get(url_prefix + "/1/users/current/tenants", auth=(username, password))
         raise_errors(resp)
@@ -114,21 +121,23 @@ class CogniacConnection(object):
             self.password = password
         elif 'COG_API_KEY' in os.environ:
             self.api_key = os.environ['COG_API_KEY']
+        elif 'COG_USER' in os.environ and 'COG_PASS' in os.environ:
+            self.username = os.environ['COG_USER']
+            self.password = os.environ['COG_PASS']
+        elif stored_api_key() is not None:
+            # fall back to a credential stored by `cogniac auth login`
+            self.api_key = stored_api_key()
         else:
-            # credentials not specified, use environment variables if found
-            try:
-                username = os.environ['COG_USER']
-                password = os.environ['COG_PASS']
-                self.username = username
-                self.password = password
-            except KeyError:
-                raise Exception("No Cogniac Credentials. Specify username and password or set COG_USER, COG_PASS or COG_API_KEY environment variables.")
+            raise Exception("No Cogniac Credentials. Specify username and password, set COG_USER, COG_PASS or COG_API_KEY environment variables, or run `cogniac auth login`.")
 
         self.url_prefix = None
         if url_prefix is not None:
             self.url_prefix = url_prefix
         elif 'COG_URL_PREFIX' in os.environ:
             self.url_prefix = os.environ['COG_URL_PREFIX']
+        elif stored_url_prefix() is not None:
+            # adopt the url_prefix recorded by `cogniac auth login`
+            self.url_prefix = stored_url_prefix()
         else:
             self.url_prefix = DEFAULT_COG_URL_PREFIX
 
