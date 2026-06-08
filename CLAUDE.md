@@ -38,6 +38,17 @@ The SDK provides both synchronous and asynchronous interfaces. The sync API uses
 
 Environment variables: `COG_USER`, `COG_PASS`, `COG_API_KEY`, `COG_TENANT`, `COG_URL_PREFIX` (default `https://api.cogniac.io/`).
 
+### Credential sources and precedence
+
+Both connection classes resolve a credential in this order (first match wins):
+1. explicit `api_key` constructor argument
+2. explicit `username`+`password` constructor arguments
+3. `COG_API_KEY` env var
+4. `COG_USER`+`COG_PASS` env vars
+5. stored login at `~/.config/cogniac/credentials` (written by `cogniac auth login`)
+
+The stored credential is a tenant-less, per-user API key consumed exactly like `COG_API_KEY` (the SDK trades it for per-tenant tokens and re-mints on 401). When it is the active source, its recorded `url_prefix` is also adopted (unless `url_prefix`/`COG_URL_PREFIX` is set explicitly). `credentials.py` is the store (XDG-aware, 0600); `auth_login.py` implements the RFC 8252 browser-loopback flow (`cogniac auth login`/`auth logout` in the CLI). See CloudCore-Product#1026 — this is the Phase 1 CLI/SDK side (`state` CSRF guard, key-in-query, no backend changes; Phase 2 adds PKCE + a one-time-code exchange).
+
 ### Entity Classes
 
 Each API resource has a sync class and an async counterpart:
@@ -107,11 +118,17 @@ The CLI uses the sync API only.
 
 ## `cogniac` CLI Tool
 
-Agent-friendly CLI. JSON output by default, `--format table` for human-readable. Auth via env vars (`COG_USER`/`COG_PASS` or `COG_API_KEY`, plus `COG_TENANT`). The tenant can also be specified per-invocation with the top-level `--tenant <tenant_id>` flag, which overrides `COG_TENANT`.
+Agent-friendly CLI. JSON output by default, `--format table` for human-readable. Auth via env vars (`COG_USER`/`COG_PASS` or `COG_API_KEY`, plus `COG_TENANT`) **or** a stored login from `cogniac auth login`. The tenant can also be specified per-invocation with the top-level `--tenant <tenant_id>` flag, which overrides `COG_TENANT`.
+
+Auth commands:
+```
+cogniac auth                    # check credentials; with --tenant/COG_TENANT, also verifies a session can be minted
+cogniac auth login              # browser-loopback login; stores a per-user API key at ~/.config/cogniac/credentials (0600). --no-browser prints the URL instead of opening it
+cogniac auth logout             # remove the stored login credential
+```
 
 Read commands:
 ```
-cogniac auth                    # check credentials; with --tenant/COG_TENANT, also verifies a session can be minted
 cogniac tenant                  # current tenant info
 cogniac tenants                 # list all authorized tenants (no COG_TENANT needed)
 cogniac apps list               # list all applications
