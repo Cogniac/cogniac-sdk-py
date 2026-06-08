@@ -21,6 +21,7 @@ exchange.
 Copyright (C) 2016 Cogniac Corporation.
 """
 
+import html
 import http.server
 import secrets
 import sys
@@ -50,7 +51,7 @@ def _failure_html(reason):
 <h2>Cogniac CLI login failed.</h2>
 <p>%s</p>
 <p>Return to your terminal and try again.</p>
-</body></html>""" % urllib.parse.quote(reason or "unknown error"))
+</body></html>""" % html.escape(reason or "unknown error"))
 
 
 def web_base_url(api_url_prefix):

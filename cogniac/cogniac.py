@@ -52,8 +52,10 @@ class CogniacConnection(object):
         return the list of valid tenants for the specified user credentials and url_prefix
         """
         api_key = os.environ.get('COG_API_KEY')
-        if api_key is None and username is None and password is None:
+        has_env_userpass = 'COG_USER' in os.environ and 'COG_PASS' in os.environ
+        if api_key is None and username is None and password is None and not has_env_userpass:
             # fall back to a stored `cogniac auth login` credential
+            # (only after explicit args and COG_USER/COG_PASS env, per documented precedence)
             api_key = stored_api_key()
         if api_key is not None:
             resp = httpx.get(url_prefix + "/1/users/current/tenants",
