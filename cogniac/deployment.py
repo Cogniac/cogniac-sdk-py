@@ -113,20 +113,39 @@ class CogniacDeployment(object):
     ##
     #  history
     ##
-    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def history(self, reverse=True, limit=None, last_key=None):
         """
-        Return this deployment group's deployment history.
+        Yield this deployment group's deployment-history records, following the
+        DynamoDB last_key cursor until the full history is drained.
+
+        reverse (bool)   reverse the sorting order
+        limit (int)      yield maximum of limit records
+        last_key (str)   resume from a previous last_key cursor
 
         See GET /1/deploymentGroups/{deployment_group_id}/history.
         """
-        params = {'reverse': reverse}
-        if limit is not None:
-            params['limit'] = limit
-        if last_key is not None:
-            params['last_key'] = last_key
-        resp = self._cc._get("/1/deploymentGroups/%s/history" % self.deployment_group_id, params=params)
-        return resp.json()
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+        def get_next(last_key):
+            params = {'reverse': reverse}
+            if limit is not None:
+                params['limit'] = limit
+            if last_key is not None:
+                params['last_key'] = last_key
+            resp = self._cc._get("/1/deploymentGroups/%s/history" % self.deployment_group_id, params=params)
+            return resp.json()
+
+        count = 0
+        while True:
+            resp = get_next(last_key)
+            data = resp['data'] if isinstance(resp, dict) and 'data' in resp else resp
+            for record in data:
+                yield record
+                count += 1
+                if limit and count == limit:
+                    return
+            last_key = resp.get('last_key') if isinstance(resp, dict) else None
+            if not last_key:
+                return
 
     ##
     #  prepull_status

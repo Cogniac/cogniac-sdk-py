@@ -321,6 +321,25 @@ class CogniacMedia(object):
         self._cc._delete("/1/media/%s" % self.media_id)
         self.__dict__.clear()
 
+    ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def update(self, body):
+        """
+        Update this media item's mutable fields with the given body dict and
+        return the updated media JSON.
+
+        body (dict):  fields to update
+
+        See POST /1/media/{media_id}.
+        """
+        resp = self._cc._post("/1/media/%s" % self.media_id, json=body)
+        result = resp.json()
+        for k, v in result.items():
+            super(CogniacMedia, self).__setattr__(k, v)
+        return result
+
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def download(self, filep=None, timeout=60):
         """

@@ -127,6 +127,25 @@ class AsyncCogniacEdgeFlow(object):
         for k, v in resp.json().items():
             super(AsyncCogniacEdgeFlow, self).__setattr__(k, v)
 
+    ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def update(self, body):
+        """
+        Update this EdgeFlow's mutable fields with the given body dict and
+        return the updated EdgeFlow JSON.
+
+        body (dict):  fields to update
+
+        See POST /1/gateways/{gateway_id}.
+        """
+        resp = await self._cc._post("/1/gateways/%s" % self.gateway_id, json=body)
+        result = resp.json()
+        for k, v in result.items():
+            super(AsyncCogniacEdgeFlow, self).__setattr__(k, v)
+        return result
+
     # -------------------------------------------------------------------------
     #
     #  CloudCore API methods

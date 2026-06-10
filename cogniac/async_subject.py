@@ -200,6 +200,25 @@ class AsyncCogniacSubject(object):
         for k, v in resp.json().items():
             super(AsyncCogniacSubject, self).__setattr__(k, v)
 
+    ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def update(self, body):
+        """
+        Update this subject's mutable fields with the given body dict and
+        return the updated subject JSON.
+
+        body (dict):  fields to update
+
+        See POST /1/subjects/{subject_uid}.
+        """
+        resp = await self._cc._post("/1/subjects/%s" % self.subject_uid, json=body)
+        result = resp.json()
+        for k, v in result.items():
+            super(AsyncCogniacSubject, self).__setattr__(k, v)
+        return result
+
     def __setattr__(self, name, value):
         if name in self.immutable_keys:
             raise AttributeError("%s is immutable" % name)

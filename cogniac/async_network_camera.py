@@ -207,6 +207,25 @@ class AsyncCogniacNetworkCamera(object):
             super(AsyncCogniacNetworkCamera, self).__setattr__(k, v)
 
     ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def update(self, body):
+        """
+        Update this network camera's mutable fields with the given body dict and
+        return the updated network camera JSON.
+
+        body (dict):  fields to update
+
+        See POST /1/networkCameras/{network_camera_id}.
+        """
+        resp = await self._cc._post("/1/networkCameras/%s" % self.network_camera_id, json=body)
+        result = resp.json()
+        for k, v in result.items():
+            super(AsyncCogniacNetworkCamera, self).__setattr__(k, v)
+        return result
+
+    ##
     #  delete
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))

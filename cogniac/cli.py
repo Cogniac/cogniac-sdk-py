@@ -114,6 +114,9 @@ _SYNONYM_GROUPS = [
     {'label', 'labels'},
     {'feedback', 'feedback'},
     {'embeddings', 'embeddings'},
+    {'user', 'users'},
+    {'event', 'events'},
+    {'detection', 'detections', 'assertion', 'assertions'},
     {'media', 'media'},  # uncountable: no plural variant
 ]
 
@@ -905,7 +908,7 @@ def cmd_app_consensus_release_items(args):
     cc = get_connection(args)
     try:
         app = cc.get_application(args.application_id)
-        output(app.consensus_release_items(args.release_id, limit=args.limit, cursor=args.cursor), args)
+        output(list(app.consensus_release_items(args.release_id, limit=args.limit, cursor=args.cursor)), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -914,7 +917,7 @@ def cmd_app_consensus_release_upstream(args):
     cc = get_connection(args)
     try:
         app = cc.get_application(args.application_id)
-        output(app.consensus_release_upstream_assertions(args.release_id, limit=args.limit, cursor=args.cursor), args)
+        output(list(app.consensus_release_upstream_assertions(args.release_id, limit=args.limit, cursor=args.cursor)), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -978,7 +981,7 @@ def cmd_app_feedback_list(args):
     cc = get_connection(args)
     try:
         app = cc.get_application(args.application_id)
-        output(app.feedback(limit=args.limit), args)
+        output(list(app.feedback(limit=args.limit, cursor=getattr(args, 'cursor', None))), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -1014,7 +1017,9 @@ def cmd_app_feedback_pending(args):
     cc = get_connection(args)
     try:
         app = cc.get_application(args.application_id)
-        output(app.pending_feedback_requests(), args)
+        limit = getattr(args, 'limit', None)
+        output(app.pending_feedback_requests(limit=limit) if limit
+               else app.pending_feedback_requests(), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -1327,7 +1332,8 @@ def cmd_deployments_history(args):
     from .deployment import CogniacDeployment
     try:
         dg = CogniacDeployment.get(cc, args.deployment_group_id)
-        output(dg.history(), args)
+        output(list(dg.history(reverse=getattr(args, 'reverse', True),
+                               limit=getattr(args, 'limit', None))), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -1443,7 +1449,9 @@ def cmd_workflow_version_get(args):
 def cmd_users_list(args):
     cc = get_connection(args)
     from .user import CogniacUser
-    output(CogniacUser.get_all(cc), args)
+    output(CogniacUser.get_all(cc,
+                               id=getattr(args, 'user_query_id', None),
+                               tenant_id=getattr(args, 'user_query_tenant_id', None)), args)
 
 
 def cmd_users_get(args):
@@ -1529,7 +1537,219 @@ def cmd_tenant_import(args):
         error_exit("ClientError", str(e))
 
 
+# ---- tenant users ----
+
+def cmd_tenant_users_list(args):
+    cc = get_connection(args)
+    output(cc.tenant.users(), args)
+
+
+def cmd_tenant_users_add(args):
+    cc = get_connection(args)
+    try:
+        body = _json_body(args) or {}
+        resp = cc.session.post(cc.url_prefix + "/1/tenants/%s/users" % cc.tenant.tenant_id, json=body)
+        resp.raise_for_status()
+        output(_safe_json(resp, {"status": "added"}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_tenant_users_delete(args):
+    cc = get_connection(args)
+    try:
+        body = _json_body(args) or {}
+        resp = cc.session.request('DELETE', cc.url_prefix + "/1/tenants/%s/users" % cc.tenant.tenant_id, json=body)
+        resp.raise_for_status()
+        output(_safe_json(resp, {"status": "deleted"}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_tenant_users_role_set(args):
+    cc = get_connection(args)
+    try:
+        body = _json_body(args) or {}
+        resp = cc.session.post(cc.url_prefix + "/1/tenants/%s/users/role" % cc.tenant.tenant_id, json=body)
+        resp.raise_for_status()
+        output(_safe_json(resp, {"status": "role set"}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def _safe_json(resp, default):
+    try:
+        return resp.json()
+    except Exception:
+        return default
+
+
+# ---- application update / model list ----
+
+def cmd_apps_create(args):
+    cc = get_connection(args)
+    from .app import CogniacApplication
+    try:
+        # CogniacApplication.create takes name + application_type (+ optional
+        # fields) as keyword arguments; --body supplies them as a JSON object.
+        app = CogniacApplication.create(cc, **(_json_body(args) or {}))
+        output(obj_to_dict(app), args, 'app')
+    except (ClientError, TypeError) as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_apps_update(args):
+    cc = get_connection(args)
+    try:
+        app = cc.get_application(args.application_id)
+        output(app.update(_json_body(args) or {}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_apps_delete(args):
+    cc = get_connection(args)
+    try:
+        app = cc.get_application(args.application_id)
+        app.delete()
+        output({"application_id": args.application_id, "status": "deleted"}, args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_app_model_list(args):
+    cc = get_connection(args)
+    try:
+        app = cc.get_application(args.application_id)
+        output(list(app.models(start=args.start, end=args.end, limit=args.limit,
+                               reverse=args.reverse)), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+# ---- subject update / delete / disassociate ----
+
+def cmd_subjects_update(args):
+    cc = get_connection(args)
+    try:
+        subject = cc.get_subject(args.subject_uid)
+        output(subject.update(_json_body(args) or {}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_subjects_delete(args):
+    cc = get_connection(args)
+    try:
+        subject = cc.get_subject(args.subject_uid)
+        subject.delete()
+        output({"subject_uid": args.subject_uid, "status": "deleted"}, args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_subjects_disassociate(args):
+    cc = get_connection(args)
+    try:
+        subject = cc.get_subject(args.subject_uid)
+        subject.disassociate_media(media=args.media_id)
+        output({"subject_uid": args.subject_uid, "media_id": args.media_id, "status": "disassociated"}, args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+# ---- media update / delete / detection list ----
+
+def cmd_media_update(args):
+    cc = get_connection(args)
+    try:
+        media = cc.get_media(args.media_id)
+        output(media.update(_json_body(args) or {}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_media_delete(args):
+    cc = get_connection(args)
+    try:
+        media = cc.get_media(args.media_id)
+        media.delete()
+        output({"media_id": args.media_id, "status": "deleted"}, args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_media_detections_list(args):
+    cc = get_connection(args)
+    try:
+        media = cc.get_media(args.media_id)
+        detections = media.detections()
+        limit = getattr(args, 'limit', None)
+        if limit:
+            detections = detections[:limit]
+        output(detections, args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+# ---- camera create / update / delete ----
+
+def cmd_cameras_create(args):
+    cc = get_connection(args)
+    from .network_camera import CogniacNetworkCamera
+    try:
+        # CogniacNetworkCamera.create takes name + url (+ optional device fields)
+        # as keyword arguments; --body supplies them as a JSON object.
+        cam = CogniacNetworkCamera.create(cc, **(_json_body(args) or {}))
+        output(obj_to_dict(cam), args, 'camera')
+    except (ClientError, TypeError) as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_cameras_update(args):
+    cc = get_connection(args)
+    try:
+        cam = cc.get_camera(args.network_camera_id)
+        output(cam.update(_json_body(args) or {}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_cameras_delete(args):
+    cc = get_connection(args)
+    try:
+        cam = cc.get_camera(args.network_camera_id)
+        cam.delete()
+        output({"network_camera_id": args.network_camera_id, "status": "deleted"}, args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+# ---- edgeflow update ----
+
+def cmd_edgeflows_update(args):
+    cc = get_connection(args)
+    try:
+        ef = cc.get_edgeflow(args.edgeflow_id)
+        output(ef.update(_json_body(args) or {}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
 # -- Parser construction --
+#
+# The CLI is noun-first / verb-last and nested (max depth ~3-4). A command's
+# canonical form reads `cogniac <noun> [<sub-noun> ...] <verb>`. Every current
+# flat/hyphenated spelling is preserved as a HIDDEN deprecated alias that routes
+# to the SAME handler — registered without a `help` description so they do not
+# clutter `--help`. Synonyms / plurals / abbreviations are accepted on every
+# path token via resource_aliases() / _SYNONYM_GROUPS.
+#
+# Verb registration is factored into _add_verb(): the nested sub-noun's
+# subparsers object and its hidden flat-alias top-level subparsers object are
+# each handed the same (name, handler, arg-spec) so there is exactly one handler
+# per command and no argument-definition duplication.
+
 
 def _add_resource(subparsers, canonical, extra_aliases=None, **kwargs):
     """Register a top-level resource subparser under its canonical name plus
@@ -1542,6 +1762,63 @@ def _add_resource(subparsers, canonical, extra_aliases=None, **kwargs):
     if extra_aliases:
         aliases = sorted(set(aliases) | set(extra_aliases))
     return subparsers.add_parser(canonical, aliases=aliases, **kwargs)
+
+
+# An argument spec is a tuple: (args_tuple, kwargs_dict) passed straight to
+# add_argument(). Reused across the nested verb and its flat-alias twin.
+def _apply_args(parser, arg_specs):
+    for names, opts in (arg_specs or []):
+        parser.add_argument(*names, **opts)
+
+
+def _add_verb(sub, name, handler, arg_specs=None, help='', aliases=None, hidden=False):
+    """Add a verb subparser to a subparsers object and bind its handler.
+
+    sub:        an add_subparsers() object
+    name:       canonical verb name (e.g. 'get', 'list', 'release')
+    handler:    cmd_* function bound via set_defaults(func=...)
+    arg_specs:  list of (names_tuple, add_argument_kwargs) applied in order
+    aliases:    additional verb-level alias spellings (hidden, deprecated)
+    hidden:     when True, omit this verb from --help (still accepted/parsed)
+    """
+    # NOTE: argparse renders a literal "==SUPPRESS==" line for a subparser added
+    # with help=SUPPRESS when it also has aliases. To keep deprecated forms out
+    # of --help cleanly, we simply omit the `help` kwarg entirely: argparse then
+    # accepts/parses the command but emits no description line for it.
+    kw = {'aliases': list(aliases)} if aliases else {}
+    if not hidden and help:
+        kw['help'] = help
+    p = sub.add_parser(name, **kw)
+    _apply_args(p, arg_specs)
+    p.set_defaults(func=handler)
+    return p
+
+
+def _flat_alias(subparsers, canonical, registrar, extra_aliases=None):
+    """Register a HIDDEN top-level flat-alias parser for a compound nested path
+    (e.g. `application-feedback` -> `application feedback`). The flat parser's
+    verbs are registered by `registrar`, which is the SAME callable used to
+    populate the nested sub-noun — so both share one handler + arg-spec set.
+
+    The flat parser is added without a `help` kwarg so it stays out of --help
+    (see _add_verb for why help=SUPPRESS is avoided).
+
+    canonical:   the hyphenated flat spelling (e.g. 'application-feedback')
+    registrar:   fn(subparsers_obj, hidden=True) that adds the verbs
+    """
+    aliases = resource_aliases(canonical)
+    if extra_aliases:
+        aliases = sorted(set(aliases) | set(extra_aliases))
+    p = subparsers.add_parser(canonical, aliases=aliases)
+    sub = p.add_subparsers(dest=canonical.replace('-', '_') + '_command')
+    registrar(sub, hidden=True)
+    return p
+
+
+# Common reusable argument specs ------------------------------------------------
+
+_BODY = [(('--body',), {'help': 'JSON request body'})]
+_BODY_REQ = [(('--body',), {'required': True, 'help': 'JSON request body'})]
 
 
 def build_parser():
@@ -1559,602 +1836,735 @@ def build_parser():
                         help='Show installed cogniac package version and exit')
     subparsers = parser.add_subparsers(dest='command')
 
-    # cogniac tenant
-    p = subparsers.add_parser('tenant', help='Show current tenant info')
-    p.set_defaults(func=cmd_tenant)
-
-    # cogniac tenants
-    p = subparsers.add_parser('tenants', help='List all authorized tenants')
-    p.set_defaults(func=cmd_tenants)
-
-    # cogniac version
-    p = subparsers.add_parser('version', help='Show API version info')
-    p.set_defaults(func=cmd_version)
-
-    # cogniac application (aliases: apps, applications, app)
-    apps_parser = _add_resource(subparsers, 'application', help='Applications')
-    apps_sub = apps_parser.add_subparsers(dest='apps_command')
-
-    p = apps_sub.add_parser('list', help='List all applications')
-    p.set_defaults(func=cmd_apps_list)
-
-    p = apps_sub.add_parser('get', help='Get a specific application')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_apps_get)
-
-    p = apps_sub.add_parser('leaderboard',
-                            help='Show the most recent ranked candidate-model snapshot for an application')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--set-assignment', dest='set_assignment',
-                   choices=['validation', 'training'], default='validation',
-                   help='Set assignment to evaluate against (default: validation)')
-    p.add_argument('--snapshot-type', dest='snapshot_type',
-                   choices=['regular', 'int8'], default='regular',
-                   help='Snapshot type (default: regular)')
-    p.add_argument('--eval-metrics', dest='eval_metrics',
-                   choices=['primary', 'all'], default='primary',
-                   help='Return primary metric only or all active metrics (default: primary)')
-    p.add_argument('--top', type=int, default=None,
-                   help='Show only the top N ranked models (default: all returned)')
-    p.add_argument('--full', action='store_true',
-                   help='Include per-subject metric breakdowns in JSON output (omitted by default)')
-    p.set_defaults(func=cmd_apps_leaderboard)
-
-    # NOTE: 'eval-metrics' kept for backward compatibility; 'evaluation-metrics' is the documented name.
-    p = apps_sub.add_parser('eval-metrics',
-                            help='List active evaluation metrics for an application')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_apps_eval_metrics_list)
-
-    p = apps_sub.add_parser('evaluation-metrics',
-                            help='List active evaluation metrics for an application')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_evaluation_metrics)
-
-    p = apps_sub.add_parser('classify', help='Run inference on an uploaded image')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('image_file', help='Local image file path')
-    p.set_defaults(func=cmd_app_classify)
-
-    p = apps_sub.add_parser('donate-model', help='Donate a model from a source application into this one')
-    p.add_argument('application_id', help='Target application ID')
-    p.add_argument('source_application_id', help='Source application ID')
-    p.set_defaults(func=cmd_app_donate_model)
-
-    p = apps_sub.add_parser('export-meraki', help="Export the application's active model to Meraki")
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_export_meraki)
-
-    p = apps_sub.add_parser('replay', help='Show replay status for an application')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_replay_status)
-
-    p = apps_sub.add_parser('replay-start', help='Start an application replay')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--body', help='JSON replay request body')
-    p.set_defaults(func=cmd_app_replay_start)
-
-    p = apps_sub.add_parser('replay-stop', help='Stop an in-progress application replay')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_replay_stop)
-
-    p = apps_sub.add_parser('detections-pending', help='Get count of pending detections')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_detections_pending)
-
-    p = apps_sub.add_parser('event-types', help='List available event types for an application')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_event_types)
-
-    p = apps_sub.add_parser('events', help='Query application events')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--start', type=float, help='Filter timestamp > start')
-    p.add_argument('--end', type=float, help='Filter timestamp < end')
-    p.add_argument('--limit', type=int, default=None, help='Max results')
-    p.add_argument('--cursor', help='Pagination cursor')
-    p.add_argument('--reverse', action='store_true', help='Sort high to low')
-    p.add_argument('--event-types', dest='event_types', nargs='+', help='Filter by event type name(s)')
-    p.set_defaults(func=cmd_app_events)
-
-    p = apps_sub.add_parser('consensus-history', help='Consensus history for output subjects')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--start', type=float, help='Filter timestamp > start')
-    p.add_argument('--end', type=float, help='Filter timestamp < end')
-    p.add_argument('--limit', type=int, default=None, help='Max history points')
-    p.add_argument('--subject-uid', dest='subject_uid', help='Restrict to a single subject')
-    p.set_defaults(func=cmd_app_consensus_history)
-
-    p = apps_sub.add_parser('performance-current', help='Current-validation performance series')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--start', type=float, help='Filter timestamp > start')
-    p.add_argument('--end', type=float, help='Filter timestamp < end')
-    p.add_argument('--limit', type=int, default=None, help='Max results')
-    p.add_argument('--reverse', action='store_true', help='Sort high to low')
-    p.add_argument('--duration', type=int, help='Window duration shorthand (start = end - duration)')
-    p.set_defaults(func=cmd_app_performance_current)
-
-    p = apps_sub.add_parser('performance-release', help='Release-validation performance series')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--start', type=float, help='Filter timestamp > start')
-    p.add_argument('--end', type=float, help='Filter timestamp < end')
-    p.add_argument('--limit', type=int, default=None, help='Max results')
-    p.add_argument('--reverse', action='store_true', help='Sort high to low')
-    p.add_argument('--duration', type=int, help='Window duration shorthand (start = end - duration)')
-    p.set_defaults(func=cmd_app_performance_release)
-
-    p = apps_sub.add_parser('performance-new-random', help='New-random test-set performance')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--limit', type=int, default=None, help='Max results')
-    p.set_defaults(func=cmd_app_performance_new_random)
-
-    p = apps_sub.add_parser('push', help='Push-notification subscription status for a device')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--device-id', dest='device_id', help='Device ID')
-    p.add_argument('--app-bundle-id', dest='app_bundle_id', help='App bundle ID')
-    p.add_argument('--event-type', dest='event_type', help='Event type')
-    p.set_defaults(func=cmd_app_push)
-
-    p = apps_sub.add_parser('push-subscribe', help='Subscribe/unsubscribe a device to app events')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--device-id', dest='device_id', help='Device ID')
-    p.add_argument('--app-bundle-id', dest='app_bundle_id', help='iOS app bundle ID')
-    p.add_argument('--event-type', dest='event_type', help='Event type')
-    p.add_argument('--unsubscribe', action='store_true', help='Unsubscribe instead of subscribe')
-    p.set_defaults(func=cmd_app_push_subscribe)
-
-    p = apps_sub.add_parser('consensus-releases', help='List consensus releases')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_consensus_releases)
-
-    p = apps_sub.add_parser('consensus-release', help='Get one consensus release')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('release_id', help='Consensus release ID')
-    p.set_defaults(func=cmd_app_consensus_release)
-
-    p = apps_sub.add_parser('consensus-release-items', help='Download consensus release items')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('release_id', help='Consensus release ID')
-    p.add_argument('--limit', type=int, default=None, help='Max results')
-    p.add_argument('--cursor', help='Pagination cursor')
-    p.set_defaults(func=cmd_app_consensus_release_items)
-
-    p = apps_sub.add_parser('consensus-release-upstream', help='Consensus release upstream assertions')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('release_id', help='Consensus release ID')
-    p.add_argument('--limit', type=int, default=None, help='Max results')
-    p.add_argument('--cursor', help='Pagination cursor')
-    p.set_defaults(func=cmd_app_consensus_release_upstream)
-
-    p = apps_sub.add_parser('consensus-detection-releases', help='Combined consensus detections')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_consensus_detection_releases)
-
-    p = apps_sub.add_parser('evaluation-metrics-create', help='Create an evaluation metric')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--body', help='JSON evaluation-metric body')
-    p.set_defaults(func=cmd_app_eval_metrics_create)
-
-    p = apps_sub.add_parser('evaluation-metrics-register-default', help='Register default evaluation metric')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_eval_metrics_register_default)
-
-    p = apps_sub.add_parser('evaluation-metrics-copy', help='Copy evaluation metrics to a target app')
-    p.add_argument('source_application_id', help='Source application ID')
-    p.add_argument('target_application_id', help='Target application ID')
-    p.set_defaults(func=cmd_app_eval_metrics_copy)
-
-    # cogniac application-types
-    at_parser = _add_resource(subparsers, 'application-types', help='Application types')
-    at_sub = at_parser.add_subparsers(dest='application_types_command')
-    p = at_sub.add_parser('list', help='List application types')
-    p.set_defaults(func=cmd_app_types_list)
-    p = at_sub.add_parser('get', help='Get a specific application type')
-    p.add_argument('application_type', help='Application type name')
-    p.set_defaults(func=cmd_app_types_get)
-
-    # cogniac application-feedback
-    af_parser = _add_resource(subparsers, 'application-feedback', help='Application feedback')
-    af_sub = af_parser.add_subparsers(dest='application_feedback_command')
-    p = af_sub.add_parser('list', help='List feedback items')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--limit', type=int, default=10, help='Max results (default: 10)')
-    p.add_argument('--cursor', help='Pagination cursor')
-    p.set_defaults(func=cmd_app_feedback_list)
-    p = af_sub.add_parser('get', help='Get a feedback request')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('feedback_id', help='Feedback request ID')
-    p.set_defaults(func=cmd_app_feedback_get)
-    p = af_sub.add_parser('create', help='Submit feedback')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--body', help='JSON feedback body')
-    p.set_defaults(func=cmd_app_feedback_create)
-    p = af_sub.add_parser('count', help='Count feedback requests pending for the user')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_feedback_count)
-    p = af_sub.add_parser('pending', help='List pending feedback requests')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_feedback_pending)
-    p = af_sub.add_parser('purge', help='Purge feedback requests')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_feedback_purge)
-    p = af_sub.add_parser('purge-requests', help='Delete all feedback requests')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_feedback_purge_requests)
-
-    # cogniac application-model
-    am_parser = _add_resource(subparsers, 'application-model', help='Application model performance')
-    am_sub = am_parser.add_subparsers(dest='application_model_command')
-    p = am_sub.add_parser('performance', help='Per-subject model performance')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--subject-uid', dest='subject_uid', required=True, help='Output subject UID (required)')
-    p.add_argument('--consensus', help='Consensus filter')
-    p.add_argument('--reverse', action='store_true', help='Sort high to low')
-    p.add_argument('--probability-lower', dest='probability_lower', type=float, help='Min probability')
-    p.add_argument('--probability-upper', dest='probability_upper', type=float, help='Max probability')
-    p.add_argument('--limit', type=int, default=None, help='Max results')
-    p.add_argument('--cursor', help='Pagination cursor')
-    p.add_argument('--set-assignment', dest='set_assignment', choices=['validation', 'training'],
-                   default='validation', help='Set assignment (default: validation)')
-    p.set_defaults(func=cmd_app_model_performance)
-
-    # cogniac application-build
-    ab_parser = _add_resource(subparsers, 'application-build', help='Integration builds')
-    ab_sub = ab_parser.add_subparsers(dest='application_build_command')
-    p = ab_sub.add_parser('list', help='List builds')
-    p.add_argument('--app', help='Filter to one application ID')
-    p.set_defaults(func=cmd_build_list)
-    p = ab_sub.add_parser('get', help='Get a build')
-    p.add_argument('build_id', help='Build ID')
-    p.set_defaults(func=cmd_build_get)
-    p = ab_sub.add_parser('create', help='Create a build')
-    p.add_argument('--body', help='JSON build request body')
-    p.set_defaults(func=cmd_build_create)
-    p = ab_sub.add_parser('delete', help='Delete a build')
-    p.add_argument('build_id', help='Build ID')
-    p.set_defaults(func=cmd_build_delete)
-    p = ab_sub.add_parser('names', help='List build names')
-    p.set_defaults(func=cmd_build_names)
-    p = ab_sub.add_parser('lint', help='Lint (flake8) a local file')
-    p.add_argument('file', help='Local file to lint')
-    p.set_defaults(func=cmd_build_lint)
-
-    # cogniac application-label
-    al_parser = _add_resource(subparsers, 'application-label', help='Labeling embedding models')
-    al_sub = al_parser.add_subparsers(dest='application_label_command')
-    p = al_sub.add_parser('image-encoder', help='Get an image embedding from the encoder model')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--body', help='JSON embedding request body')
-    p.set_defaults(func=cmd_app_label_image_encoder)
-    p = al_sub.add_parser('image-encoder-upload', help='Get an embedding for an uploaded image reference')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('file', help='File reference')
-    p.add_argument('--body', help='JSON embedding request body (overrides file)')
-    p.set_defaults(func=cmd_app_label_image_encoder_upload)
-    p = al_sub.add_parser('mask-decoder', help='Download the mask decoder model (ONNX)')
-    p.add_argument('application_id', help='Application ID')
-    p.add_argument('--output', '-o', help='Output file path')
-    p.set_defaults(func=cmd_app_label_mask_decoder)
-    p = al_sub.add_parser('mask-decoder-head', help='Mask decoder model metadata (HEAD)')
-    p.add_argument('application_id', help='Application ID')
-    p.set_defaults(func=cmd_app_label_mask_decoder_head)
-
-    # cogniac media-embeddings <media_id>
-    me_parser = _add_resource(subparsers, 'media-embeddings', help='Media embeddings')
-    me_parser.add_argument('media_id', help='Media ID')
-    me_parser.add_argument('--model-id', dest='model_id', help='Model ID')
-    me_parser.set_defaults(func=cmd_media_embeddings)
-
-    # cogniac subject (aliases: subjects)
-    subjects_parser = _add_resource(subparsers, 'subject', help='Subjects')
-    subjects_sub = subjects_parser.add_subparsers(dest='subjects_command')
-
-    p = subjects_sub.add_parser('list', help='List all subjects')
-    p.set_defaults(func=cmd_subjects_list)
-
-    p = subjects_sub.add_parser('get', help='Get a specific subject')
-    p.add_argument('subject_uid', help='Subject UID')
-    p.set_defaults(func=cmd_subjects_get)
-
-    p = subjects_sub.add_parser('media', help='List media associations for a subject')
-    p.add_argument('subject_uid', help='Subject UID')
-    p.add_argument('--limit', type=int, default=100, help='Max results (default: 100)')
-    p.add_argument('--consensus', choices=['True', 'False', 'Sidelined'], help='Filter by consensus')
-    p.add_argument('--probability-lower', dest='probability_lower', type=float, help='Min probability')
-    p.add_argument('--probability-upper', dest='probability_upper', type=float, help='Max probability')
-    p.set_defaults(func=cmd_subjects_media)
-
-    p = subjects_sub.add_parser('search', help='Search subjects')
-    p.add_argument('--prefix', help='Subject name prefix')
-    p.add_argument('--similar', help='Semantically similar text')
-    p.add_argument('--name', help='Exact subject name')
-    p.add_argument('--ids', nargs='+', help='Subject UIDs to retrieve')
-    p.add_argument('--limit', type=int, default=10, help='Max results (default: 10)')
-    p.set_defaults(func=cmd_subjects_search)
-
-    p = subjects_sub.add_parser('create', help='Create a new subject')
-    p.add_argument('name', help='Subject name')
-    p.add_argument('--description', help='Subject description')
-    p.add_argument('--external-id', dest='external_id', help='External ID')
-    p.set_defaults(func=cmd_subjects_create)
-
-    p = subjects_sub.add_parser('associate', help='Associate media with a subject')
-    p.add_argument('subject_uid', help='Subject UID')
-    p.add_argument('media_id', help='Media ID to associate')
-    p.add_argument('--consensus', default='None',
-                   choices=['True', 'False', 'Sidelined', 'None'],
-                   help='Consensus label (default: None)')
-    p.set_defaults(func=cmd_subjects_associate)
-
-    p = subjects_sub.add_parser('consensus-history', help='Consensus history for a subject')
-    p.add_argument('subject_uid', help='Subject UID')
-    p.add_argument('--start', type=float, help='Filter timestamp > start')
-    p.add_argument('--end', type=float, help='Filter timestamp < end')
-    p.add_argument('--limit', type=int, default=None, help='Max history points')
-    p.set_defaults(func=cmd_subjects_consensus_history)
-
-    p = subjects_sub.add_parser('detections', help='Subject detections for a given media item')
-    p.add_argument('subject_uid', help='Subject UID')
-    p.add_argument('media_id', help='Media ID (required by the API)')
-    p.set_defaults(func=cmd_subjects_detections)
-
-    # cogniac media
-    media_parser = _add_resource(subparsers, 'media', help='Media')
-    media_sub = media_parser.add_subparsers(dest='media_command')
-
-    p = media_sub.add_parser('get', help='Get a specific media item')
-    p.add_argument('media_id', help='Media ID')
-    p.add_argument('--download', '-d', nargs='?', const=True, default=False,
-                   metavar='FILE', help='Download media file (optionally specify output path)')
-    p.set_defaults(func=cmd_media_get)
-
-    p = media_sub.add_parser('download', help='Download media file to disk')
-    p.add_argument('media_id', help='Media ID')
-    p.add_argument('--output', '-o', help='Output file path (default: <media_id>.<ext>)')
-    p.set_defaults(func=cmd_media_download)
-
-    p = media_sub.add_parser('search', help='Search media')
-    p.add_argument('--md5', help='MD5 hash')
-    p.add_argument('--filename', help='Filename')
-    p.add_argument('--external-media-id', dest='external_media_id', help='External media ID')
-    p.add_argument('--domain-unit', dest='domain_unit', help='Domain unit')
-    p.add_argument('--limit', type=int, default=None, help='Max results')
-    p.set_defaults(func=cmd_media_search)
-
-    p = media_sub.add_parser('upload', help='Upload a media file')
-    p.add_argument('filename', help='Local file path or URL')
-    p.add_argument('--subject-uid', dest='subject_uid', help='Subject UID to associate after upload')
-    p.add_argument('--external-media-id', dest='external_media_id', help='External media ID')
-    p.add_argument('--domain-unit', dest='domain_unit', help='Domain unit')
-    p.add_argument('--meta-tags', dest='meta_tags', nargs='+', help='Metadata tags')
-    p.set_defaults(func=cmd_media_upload)
-
-    p = media_sub.add_parser('share', help='Share a media item')
-    p.add_argument('media_id', help='Media ID')
-    p.add_argument('--body', help='JSON share request body')
-    p.set_defaults(func=cmd_media_share)
-
-    p = media_sub.add_parser('create-detection', help='Submit detection(s) for a media item')
-    p.add_argument('media_id', help='Media ID')
-    p.add_argument('--body', help='JSON detections request body')
-    p.set_defaults(func=cmd_media_create_detection)
-
-    # cogniac edgeflow (aliases: edgeflows, gateway, gateways)
-    ef_parser = _add_resource(subparsers, 'edgeflow', help='EdgeFlow devices')
-    ef_sub = ef_parser.add_subparsers(dest='edgeflows_command')
-
-    p = ef_sub.add_parser('list', help='List all EdgeFlows')
-    p.set_defaults(func=cmd_edgeflows_list)
-
-    p = ef_sub.add_parser('get', help='Get a specific EdgeFlow')
-    p.add_argument('edgeflow_id', help='EdgeFlow ID (gateway_id)')
-    p.set_defaults(func=cmd_edgeflows_get)
-
-    p = ef_sub.add_parser('status', help='Get EdgeFlow status events')
-    p.add_argument('edgeflow_id', help='EdgeFlow ID (gateway_id)')
-    p.add_argument('--subsystem', help='Filter by subsystem (e.g. model_detections, ifconfig, ping)')
-    p.add_argument('--limit', type=int, default=10, help='Max results (default: 10)')
-    p.set_defaults(func=cmd_edgeflows_status)
-
-    p = ef_sub.add_parser('create', help='Create a new EdgeFlow')
-    p.add_argument('--body', help='JSON gateway request body')
-    p.set_defaults(func=cmd_edgeflows_create)
-
-    p = ef_sub.add_parser('delete', help='Delete an EdgeFlow')
-    p.add_argument('edgeflow_id', help='EdgeFlow ID (gateway_id)')
-    p.set_defaults(func=cmd_edgeflows_delete)
-
-    # cogniac edgeflow-certificate
-    efc_parser = _add_resource(subparsers, 'edgeflow-certificate', help='EdgeFlow TLS certificate')
-    efc_sub = efc_parser.add_subparsers(dest='edgeflow_certificate_command')
-    p = efc_sub.add_parser('get', help='Get an EdgeFlow TLS certificate')
-    p.add_argument('edgeflow_id', help='EdgeFlow ID (gateway_id)')
-    p.set_defaults(func=cmd_edgeflow_cert_get)
-    p = efc_sub.add_parser('set', help='Set an EdgeFlow TLS certificate')
-    p.add_argument('edgeflow_id', help='EdgeFlow ID (gateway_id)')
-    p.add_argument('--body', help='JSON certificate/key body')
-    p.set_defaults(func=cmd_edgeflow_cert_set)
-    p = efc_sub.add_parser('replace', help='Replace an EdgeFlow TLS certificate (PUT)')
-    p.add_argument('edgeflow_id', help='EdgeFlow ID (gateway_id)')
-    p.add_argument('--body', help='JSON certificate/key body')
-    p.set_defaults(func=cmd_edgeflow_cert_replace)
-    p = efc_sub.add_parser('delete', help='Delete an EdgeFlow TLS certificate')
-    p.add_argument('edgeflow_id', help='EdgeFlow ID (gateway_id)')
-    p.set_defaults(func=cmd_edgeflow_cert_delete)
-
-    # cogniac edgeflow-metrics
-    efm_parser = _add_resource(subparsers, 'edgeflow-metrics', help='EdgeFlow metrics')
-    efm_sub = efm_parser.add_subparsers(dest='edgeflow_metrics_command')
-    p = efm_sub.add_parser('list', help='List metrics (all, or for one EdgeFlow)')
-    p.add_argument('edgeflow_id', nargs='?', help='Optional EdgeFlow ID to filter to')
-    p.set_defaults(func=cmd_edgeflow_metrics_list)
-
-    # cogniac edgeflow-metric-names
-    efmn_parser = _add_resource(subparsers, 'edgeflow-metric-names', help='EdgeFlow metric names')
-    efmn_parser.set_defaults(func=cmd_edgeflow_metric_names)
-
-    # cogniac camera (aliases: cameras)
-    cam_parser = _add_resource(subparsers, 'camera', help='Network cameras')
-    cam_sub = cam_parser.add_subparsers(dest='cameras_command')
-
-    p = cam_sub.add_parser('list', help='List all cameras')
-    p.set_defaults(func=cmd_cameras_list)
-
-    p = cam_sub.add_parser('get', help='Get a specific camera')
-    p.add_argument('network_camera_id', help='Network camera ID')
-    p.set_defaults(func=cmd_cameras_get)
-
-    p = cam_sub.add_parser('genicam', help='Get the GenICam XML for a camera')
-    p.add_argument('network_camera_id', help='Network camera ID')
-    p.set_defaults(func=cmd_cameras_genicam)
-
-    # cogniac deployment (aliases: deployments, deployment-group, deployment-groups)
-    dep_parser = _add_resource(subparsers, 'deployment', help='Deployment groups',
-                               extra_aliases=['deployment-group', 'deployment-groups'])
-    dep_sub = dep_parser.add_subparsers(dest='deployments_command')
-
-    p = dep_sub.add_parser('list', help='List all deployment groups')
-    p.set_defaults(func=cmd_deployments_list)
-
-    p = dep_sub.add_parser('get', help='Get a specific deployment group')
-    p.add_argument('deployment_group_id', help='Deployment group ID')
-    p.set_defaults(func=cmd_deployments_get)
-
-    p = dep_sub.add_parser('create', help='Create a deployment group')
-    p.add_argument('--body', help='JSON deployment-group body')
-    p.set_defaults(func=cmd_deployments_create)
-
-    p = dep_sub.add_parser('delete', help='Delete a deployment group')
-    p.add_argument('deployment_group_id', help='Deployment group ID')
-    p.set_defaults(func=cmd_deployments_delete)
-
-    p = dep_sub.add_parser('edgeflows', help='List EdgeFlows assigned to a deployment group')
-    p.add_argument('deployment_group_id', help='Deployment group ID')
-    p.set_defaults(func=cmd_deployments_edgeflows)
-
-    p = dep_sub.add_parser('history', help='Deployment history for a group')
-    p.add_argument('deployment_group_id', help='Deployment group ID')
-    p.set_defaults(func=cmd_deployments_history)
-
-    p = dep_sub.add_parser('prepull', help='Prepull status for a deployment group')
-    p.add_argument('deployment_group_id', help='Deployment group ID')
-    p.set_defaults(func=cmd_deployments_prepull_status)
-
-    p = dep_sub.add_parser('prepull-start', help='Start prepull of a workflow on a deployment group')
-    p.add_argument('deployment_group_id', help='Deployment group ID')
-    p.add_argument('workflow_id', help='Workflow ID')
-    p.set_defaults(func=cmd_deployments_prepull_start)
-
-    p = dep_sub.add_parser('target-workflow', help='Set the target workflow on a deployment group')
-    p.add_argument('deployment_group_id', help='Deployment group ID')
-    p.add_argument('workflow_id', help='Workflow ID')
-    p.set_defaults(func=cmd_deployments_target_workflow)
-
-    # cogniac deployment-capacity
-    dc_parser = _add_resource(subparsers, 'deployment-capacity', help='Deployment capacity classes')
-    dc_sub = dc_parser.add_subparsers(dest='deployment_capacity_command')
-    p = dc_sub.add_parser('list', help='List deployment capacity classes')
-    p.set_defaults(func=cmd_deployment_capacity_list)
-    p = dc_sub.add_parser('get', help='Get a deployment capacity class')
-    p.add_argument('capacity_class_id', help='Capacity class ID')
-    p.set_defaults(func=cmd_deployment_capacity_get)
-
-    # cogniac workflow (aliases: workflows)
-    wf_parser = _add_resource(subparsers, 'workflow', help='Workflows')
-    wf_sub = wf_parser.add_subparsers(dest='workflows_command')
-
-    p = wf_sub.add_parser('list', help='List all workflows')
-    p.set_defaults(func=cmd_workflows_list)
-
-    p = wf_sub.add_parser('get', help='Get a specific workflow')
-    p.add_argument('workflow_id', help='Workflow ID')
-    p.set_defaults(func=cmd_workflows_get)
-
-    p = wf_sub.add_parser('create', help='Create a workflow')
-    p.add_argument('--body', help='JSON workflow body')
-    p.set_defaults(func=cmd_workflows_create)
-
-    p = wf_sub.add_parser('delete', help='Delete a workflow')
-    p.add_argument('workflow_id', help='Workflow ID')
-    p.set_defaults(func=cmd_workflows_delete)
-
-    p = wf_sub.add_parser('edgeflow-targets', help='Supported EdgeFlow model targets')
-    p.add_argument('edgeflow_model', nargs='?', help='Optional EdgeFlow model for detailed target info')
-    p.set_defaults(func=cmd_workflows_edgeflow_targets)
-
-    # cogniac workflow-version
-    wv_parser = _add_resource(subparsers, 'workflow-version', help='Workflow versions')
-    wv_sub = wv_parser.add_subparsers(dest='workflow_version_command')
-    p = wv_sub.add_parser('new', help='Create a new workflow version')
-    p.add_argument('workflow_id', help='Base workflow ID')
-    p.add_argument('--body', required=True, help='JSON workflow-version body')
-    p.set_defaults(func=cmd_workflow_version_new)
-    p = wv_sub.add_parser('get', help='Get a specific workflow version')
-    p.add_argument('base_id', help='Base workflow ID')
-    p.add_argument('version', help='Version')
-    p.set_defaults(func=cmd_workflow_version_get)
-
-    # cogniac users (no singular alias — 'user' is the existing leaf)
-    users_parser = subparsers.add_parser('users', help='Users')
-    users_sub = users_parser.add_subparsers(dest='users_command')
-    p = users_sub.add_parser('list', help='List/query users')
-    p.set_defaults(func=cmd_users_list)
-    p = users_sub.add_parser('get', help='Get a specific user')
-    p.add_argument('user_id', help='User ID')
-    p.set_defaults(func=cmd_users_get)
-    p = users_sub.add_parser('delete', help='Delete a user')
-    p.add_argument('user_id', help='User ID')
-    p.set_defaults(func=cmd_users_delete)
-    p = users_sub.add_parser('tenants', help='List the tenants a user belongs to')
-    p.add_argument('user_id', help='User ID (or "current")')
-    p.set_defaults(func=cmd_users_tenants)
-    p = users_sub.add_parser('request-password-reset', help='Request a password-reset email')
-    p.add_argument('email', help='Email or user ID')
-    p.set_defaults(func=cmd_users_request_password_reset)
-
-    # cogniac tenant-edgeflow-certificate
-    tec_parser = _add_resource(subparsers, 'tenant-edgeflow-certificate',
-                               help='Tenant-wide EdgeFlow TLS certificate')
-    tec_sub = tec_parser.add_subparsers(dest='tenant_edgeflow_certificate_command')
-    p = tec_sub.add_parser('get', help='Get the tenant EdgeFlow certificate')
-    p.set_defaults(func=cmd_tenant_ef_cert_get)
-    p = tec_sub.add_parser('set', help='Set the tenant EdgeFlow certificate')
-    p.add_argument('--body', help='JSON certificate/key body')
-    p.set_defaults(func=cmd_tenant_ef_cert_set)
-    p = tec_sub.add_parser('delete', help='Delete the tenant EdgeFlow certificate')
-    p.set_defaults(func=cmd_tenant_ef_cert_delete)
-
-    # cogniac tenant-meraki-key
-    tmk_parser = _add_resource(subparsers, 'tenant-meraki-key', help='Tenant Meraki API key')
-    tmk_sub = tmk_parser.add_subparsers(dest='tenant_meraki_key_command')
-    p = tmk_sub.add_parser('delete', help='Delete the tenant Meraki API key')
-    p.set_defaults(func=cmd_tenant_meraki_key_delete)
-
-    # cogniac tenant-import <cloudcore_import_key>
-    ti_parser = _add_resource(subparsers, 'tenant-import', help='CloudCore import payload')
-    ti_parser.add_argument('cloudcore_import_key', help='CloudCore import key')
-    ti_parser.set_defaults(func=cmd_tenant_import)
-
-    # cogniac auth [login|logout]
+    # ======================================================================
+    #  auth
+    # ======================================================================
     auth_parser = subparsers.add_parser(
         'auth',
         help='Check credentials, or log in/out. Bare `cogniac auth` checks credentials; '
              'if --tenant/COG_TENANT is set, verifies a session can be minted')
-    # bare `cogniac auth` (no subcommand) keeps the existing credential-check behavior
     auth_parser.set_defaults(func=cmd_auth)
     auth_sub = auth_parser.add_subparsers(dest='auth_command')
+    _add_verb(auth_sub, 'login', cmd_auth_login,
+              [(('--no-browser',), {'dest': 'no_browser', 'action': 'store_true',
+                                    'help': 'Do not auto-open a browser; just print the login URL'})],
+              help='Log in via the browser and store a per-user API key')
+    _add_verb(auth_sub, 'logout', cmd_auth_logout, help='Remove the stored login credential')
 
-    p = auth_sub.add_parser('login',
-                            help='Log in via the browser and store a per-user API key (~/.config/cogniac/credentials)')
-    p.add_argument('--no-browser', dest='no_browser', action='store_true',
-                   help='Do not auto-open a browser; just print the login URL')
-    p.set_defaults(func=cmd_auth_login)
+    # ======================================================================
+    #  tenant
+    # ======================================================================
+    tenant_parser = _add_resource(subparsers, 'tenant', help='Tenant')
+    tenant_sub = tenant_parser.add_subparsers(dest='tenant_command')
+    # bare `cogniac tenant` keeps the historical current-tenant behavior
+    tenant_parser.set_defaults(func=cmd_tenant)
+    _add_verb(tenant_sub, 'get', cmd_tenant, help='Show the current tenant')
+    _add_verb(tenant_sub, 'list', cmd_tenants, help='List tenants you are authorized for')
 
-    p = auth_sub.add_parser('logout', help='Remove the stored login credential')
-    p.set_defaults(func=cmd_auth_logout)
+    # tenant edgeflow certificate (type-less) + tenant edgeflow ... nested noun
+    ten_ef_parser = tenant_sub.add_parser('edgeflow', help='Tenant-wide EdgeFlow settings')
+    ten_ef_sub = ten_ef_parser.add_subparsers(dest='tenant_edgeflow_command')
+    ten_cert_parser = ten_ef_sub.add_parser('certificate', aliases=resource_aliases('certificate'),
+                                            help='Tenant-wide EdgeFlow TLS certificate')
+    ten_cert_sub = ten_cert_parser.add_subparsers(dest='tenant_edgeflow_certificate_command')
 
-    # cogniac user
-    p = subparsers.add_parser('user', help='Show current user info and system roles')
-    p.set_defaults(func=cmd_user)
+    def _reg_tenant_cert(sub, hidden=False):
+        _add_verb(sub, 'get', cmd_tenant_ef_cert_get, help='Get the tenant EdgeFlow certificate', hidden=hidden)
+        _add_verb(sub, 'set', cmd_tenant_ef_cert_set, _BODY, help='Set the tenant EdgeFlow certificate', hidden=hidden)
+        _add_verb(sub, 'delete', cmd_tenant_ef_cert_delete, help='Delete the tenant EdgeFlow certificate', hidden=hidden)
+    _reg_tenant_cert(ten_cert_sub)
+
+    # tenant meraki-api-key delete
+    ten_meraki_parser = tenant_sub.add_parser('meraki-api-key', help='Tenant Meraki API key')
+    ten_meraki_sub = ten_meraki_parser.add_subparsers(dest='tenant_meraki_command')
+    _add_verb(ten_meraki_sub, 'delete', cmd_tenant_meraki_key_delete, help="Delete the tenant's Meraki API key")
+
+    # tenant cloudcore-import-key get <cloudcore-import-key>
+    ten_import_parser = tenant_sub.add_parser('cloudcore-import-key', help='CloudCore import payload')
+    ten_import_sub = ten_import_parser.add_subparsers(dest='tenant_import_command')
+    _add_verb(ten_import_sub, 'get', cmd_tenant_import,
+              [(('cloudcore_import_key',), {'help': 'CloudCore import key'})],
+              help='Fetch a CloudCore import payload by import key')
+
+    # tenant user list/add/delete + tenant user role set
+    ten_user_parser = tenant_sub.add_parser('user', aliases=resource_aliases('user'), help='Tenant users')
+    ten_user_sub = ten_user_parser.add_subparsers(dest='tenant_user_command')
+    _add_verb(ten_user_sub, 'list', cmd_tenant_users_list, help="List the tenant's users")
+    _add_verb(ten_user_sub, 'add', cmd_tenant_users_add, _BODY_REQ, help='Add a user to the tenant')
+    _add_verb(ten_user_sub, 'delete', cmd_tenant_users_delete, _BODY_REQ, help='Remove a user from the tenant')
+    ten_user_role_parser = ten_user_sub.add_parser('role', help='Tenant user role')
+    ten_user_role_sub = ten_user_role_parser.add_subparsers(dest='tenant_user_role_command')
+    _add_verb(ten_user_role_sub, 'set', cmd_tenant_users_role_set, _BODY_REQ, help="Set a tenant user's role")
+
+    # hidden flat aliases for the old tenant-* spellings
+    _flat_alias(subparsers, 'tenant-edgeflow-certificate', _reg_tenant_cert)
+
+    def _reg_tenant_meraki(sub, hidden=False):
+        _add_verb(sub, 'delete', cmd_tenant_meraki_key_delete, help='Delete the tenant Meraki API key', hidden=hidden)
+    _flat_alias(subparsers, 'tenant-meraki-key', _reg_tenant_meraki)
+
+    ti_parser = _add_resource(subparsers, 'tenant-import')
+    ti_parser.add_argument('cloudcore_import_key', help='CloudCore import key')
+    ti_parser.set_defaults(func=cmd_tenant_import)
+
+    # ======================================================================
+    #  application
+    # ======================================================================
+    apps_parser = _add_resource(subparsers, 'application', help='Applications')
+    apps_sub = apps_parser.add_subparsers(dest='apps_command')
+
+    _LEADERBOARD_ARGS = [
+        (('application_id',), {'help': 'Application ID'}),
+        (('--set-assignment',), {'dest': 'set_assignment', 'choices': ['validation', 'training'],
+                                 'default': 'validation', 'help': 'Set assignment (default: validation)'}),
+        (('--snapshot-type',), {'dest': 'snapshot_type', 'choices': ['regular', 'int8'],
+                                'default': 'regular', 'help': 'Snapshot type (default: regular)'}),
+        (('--eval-metrics',), {'dest': 'eval_metrics', 'choices': ['primary', 'all'],
+                               'default': 'primary', 'help': 'Primary metric only or all (default: primary)'}),
+        (('--top',), {'type': int, 'default': None, 'help': 'Show only the top N ranked models'}),
+        (('--full',), {'action': 'store_true', 'help': 'Include per-subject metric breakdowns'}),
+    ]
+    _EVENTS_ARGS = [
+        (('application_id',), {'help': 'Application ID'}),
+        (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
+        (('--end',), {'type': float, 'help': 'Filter timestamp < end'}),
+        (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
+        (('--cursor',), {'help': 'Pagination cursor'}),
+        (('--reverse',), {'action': 'store_true', 'help': 'Sort high to low'}),
+        (('--event-type',), {'dest': 'event_types', 'nargs': '+', 'help': 'Filter by event type name(s)'}),
+    ]
+
+    _add_verb(apps_sub, 'list', cmd_apps_list, help='List the tenant applications')
+    _add_verb(apps_sub, 'get', cmd_apps_get,
+              [(('application_id',), {'help': 'Application ID'})], help='Show one application')
+    _add_verb(apps_sub, 'create', cmd_apps_create, _BODY_REQ, help='Create an application')
+    _add_verb(apps_sub, 'update', cmd_apps_update,
+              [(('application_id',), {'help': 'Application ID'})] + _BODY_REQ, help="Update an application's fields")
+    _add_verb(apps_sub, 'delete', cmd_apps_delete,
+              [(('application_id',), {'help': 'Application ID'})], help='Delete an application')
+    _add_verb(apps_sub, 'leaderboard', cmd_apps_leaderboard, _LEADERBOARD_ARGS,
+              help='Ranked candidate-model snapshot for the app')
+    _add_verb(apps_sub, 'classify', cmd_app_classify,
+              [(('application_id',), {'help': 'Application ID'}),
+               (('image_file',), {'help': 'Local image file path'})],
+              help="Run the app's model on a local image")
+    _add_verb(apps_sub, 'events', cmd_app_events, _EVENTS_ARGS, help="Stream the app's events")
+    # hidden flat verb alias for the old plural 'eval-metrics' spelling lives below
+
+    # application event types
+    # NOTE: 'events' (plural) is the streaming verb above, so the event-types
+    # sub-noun keeps only the singular 'event' spelling to avoid a collision.
+    app_event_parser = apps_sub.add_parser('event', help='Application event types')
+    app_event_sub = app_event_parser.add_subparsers(dest='app_event_command')
+    _add_verb(app_event_sub, 'types', cmd_app_event_types,
+              [(('application_id',), {'help': 'Application ID'})], help="List the event types the app emits")
+
+    # application detections pending
+    def _reg_app_detections(sub, hidden=False):
+        _add_verb(sub, 'pending', cmd_app_detections_pending,
+                  [(('application_id',), {'help': 'Application ID'})],
+                  help='Count of pending (unreviewed) detections', hidden=hidden)
+    app_det_parser = apps_sub.add_parser('detections', aliases=resource_aliases('detections'),
+                                         help='Application detections')
+    app_det_sub = app_det_parser.add_subparsers(dest='app_detections_command')
+    _reg_app_detections(app_det_sub)
+
+    # application replay (sibling verbs)
+    def _reg_app_replay(sub, hidden=False):
+        _add_verb(sub, 'status', cmd_app_replay_status,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--timeout',), {'type': float, 'help': 'Client-side long-poll timeout (seconds)'})],
+                  help='Show replay status (long-polls)', hidden=hidden)
+        _add_verb(sub, 'start', cmd_app_replay_start,
+                  [(('application_id',), {'help': 'Application ID'})] + _BODY,
+                  help='Start an application replay', hidden=hidden)
+        _add_verb(sub, 'stop', cmd_app_replay_stop,
+                  [(('application_id',), {'help': 'Application ID'})],
+                  help='Stop an in-progress replay', hidden=hidden)
+    app_replay_parser = apps_sub.add_parser('replay', help='Application replay')
+    app_replay_sub = app_replay_parser.add_subparsers(dest='app_replay_command')
+    _reg_app_replay(app_replay_sub)
+
+    # application performance (sibling verbs)
+    _PERF_ARGS = [
+        (('application_id',), {'help': 'Application ID'}),
+        (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
+        (('--end',), {'type': float, 'help': 'Filter timestamp < end'}),
+        (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
+        (('--reverse',), {'action': 'store_true', 'help': 'Sort high to low'}),
+        (('--duration',), {'type': int, 'help': 'Window duration shorthand (start = end - duration)'}),
+    ]
+
+    def _reg_app_performance(sub, hidden=False):
+        _add_verb(sub, 'current', cmd_app_performance_current, _PERF_ARGS,
+                  help='Current-validation performance series', hidden=hidden)
+        _add_verb(sub, 'release', cmd_app_performance_release, _PERF_ARGS,
+                  help='Release-validation performance series', hidden=hidden)
+        _add_verb(sub, 'new-random', cmd_app_performance_new_random,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--limit',), {'type': int, 'default': None, 'help': 'Max results'})],
+                  help='New-random test-set performance', hidden=hidden)
+    app_perf_parser = apps_sub.add_parser('performance', aliases=resource_aliases('performance'),
+                                          help='Application performance')
+    app_perf_sub = app_perf_parser.add_subparsers(dest='app_performance_command')
+    _reg_app_performance(app_perf_sub)
+
+    # application push
+    def _reg_app_push(sub, hidden=False):
+        _add_verb(sub, 'get', cmd_app_push,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--device-id',), {'dest': 'device_id', 'help': 'Device ID'}),
+                   (('--app-bundle-id',), {'dest': 'app_bundle_id', 'help': 'App bundle ID'}),
+                   (('--event-type',), {'dest': 'event_type', 'help': 'Event type'})],
+                  help="Get a device's push-subscription status", hidden=hidden)
+        _add_verb(sub, 'subscribe', cmd_app_push_subscribe,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--device-id',), {'dest': 'device_id', 'help': 'Device ID'}),
+                   (('--app-bundle-id',), {'dest': 'app_bundle_id', 'help': 'App bundle ID'}),
+                   (('--event-type',), {'dest': 'event_type', 'help': 'Event type'}),
+                   (('--unsubscribe',), {'action': 'store_true', 'help': 'Unsubscribe instead of subscribe'})],
+                  help='(Un)subscribe a device to app events', hidden=hidden)
+    app_push_parser = apps_sub.add_parser('push', help='Application push notifications')
+    app_push_sub = app_push_parser.add_subparsers(dest='app_push_command')
+    _reg_app_push(app_push_sub)
+
+    # application feedback
+    def _reg_app_feedback(sub, hidden=False):
+        _add_verb(sub, 'list', cmd_app_feedback_list,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
+                   (('--cursor',), {'help': 'Pagination cursor'})],
+                  help="Stream the app's feedback requests", hidden=hidden)
+        _add_verb(sub, 'get', cmd_app_feedback_get,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('feedback_id',), {'help': 'Feedback request ID'})],
+                  help='Show one feedback request', hidden=hidden)
+        _add_verb(sub, 'create', cmd_app_feedback_create,
+                  [(('application_id',), {'help': 'Application ID'})] + _BODY_REQ,
+                  help='Create a feedback request', hidden=hidden)
+        _add_verb(sub, 'count', cmd_app_feedback_count,
+                  [(('application_id',), {'help': 'Application ID'})],
+                  help='Count outstanding feedback requests', hidden=hidden)
+        _add_verb(sub, 'pending', cmd_app_feedback_pending,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--limit',), {'type': int, 'default': None, 'help': 'Max results'})],
+                  help='Pending feedback requests for the caller', hidden=hidden)
+        _add_verb(sub, 'purge', cmd_app_feedback_purge,
+                  [(('application_id',), {'help': 'Application ID'})],
+                  help="Purge the app's feedback", hidden=hidden)
+        _add_verb(sub, 'purge-requests', cmd_app_feedback_purge_requests,
+                  [(('application_id',), {'help': 'Application ID'})],
+                  help='Delete all feedback requests', hidden=hidden)
+    app_feedback_parser = apps_sub.add_parser('feedback', help='Application feedback')
+    app_feedback_sub = app_feedback_parser.add_subparsers(dest='app_feedback_command')
+    _reg_app_feedback(app_feedback_sub)
+    _flat_alias(subparsers, 'application-feedback', _reg_app_feedback)
+
+    # application model
+    def _reg_app_model(sub, hidden=False):
+        _add_verb(sub, 'performance', cmd_app_model_performance,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--subject-uid',), {'dest': 'subject_uid', 'required': True, 'help': 'Output subject UID (required)'}),
+                   (('--consensus',), {'help': 'Consensus filter'}),
+                   (('--reverse',), {'action': 'store_true', 'help': 'Sort high to low'}),
+                   (('--probability-lower',), {'dest': 'probability_lower', 'type': float, 'help': 'Min probability'}),
+                   (('--probability-upper',), {'dest': 'probability_upper', 'type': float, 'help': 'Max probability'}),
+                   (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
+                   (('--cursor',), {'help': 'Pagination cursor'}),
+                   (('--set-assignment',), {'dest': 'set_assignment', 'choices': ['validation', 'training'],
+                                            'default': 'validation', 'help': 'Set assignment (default: validation)'})],
+                  help='Per-subject model performance (may report results-pending)', hidden=hidden)
+        _add_verb(sub, 'donate', cmd_app_donate_model,
+                  [(('application_id',), {'help': 'Target application ID'}),
+                   (('--source',), {'dest': 'source_application_id', 'required': True, 'help': 'Source application ID'})],
+                  help='Donate a model from a source application into this one', hidden=hidden)
+        _add_verb(sub, 'meraki-export', cmd_app_export_meraki,
+                  [(('application_id',), {'help': 'Application ID'})],
+                  help="Export the app's model to Meraki", hidden=hidden)
+        _add_verb(sub, 'list', cmd_app_model_list,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
+                   (('--end',), {'type': float, 'help': 'Filter timestamp < end'}),
+                   (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
+                   (('--reverse',), {'action': 'store_true', 'help': 'Sort high to low'})],
+                  help="Stream the app's models", hidden=hidden)
+    app_model_parser = apps_sub.add_parser('model', aliases=resource_aliases('model'), help='Application model')
+    app_model_sub = app_model_parser.add_subparsers(dest='app_model_command')
+    _reg_app_model(app_model_sub)
+    _flat_alias(subparsers, 'application-model', _reg_app_model)
+
+    # application consensus
+    def _reg_consensus_release(sub, hidden=False):
+        _add_verb(sub, 'list', cmd_app_consensus_releases,
+                  [(('application_id',), {'help': 'Application ID'})],
+                  help="List the app's consensus releases", hidden=hidden)
+        _add_verb(sub, 'get', cmd_app_consensus_release,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('release_id',), {'help': 'Consensus release ID'})],
+                  help='Show one consensus release', hidden=hidden)
+        _add_verb(sub, 'items', cmd_app_consensus_release_items,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('release_id',), {'help': 'Consensus release ID'}),
+                   (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
+                   (('--cursor',), {'help': 'Pagination cursor'})],
+                  help="Stream a release's consensus items", hidden=hidden)
+        _add_verb(sub, 'upstream', cmd_app_consensus_release_upstream,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('release_id',), {'help': 'Consensus release ID'}),
+                   (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
+                   (('--cursor',), {'help': 'Pagination cursor'})],
+                  help="Stream a release's upstream assertions", hidden=hidden)
+        _add_verb(sub, 'detections', cmd_app_consensus_detection_releases,
+                  [(('application_id',), {'help': 'Application ID'})],
+                  help='Combined consensus detections for output subjects', hidden=hidden)
+
+    _CONSENSUS_HISTORY_ARGS = [
+        (('application_id',), {'help': 'Application ID'}),
+        (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
+        (('--end',), {'type': float, 'help': 'Filter timestamp < end'}),
+        (('--limit',), {'type': int, 'default': None, 'help': 'Max history points'}),
+        (('--subject-uid',), {'dest': 'subject_uid', 'help': 'Restrict to a single subject'}),
+    ]
+    app_consensus_parser = apps_sub.add_parser('consensus', help='Application consensus')
+    app_consensus_sub = app_consensus_parser.add_subparsers(dest='app_consensus_command')
+    _add_verb(app_consensus_sub, 'history', cmd_app_consensus_history, _CONSENSUS_HISTORY_ARGS,
+              help='Consensus-change history for the app')
+    app_cons_rel_parser = app_consensus_sub.add_parser('release', help='Consensus releases')
+    app_cons_rel_sub = app_cons_rel_parser.add_subparsers(dest='app_consensus_release_command')
+    _reg_consensus_release(app_cons_rel_sub)
+
+    # hidden flat aliases for the historical `application consensus-*` verbs
+    _add_verb(apps_sub, 'consensus-history', cmd_app_consensus_history, _CONSENSUS_HISTORY_ARGS, hidden=True)
+    _add_verb(apps_sub, 'consensus-releases', cmd_app_consensus_releases,
+              [(('application_id',), {'help': 'Application ID'})], hidden=True)
+    _add_verb(apps_sub, 'consensus-release', cmd_app_consensus_release,
+              [(('application_id',), {'help': 'Application ID'}),
+               (('release_id',), {'help': 'Consensus release ID'})], hidden=True)
+    _add_verb(apps_sub, 'consensus-release-items', cmd_app_consensus_release_items,
+              [(('application_id',), {'help': 'Application ID'}),
+               (('release_id',), {'help': 'Consensus release ID'}),
+               (('--limit',), {'type': int, 'default': None}), (('--cursor',), {})], hidden=True)
+    _add_verb(apps_sub, 'consensus-release-upstream', cmd_app_consensus_release_upstream,
+              [(('application_id',), {'help': 'Application ID'}),
+               (('release_id',), {'help': 'Consensus release ID'}),
+               (('--limit',), {'type': int, 'default': None}), (('--cursor',), {})], hidden=True)
+    _add_verb(apps_sub, 'consensus-detection-releases', cmd_app_consensus_detection_releases,
+              [(('application_id',), {'help': 'Application ID'})], hidden=True)
+
+    # hidden flat-verb aliases for the historical `application <verb>` spellings
+    _APP_ID = [(('application_id',), {'help': 'Application ID'})]
+    _add_verb(apps_sub, 'eval-metrics', cmd_app_evaluation_metrics, _APP_ID, hidden=True)
+    _add_verb(apps_sub, 'evaluation-metrics', cmd_app_evaluation_metrics, _APP_ID, hidden=True)
+    _add_verb(apps_sub, 'evaluation-metrics-create', cmd_app_eval_metrics_create, _APP_ID + _BODY, hidden=True)
+    _add_verb(apps_sub, 'evaluation-metrics-register-default', cmd_app_eval_metrics_register_default,
+              _APP_ID + _BODY, hidden=True)
+    _add_verb(apps_sub, 'evaluation-metrics-copy', cmd_app_eval_metrics_copy,
+              [(('source_application_id',), {'help': 'Source application ID'}),
+               (('target_application_id',), {'help': 'Target application ID'})], hidden=True)
+    _add_verb(apps_sub, 'donate-model', cmd_app_donate_model,
+              [(('application_id',), {'help': 'Target application ID'}),
+               (('source_application_id',), {'help': 'Source application ID'})], hidden=True)
+    _add_verb(apps_sub, 'export-meraki', cmd_app_export_meraki, _APP_ID, hidden=True)
+    # bare `replay` / `push` are superseded by `replay status` / `push get`
+    # (those tokens are now sub-nouns); the hyphenated variants below have no clash.
+    _add_verb(apps_sub, 'replay-start', cmd_app_replay_start, _APP_ID + _BODY, hidden=True)
+    _add_verb(apps_sub, 'replay-stop', cmd_app_replay_stop, _APP_ID, hidden=True)
+    _add_verb(apps_sub, 'detections-pending', cmd_app_detections_pending, _APP_ID, hidden=True)
+    _add_verb(apps_sub, 'event-types', cmd_app_event_types, _APP_ID, hidden=True)
+    _add_verb(apps_sub, 'performance-current', cmd_app_performance_current, _PERF_ARGS, hidden=True)
+    _add_verb(apps_sub, 'performance-release', cmd_app_performance_release, _PERF_ARGS, hidden=True)
+    _add_verb(apps_sub, 'performance-new-random', cmd_app_performance_new_random,
+              _APP_ID + [(('--limit',), {'type': int, 'default': None})], hidden=True)
+    _add_verb(apps_sub, 'push-subscribe', cmd_app_push_subscribe,
+              _APP_ID + [(('--device-id',), {'dest': 'device_id'}),
+                         (('--app-bundle-id',), {'dest': 'app_bundle_id'}),
+                         (('--event-type',), {'dest': 'event_type'}),
+                         (('--unsubscribe',), {'action': 'store_true'})], hidden=True)
+
+    # application evaluation metrics
+    def _reg_eval_metrics(sub, hidden=False):
+        _add_verb(sub, 'get', cmd_app_evaluation_metrics,
+                  [(('application_id',), {'help': 'Application ID'})],
+                  help="Show the app's active evaluation metrics", hidden=hidden)
+        _add_verb(sub, 'create', cmd_app_eval_metrics_create,
+                  [(('application_id',), {'help': 'Application ID'})] + _BODY_REQ,
+                  help='Create an evaluation metric', hidden=hidden)
+        _add_verb(sub, 'register-default', cmd_app_eval_metrics_register_default,
+                  [(('application_id',), {'help': 'Application ID'})] + _BODY,
+                  help='Register the default evaluation metric', hidden=hidden)
+        _add_verb(sub, 'copy', cmd_app_eval_metrics_copy,
+                  [(('--source',), {'dest': 'source_application_id', 'required': True, 'help': 'Source application ID'}),
+                   (('--target',), {'dest': 'target_application_id', 'required': True, 'help': 'Target application ID'})],
+                  help='Copy evaluation metrics between apps', hidden=hidden)
+    app_eval_parser = apps_sub.add_parser('evaluation', aliases=resource_aliases('evaluation'),
+                                          help='Application evaluation metrics')
+    app_eval_sub = app_eval_parser.add_subparsers(dest='app_evaluation_command')
+    app_eval_metrics_parser = app_eval_sub.add_parser('metrics', aliases=resource_aliases('metrics'),
+                                                      help='Evaluation metrics')
+    app_eval_metrics_sub = app_eval_metrics_parser.add_subparsers(dest='app_evaluation_metrics_command')
+    _reg_eval_metrics(app_eval_metrics_sub)
+
+    # application labeling models (atomic terminal nouns)
+    app_lie_parser = apps_sub.add_parser('label-image-encoder-model', help='Labeling image-encoder model')
+    app_lie_sub = app_lie_parser.add_subparsers(dest='app_label_image_encoder_command')
+    _add_verb(app_lie_sub, 'download', cmd_app_label_image_encoder,
+              [(('application_id',), {'help': 'Application ID'})] + _BODY,
+              help='Download the labeling image-encoder model')
+    app_lmd_parser = apps_sub.add_parser('label-mask-decoder-model', help='Labeling mask-decoder model')
+    app_lmd_sub = app_lmd_parser.add_subparsers(dest='app_label_mask_decoder_command')
+    _add_verb(app_lmd_sub, 'download', cmd_app_label_mask_decoder,
+              [(('application_id',), {'help': 'Application ID'}),
+               (('--output', '-o'), {'help': 'Output file path'})],
+              help='Download the labeling mask-decoder model')
+
+    # application type
+    def _reg_app_type(sub, hidden=False):
+        _add_verb(sub, 'list', cmd_app_types_list,
+                  [(('--production',), {'action': 'store_true', 'help': 'Only production types'}),
+                   (('--deprecated',), {'action': 'store_true', 'help': 'Only deprecated types'}),
+                   (('--reverse',), {'action': 'store_true', 'help': 'Reverse sort order'})],
+                  help='List available application types', hidden=hidden)
+        _add_verb(sub, 'get', cmd_app_types_get,
+                  [(('application_type',), {'help': 'Application type name'})],
+                  help='Show one application type', hidden=hidden)
+    app_type_parser = apps_sub.add_parser('type', aliases=resource_aliases('type'), help='Application types')
+    app_type_sub = app_type_parser.add_subparsers(dest='app_type_command')
+    _reg_app_type(app_type_sub)
+    _flat_alias(subparsers, 'application-type', _reg_app_type)
+
+    # application build (nested noun)
+    def _reg_app_build(sub, hidden=False):
+        _add_verb(sub, 'list', cmd_build_list,
+                  [(('--app',), {'help': 'Filter to one application ID'})],
+                  help='List builds (optionally for one app)', hidden=hidden)
+        _add_verb(sub, 'get', cmd_build_get,
+                  [(('application_build_id',), {'help': 'Build ID'})], help='Show one build', hidden=hidden)
+        _add_verb(sub, 'create', cmd_build_create, _BODY_REQ, help='Create a build', hidden=hidden)
+        _add_verb(sub, 'delete', cmd_build_delete,
+                  [(('application_build_id',), {'help': 'Build ID'})], help='Delete a build', hidden=hidden)
+        _add_verb(sub, 'lint', cmd_build_lint,
+                  [(('filename',), {'help': 'Local build definition file to lint'})],
+                  help='Lint a build definition file', hidden=hidden)
+        names_parser = (sub.add_parser('names') if hidden
+                        else sub.add_parser('names', help='Build names'))
+        names_sub = names_parser.add_subparsers(dest='app_build_names_command')
+        _add_verb(names_sub, 'list', cmd_build_names, help='List build names', hidden=hidden)
+    app_build_parser = apps_sub.add_parser('build', aliases=resource_aliases('build'), help='Application builds')
+    app_build_sub = app_build_parser.add_subparsers(dest='app_build_command')
+    _reg_app_build(app_build_sub)
+    _flat_alias(subparsers, 'application-build', _reg_app_build)
+
+    # hidden flat aliases for the historical application-* top-level spellings.
+    # (application-types is already reachable via the application-type plural alias.)
+    _flat_alias(subparsers, 'application-evaluation-metrics', _reg_eval_metrics)
+
+    # historical `application-label` flat noun: image-encoder / mask-decoder verbs
+    def _reg_app_label_flat(sub, hidden=False):
+        _add_verb(sub, 'image-encoder', cmd_app_label_image_encoder,
+                  [(('application_id',), {'help': 'Application ID'})] + _BODY, hidden=True)
+        _add_verb(sub, 'mask-decoder', cmd_app_label_mask_decoder,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--output', '-o'), {})], hidden=True)
+    _flat_alias(subparsers, 'application-label', _reg_app_label_flat)
+
+    # ======================================================================
+    #  subject
+    # ======================================================================
+    subjects_parser = _add_resource(subparsers, 'subject', help='Subjects')
+    subjects_sub = subjects_parser.add_subparsers(dest='subjects_command')
+    _add_verb(subjects_sub, 'list', cmd_subjects_list, help='List the tenant subjects')
+    _add_verb(subjects_sub, 'get', cmd_subjects_get,
+              [(('subject_uid',), {'help': 'Subject UID'})], help='Show one subject')
+    _add_verb(subjects_sub, 'create', cmd_subjects_create,
+              [(('name',), {'help': 'Subject name'}),
+               (('--description',), {'help': 'Subject description'}),
+               (('--external-id',), {'dest': 'external_id', 'help': 'External ID'})],
+              help='Create a subject')
+    _add_verb(subjects_sub, 'update', cmd_subjects_update,
+              [(('subject_uid',), {'help': 'Subject UID'})] + _BODY_REQ, help="Update a subject's fields")
+    _add_verb(subjects_sub, 'delete', cmd_subjects_delete,
+              [(('subject_uid',), {'help': 'Subject UID'})], help='Delete a subject')
+    _add_verb(subjects_sub, 'search', cmd_subjects_search,
+              [(('--prefix',), {'help': 'Subject name prefix'}),
+               (('--similar',), {'help': 'Semantically similar text'}),
+               (('--name',), {'help': 'Exact subject name'}),
+               (('--ids',), {'nargs': '+', 'help': 'Subject UIDs to retrieve'}),
+               (('--limit',), {'type': int, 'default': 10, 'help': 'Max results (default: 10)'})],
+              help='Search subjects by prefix/similarity/name/ids')
+    _add_verb(subjects_sub, 'media', cmd_subjects_media,
+              [(('subject_uid',), {'help': 'Subject UID'}),
+               (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
+               (('--consensus',), {'choices': ['True', 'False', 'Sidelined'], 'help': 'Filter by consensus'}),
+               (('--probability-lower',), {'dest': 'probability_lower', 'type': float, 'help': 'Min probability'}),
+               (('--probability-upper',), {'dest': 'probability_upper', 'type': float, 'help': 'Max probability'}),
+               (('--reverse',), {'action': 'store_true', 'help': 'Sort high to low'})],
+              help="Stream a subject's media associations")
+    _add_verb(subjects_sub, 'associate', cmd_subjects_associate,
+              [(('subject_uid',), {'help': 'Subject UID'}),
+               (('media_id',), {'help': 'Media ID to associate'}),
+               (('--consensus',), {'default': 'None', 'choices': ['True', 'False', 'Sidelined', 'None'],
+                                   'help': 'Consensus label (default: None)'})],
+              help='Associate a media item with a subject')
+    _add_verb(subjects_sub, 'disassociate', cmd_subjects_disassociate,
+              [(('subject_uid',), {'help': 'Subject UID'}),
+               (('media_id',), {'help': 'Media ID to disassociate'})],
+              help='Remove a media association from a subject')
+    _add_verb(subjects_sub, 'detections', cmd_subjects_detections,
+              [(('subject_uid',), {'help': 'Subject UID'}),
+               (('--media-id',), {'dest': 'media_id', 'required': True, 'help': 'Media ID (required by the API)'})],
+              help='Assertions for the subject on a given media item')
+    # subject consensus history
+    subj_cons_parser = subjects_sub.add_parser('consensus', help='Subject consensus')
+    subj_cons_sub = subj_cons_parser.add_subparsers(dest='subject_consensus_command')
+    _add_verb(subj_cons_sub, 'history', cmd_subjects_consensus_history,
+              [(('subject_uid',), {'help': 'Subject UID'}),
+               (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
+               (('--end',), {'type': float, 'help': 'Filter timestamp < end'}),
+               (('--limit',), {'type': int, 'default': None, 'help': 'Max history points'})],
+              help='Consensus-change history for the subject')
+
+    # ======================================================================
+    #  media
+    # ======================================================================
+    media_parser = _add_resource(subparsers, 'media', help='Media')
+    media_sub = media_parser.add_subparsers(dest='media_command')
+    _add_verb(media_sub, 'get', cmd_media_get,
+              [(('media_id',), {'help': 'Media ID'}),
+               (('--download', '-d'), {'nargs': '?', 'const': True, 'default': False, 'metavar': 'FILE',
+                                       'help': 'Download media file (optionally specify output path)'})],
+              help='Show media metadata (optionally download)')
+    _add_verb(media_sub, 'upload', cmd_media_upload,
+              [(('filename',), {'help': 'Local file path or URL'}),
+               (('--subject-uid',), {'dest': 'subject_uid', 'help': 'Subject UID to associate after upload'}),
+               (('--external-media-id',), {'dest': 'external_media_id', 'help': 'External media ID'}),
+               (('--domain-unit',), {'dest': 'domain_unit', 'help': 'Domain unit'}),
+               (('--meta-tags',), {'dest': 'meta_tags', 'nargs': '+', 'help': 'Metadata tags'})],
+              help='Upload a media file')
+    _add_verb(media_sub, 'update', cmd_media_update,
+              [(('media_id',), {'help': 'Media ID'})] + _BODY_REQ, help="Update a media item's fields")
+    _add_verb(media_sub, 'delete', cmd_media_delete,
+              [(('media_id',), {'help': 'Media ID'})], help='Delete a media item')
+    _add_verb(media_sub, 'download', cmd_media_download,
+              [(('media_id',), {'help': 'Media ID'}),
+               (('--output', '-o'), {'help': 'Output file path (default: <media_id>.<ext>)'})],
+              help='Download the media file')
+    _add_verb(media_sub, 'search', cmd_media_search,
+              [(('--md5',), {'help': 'MD5 hash'}),
+               (('--filename',), {'help': 'Filename'}),
+               (('--external-media-id',), {'dest': 'external_media_id', 'help': 'External media ID'}),
+               (('--domain-unit',), {'dest': 'domain_unit', 'help': 'Domain unit'}),
+               (('--limit',), {'type': int, 'default': None, 'help': 'Max results'})],
+              help='Search media by md5/filename/external-id/domain-unit')
+    _add_verb(media_sub, 'share', cmd_media_share,
+              [(('media_id',), {'help': 'Media ID'})] + _BODY, help='Share a media item')
+    # media embeddings get
+    media_emb_parser = media_sub.add_parser('embeddings', help='Media embeddings')
+    media_emb_sub = media_emb_parser.add_subparsers(dest='media_embeddings_command')
+    _add_verb(media_emb_sub, 'get', cmd_media_embeddings,
+              [(('media_id',), {'help': 'Media ID'}),
+               (('--model-id',), {'dest': 'model_id', 'help': 'Model ID'}),
+               (('--focus',), {'help': 'Focus context (JSON)'})],
+              help='Get media embeddings')
+    # media detection list/create
+    def _reg_media_detection(sub, hidden=False):
+        _add_verb(sub, 'list', cmd_media_detections_list,
+                  [(('media_id',), {'help': 'Media ID'}),
+                   (('--limit',), {'type': int, 'default': None, 'help': 'Max results'})],
+                  help='List detections (assertions) on the media', hidden=hidden)
+        _add_verb(sub, 'create', cmd_media_create_detection,
+                  [(('media_id',), {'help': 'Media ID'})] + _BODY,
+                  help='Create a detection (assertion) on the media', hidden=hidden)
+    media_det_parser = media_sub.add_parser('detection', aliases=resource_aliases('detection'),
+                                            help='Media detections')
+    media_det_sub = media_det_parser.add_subparsers(dest='media_detection_command')
+    _reg_media_detection(media_det_sub)
+    # hidden flat alias for the old media-embeddings spelling
+    me_parser = _add_resource(subparsers, 'media-embeddings')
+    me_parser.add_argument('media_id', help='Media ID')
+    me_parser.add_argument('--model-id', dest='model_id', help='Model ID')
+    me_parser.add_argument('--focus', help='Focus context (JSON)')
+    me_parser.set_defaults(func=cmd_media_embeddings)
+
+    # ======================================================================
+    #  edgeflow
+    # ======================================================================
+    ef_parser = _add_resource(subparsers, 'edgeflow', help='EdgeFlow devices')
+    ef_sub = ef_parser.add_subparsers(dest='edgeflows_command')
+    _add_verb(ef_sub, 'list', cmd_edgeflows_list, help='List the tenant EdgeFlows')
+    _add_verb(ef_sub, 'get', cmd_edgeflows_get,
+              [(('edgeflow_id',), {'help': 'EdgeFlow ID (gateway_id)'})], help='Show one EdgeFlow')
+    _add_verb(ef_sub, 'create', cmd_edgeflows_create, _BODY, help='Create an EdgeFlow')
+    _add_verb(ef_sub, 'update', cmd_edgeflows_update,
+              [(('edgeflow_id',), {'help': 'EdgeFlow ID (gateway_id)'})] + _BODY_REQ, help="Update an EdgeFlow's fields")
+    _add_verb(ef_sub, 'delete', cmd_edgeflows_delete,
+              [(('edgeflow_id',), {'help': 'EdgeFlow ID (gateway_id)'})], help='Delete an EdgeFlow')
+    _add_verb(ef_sub, 'status', cmd_edgeflows_status,
+              [(('edgeflow_id',), {'help': 'EdgeFlow ID (gateway_id)'}),
+               (('--subsystem',), {'help': 'Filter by subsystem'}),
+               (('--limit',), {'type': int, 'default': None, 'help': 'Max results'})],
+              help='EdgeFlow status events')
+
+    # edgeflow certificate
+    def _reg_ef_cert(sub, hidden=False):
+        _add_verb(sub, 'get', cmd_edgeflow_cert_get,
+                  [(('edgeflow_id',), {'help': 'EdgeFlow ID (gateway_id)'})],
+                  help='Get the EdgeFlow client certificate', hidden=hidden)
+        _add_verb(sub, 'set', cmd_edgeflow_cert_set,
+                  [(('edgeflow_id',), {'help': 'EdgeFlow ID (gateway_id)'})] + _BODY,
+                  help='Set the EdgeFlow certificate', hidden=hidden)
+        _add_verb(sub, 'replace', cmd_edgeflow_cert_replace,
+                  [(('edgeflow_id',), {'help': 'EdgeFlow ID (gateway_id)'})] + _BODY,
+                  help='Replace the EdgeFlow certificate', hidden=hidden)
+        _add_verb(sub, 'delete', cmd_edgeflow_cert_delete,
+                  [(('edgeflow_id',), {'help': 'EdgeFlow ID (gateway_id)'})],
+                  help='Delete the EdgeFlow certificate', hidden=hidden)
+    ef_cert_parser = ef_sub.add_parser('certificate', aliases=resource_aliases('certificate'),
+                                       help='EdgeFlow TLS certificate')
+    ef_cert_sub = ef_cert_parser.add_subparsers(dest='edgeflow_certificate_command')
+    _reg_ef_cert(ef_cert_sub)
+    _flat_alias(subparsers, 'edgeflow-certificate', _reg_ef_cert)
+
+    # edgeflow metrics list/names
+    def _reg_ef_metrics(sub, hidden=False):
+        _add_verb(sub, 'list', cmd_edgeflow_metrics_list,
+                  [(('edgeflow_id',), {'nargs': '?', 'help': 'Optional EdgeFlow ID to filter to'})],
+                  help='List metrics (all, or for one EdgeFlow)', hidden=hidden)
+        _add_verb(sub, 'names', cmd_edgeflow_metric_names, help='List metric names', hidden=hidden)
+    ef_metrics_parser = ef_sub.add_parser('metrics', aliases=resource_aliases('metrics'), help='EdgeFlow metrics')
+    ef_metrics_sub = ef_metrics_parser.add_subparsers(dest='edgeflow_metrics_command')
+    _reg_ef_metrics(ef_metrics_sub)
+    _flat_alias(subparsers, 'edgeflow-metrics', _reg_ef_metrics)
+
+    # hidden flat alias for the old edgeflow-metric-names spelling
+    efmn_parser = _add_resource(subparsers, 'edgeflow-metric-names')
+    efmn_parser.set_defaults(func=cmd_edgeflow_metric_names)
+
+    # ======================================================================
+    #  camera
+    # ======================================================================
+    cam_parser = _add_resource(subparsers, 'camera', extra_aliases=['network-camera', 'network-cameras'],
+                               help='Network cameras')
+    cam_sub = cam_parser.add_subparsers(dest='cameras_command')
+    _add_verb(cam_sub, 'list', cmd_cameras_list, help='List the tenant network cameras')
+    _add_verb(cam_sub, 'get', cmd_cameras_get,
+              [(('network_camera_id',), {'help': 'Network camera ID'})], help='Show one network camera')
+    _add_verb(cam_sub, 'create', cmd_cameras_create, _BODY_REQ, help='Create a network camera')
+    _add_verb(cam_sub, 'update', cmd_cameras_update,
+              [(('network_camera_id',), {'help': 'Network camera ID'})] + _BODY_REQ,
+              help="Update a network camera's fields")
+    _add_verb(cam_sub, 'delete', cmd_cameras_delete,
+              [(('network_camera_id',), {'help': 'Network camera ID'})], help='Delete a network camera')
+    _add_verb(cam_sub, 'genicam', cmd_cameras_genicam,
+              [(('network_camera_id',), {'help': 'Network camera ID'})], help="Get the camera's GenICam XML")
+
+    # ======================================================================
+    #  deployment
+    # ======================================================================
+    dep_parser = _add_resource(subparsers, 'deployment', help='Deployment groups',
+                               extra_aliases=['deployment-group', 'deployment-groups'])
+    dep_sub = dep_parser.add_subparsers(dest='deployments_command')
+    _add_verb(dep_sub, 'list', cmd_deployments_list, help='List deployment groups')
+    _add_verb(dep_sub, 'get', cmd_deployments_get,
+              [(('deployment_group_id',), {'help': 'Deployment group ID'})], help='Show one deployment group')
+    _add_verb(dep_sub, 'create', cmd_deployments_create, _BODY, help='Create a deployment group')
+    _add_verb(dep_sub, 'delete', cmd_deployments_delete,
+              [(('deployment_group_id',), {'help': 'Deployment group ID'})], help='Delete a deployment group')
+    _add_verb(dep_sub, 'edgeflows', cmd_deployments_edgeflows,
+              [(('deployment_group_id',), {'help': 'Deployment group ID'})], help="List the group's EdgeFlows")
+    _add_verb(dep_sub, 'history', cmd_deployments_history,
+              [(('deployment_group_id',), {'help': 'Deployment group ID'}),
+               (('--limit',), {'type': int, 'default': None, 'help': 'Max records'}),
+               (('--reverse',), {'action': 'store_true', 'default': True, 'help': 'Sort high to low'})],
+              help='Deployment-group change history')
+    # deployment prepull status/start
+    dep_prepull_parser = dep_sub.add_parser('prepull', help='Deployment image prepull')
+    dep_prepull_sub = dep_prepull_parser.add_subparsers(dest='deployment_prepull_command')
+    _add_verb(dep_prepull_sub, 'status', cmd_deployments_prepull_status,
+              [(('deployment_group_id',), {'help': 'Deployment group ID'})], help='Show image-prepull status')
+    _add_verb(dep_prepull_sub, 'start', cmd_deployments_prepull_start,
+              [(('deployment_group_id',), {'help': 'Deployment group ID'}),
+               (('--workflow',), {'dest': 'workflow_id', 'required': True, 'help': 'Workflow ID'})],
+              help="Start prepull of a workflow's images")
+    # deployment target workflow set
+    dep_target_parser = dep_sub.add_parser('target', help='Deployment target')
+    dep_target_sub = dep_target_parser.add_subparsers(dest='deployment_target_command')
+    dep_target_wf_parser = dep_target_sub.add_parser('workflow', aliases=resource_aliases('workflow'),
+                                                     help='Deployment target workflow')
+    dep_target_wf_sub = dep_target_wf_parser.add_subparsers(dest='deployment_target_workflow_command')
+    _add_verb(dep_target_wf_sub, 'set', cmd_deployments_target_workflow,
+              [(('deployment_group_id',), {'help': 'Deployment group ID'}),
+               (('--workflow',), {'dest': 'workflow_id', 'required': True, 'help': 'Workflow ID'})],
+              help="Set the group's target workflow")
+    # deployment capacity list/get
+    def _reg_dep_capacity(sub, hidden=False):
+        _add_verb(sub, 'list', cmd_deployment_capacity_list, help='List deployment capacity classes', hidden=hidden)
+        _add_verb(sub, 'get', cmd_deployment_capacity_get,
+                  [(('capacity_class_id',), {'help': 'Capacity class ID'})],
+                  help='Show one capacity class', hidden=hidden)
+    dep_cap_parser = dep_sub.add_parser('capacity', aliases=resource_aliases('capacity'),
+                                        help='Deployment capacity classes')
+    dep_cap_sub = dep_cap_parser.add_subparsers(dest='deployment_capacity_command')
+    _reg_dep_capacity(dep_cap_sub)
+    _flat_alias(subparsers, 'deployment-capacity', _reg_dep_capacity)
+
+    # ======================================================================
+    #  workflow
+    # ======================================================================
+    wf_parser = _add_resource(subparsers, 'workflow', help='Workflows')
+    wf_sub = wf_parser.add_subparsers(dest='workflows_command')
+    _add_verb(wf_sub, 'list', cmd_workflows_list, help='List the tenant workflows')
+    _add_verb(wf_sub, 'get', cmd_workflows_get,
+              [(('workflow_id',), {'help': 'Workflow ID'})], help='Show one workflow')
+    _add_verb(wf_sub, 'create', cmd_workflows_create, _BODY, help='Create a workflow')
+    _add_verb(wf_sub, 'delete', cmd_workflows_delete,
+              [(('workflow_id',), {'help': 'Workflow ID'})], help='Delete a workflow')
+    # workflow edgeflow deployment-targets list
+    wf_ef_parser = wf_sub.add_parser('edgeflow', aliases=resource_aliases('edgeflow'),
+                                     help='Workflow EdgeFlow deployment targets')
+    wf_ef_sub = wf_ef_parser.add_subparsers(dest='workflow_edgeflow_command')
+    wf_ef_dt_parser = wf_ef_sub.add_parser('deployment-targets', aliases=['deployment-target'],
+                                           help='EdgeFlow deployment targets')
+    wf_ef_dt_sub = wf_ef_dt_parser.add_subparsers(dest='workflow_edgeflow_deployment_targets_command')
+    _add_verb(wf_ef_dt_sub, 'list', cmd_workflows_edgeflow_targets,
+              [(('--edgeflow-model',), {'dest': 'edgeflow_model', 'help': 'Optional EdgeFlow model for detailed target info'})],
+              help='List valid EdgeFlow deployment targets')
+    # workflow version new/get
+    def _reg_wf_version(sub, hidden=False):
+        _add_verb(sub, 'new', cmd_workflow_version_new,
+                  [(('workflow_id',), {'help': 'Base workflow ID'})] + _BODY_REQ,
+                  help='Create a new workflow version', hidden=hidden)
+        _add_verb(sub, 'get', cmd_workflow_version_get,
+                  [(('base_id',), {'help': 'Base workflow ID'}),
+                   (('version',), {'help': 'Version'})],
+                  help='Show a specific workflow version', hidden=hidden)
+    wf_version_parser = wf_sub.add_parser('version', aliases=resource_aliases('version'), help='Workflow versions')
+    wf_version_sub = wf_version_parser.add_subparsers(dest='workflow_version_command')
+    _reg_wf_version(wf_version_sub)
+    _flat_alias(subparsers, 'workflow-version', _reg_wf_version)
+
+    # ======================================================================
+    #  user
+    # ======================================================================
+    user_parser = _add_resource(subparsers, 'user', help='Users')
+    user_sub = user_parser.add_subparsers(dest='users_command')
+    _add_verb(user_sub, 'list', cmd_users_list,
+              [(('--id',), {'dest': 'user_query_id', 'help': 'Filter by user ID'}),
+               (('--tenant-id',), {'dest': 'user_query_tenant_id', 'help': 'Filter by tenant ID'})],
+              help='Query users (by id)')
+    _add_verb(user_sub, 'get', cmd_users_get,
+              [(('user_id',), {'help': 'User ID'})], help='Show one user')
+    _add_verb(user_sub, 'delete', cmd_users_delete,
+              [(('user_id',), {'help': 'User ID'})], help='Delete a user')
+    _add_verb(user_sub, 'tenants', cmd_users_tenants,
+              [(('user_id',), {'help': 'User ID (or "current")'})], help="List a user's tenants")
+    # user password reset <email>
+    user_pw_parser = user_sub.add_parser('password', help='User password')
+    user_pw_sub = user_pw_parser.add_subparsers(dest='user_password_command')
+    _add_verb(user_pw_sub, 'reset', cmd_users_request_password_reset,
+              [(('email',), {'help': 'Email or user ID'})], help='Trigger a password-reset email')
+
+    # 'cogniac user' with no subcommand keeps the historical current-user behavior
+    user_parser.set_defaults(func=cmd_user)
 
     return parser
 

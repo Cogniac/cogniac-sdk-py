@@ -460,6 +460,25 @@ class CogniacEdgeFlow(object):
         self._cc._delete("/1/gateways/%s" % self.gateway_id)
 
     ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def update(self, body):
+        """
+        Update this EdgeFlow's mutable fields with the given body dict and
+        return the updated EdgeFlow JSON.
+
+        body (dict):  fields to update
+
+        See POST /1/gateways/{gateway_id}.
+        """
+        resp = self._cc._post("/1/gateways/%s" % self.gateway_id, json=body)
+        result = resp.json()
+        for k, v in result.items():
+            super(CogniacEdgeFlow, self).__setattr__(k, v)
+        return result
+
+    ##
     #  TLS certificate
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))

@@ -90,13 +90,37 @@ class TestApplicationReadCoverage:
         if not apps:
             pytest.skip("no applications on tenant")
         app = apps[0]
-        # listing feedback requests can be permission-gated per tenant/role
+        # feedback() is a generator that drains pagination; listing feedback
+        # requests can be permission-gated per tenant/role.
         try:
-            assert isinstance(app.feedback(limit=2), (dict, list))
+            assert isinstance(list(app.feedback(limit=2)), list)
         except cogniac.ClientError:
             pass
         assert isinstance(app.feedback_request_count(), (dict, int))
         assert isinstance(app.pending_feedback_requests(), (dict, list))
+
+    def test_consensus_releases_and_items(self, cc):
+        apps = cc.get_all_applications()
+        if not apps:
+            pytest.skip("no applications on tenant")
+        app = apps[0]
+        releases = app.consensus_releases()
+        items = releases.get('data', releases) if isinstance(releases, dict) else releases
+        rel_id = None
+        if isinstance(items, list) and items:
+            rel_id = items[0].get('consensus_release_id') if isinstance(items[0], dict) else None
+        if not rel_id:
+            pytest.skip("no consensus releases on tenant")
+        # both sub-reads are generators that drain pagination
+        assert isinstance(list(app.consensus_release_items(rel_id, limit=2)), list)
+        assert isinstance(list(app.consensus_release_upstream_assertions(rel_id, limit=2)), list)
+
+    def test_models_generator(self, cc):
+        apps = cc.get_all_applications()
+        if not apps:
+            pytest.skip("no applications on tenant")
+        # should not raise; may be empty
+        assert isinstance(list(apps[0].models(limit=2)), list)
 
 
 @requires_live
@@ -183,7 +207,8 @@ class TestDeploymentReadCoverage:
             pytest.skip("no deployment groups on tenant")
         dg = groups[0]
         assert isinstance(dg.edgeflows(), (list, dict))
-        assert isinstance(dg.history(), (dict, list))
+        # history() is a generator that drains the DynamoDB last_key cursor
+        assert isinstance(list(dg.history(limit=5)), list)
         assert isinstance(dg.prepull_status(), (dict, list))
 
 

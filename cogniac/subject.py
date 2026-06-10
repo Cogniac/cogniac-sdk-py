@@ -198,6 +198,25 @@ class CogniacSubject(object):
         self._sub_keys = None
         self.connection = None
 
+    ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def update(self, body):
+        """
+        Update this subject's mutable fields with the given body dict and
+        return the updated subject JSON.
+
+        body (dict):  fields to update
+
+        See POST /1/subjects/{subject_uid}.
+        """
+        resp = self._cc._post("/1/subjects/%s" % self.subject_uid, json=body)
+        result = resp.json()
+        for k, v in result.items():
+            super(CogniacSubject, self).__setattr__(k, v)
+        return result
+
     def __setattr__(self, name, value):
         if name in ['subject_uid', 'created_at', 'created_by', 'modified_at', 'modified_by']:
             raise AttributeError("%s is immutable" % name)

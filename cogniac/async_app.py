@@ -205,6 +205,25 @@ class AsyncCogniacApplication(object):
         for k, v in resp.json().items():
             super(AsyncCogniacApplication, self).__setattr__(k, v)
 
+    ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def update(self, body):
+        """
+        Update this application's mutable fields with the given body dict and
+        return the updated application JSON.
+
+        body (dict):  fields to update
+
+        See POST /1/applications/{application_id}.
+        """
+        resp = await self._cc._post("/1/applications/%s" % self.application_id, json=body)
+        result = resp.json()
+        for k, v in result.items():
+            super(AsyncCogniacApplication, self).__setattr__(k, v)
+        return result
+
     def __setattr__(self, name, value):
         if name in self.immutable_keys:
             raise AttributeError("%s is immutable" % name)
@@ -756,15 +775,40 @@ class AsyncCogniacApplication(object):
     ##
     #  feedback
     ##
-    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    async def feedback(self, limit=10):
+    async def feedback(self, limit=None, cursor=None):
         """
-        Return up to {limit} feedback requests for this application.
+        Async generator yielding this application's feedback requests, following pagination.
+
+        limit (int)    yield maximum of limit results
+        cursor (str)   opaque pagination cursor to resume from
 
         See GET /21/applications/{app_id}/feedbackRequests.
         """
-        resp = await self._cc._get("/21/applications/%s/feedbackRequests?limit=%d" % (self.application_id, limit))
-        return resp.json()
+        params = []
+        if limit:
+            assert(limit > 0)
+            params.append('limit=%d' % min(limit, 100))
+        if cursor is not None:
+            params.append("cursor=%s" % cursor)
+
+        url = "/21/applications/%s/feedbackRequests?" % self.application_id
+        url += "&".join(params)
+
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+        async def get_next(url):
+            resp = await self._cc._get(url)
+            return resp.json()
+
+        count = 0
+        while url:
+            resp = await get_next(url)
+            data = resp['data'] if isinstance(resp, dict) and 'data' in resp else resp
+            for item in data:
+                yield item
+                count += 1
+                if limit and count == limit:
+                    return
+            url = resp.get('paging', {}).get('next') if isinstance(resp, dict) else None
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     async def feedback_request(self, feedback_id):
@@ -889,39 +933,57 @@ class AsyncCogniacApplication(object):
         resp = await self._cc._get("/22/applications/%s/consensus_release/%s" % (self.application_id, consensus_release_id))
         return resp.json()
 
-    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     async def consensus_release_items(self, consensus_release_id, limit=None, cursor=None):
         """
-        Download the consensus items for a consensus release.
+        Async generator yielding the consensus items for a consensus release, following pagination.
+
+        limit (int)    yield maximum of limit results
+        cursor (str)   opaque pagination cursor to resume from
 
         See GET /22/applications/{app_id}/consensus_release/{consensus_release_id}/consensus_items.
         """
-        params = {}
-        if limit is not None:
-            params['limit'] = limit
-        if cursor is not None:
-            params['cursor'] = cursor
-        resp = await self._cc._get(
-            "/22/applications/%s/consensus_release/%s/consensus_items" % (self.application_id, consensus_release_id),
-            params=params)
-        return resp.json()
+        async for item in self._paged_release_items(consensus_release_id, 'consensus_items', limit, cursor):
+            yield item
 
-    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     async def consensus_release_upstream_assertions(self, consensus_release_id, limit=None, cursor=None):
         """
-        Return the upstream assertions for a consensus release.
+        Async generator yielding the upstream assertions for a consensus release, following pagination.
+
+        limit (int)    yield maximum of limit results
+        cursor (str)   opaque pagination cursor to resume from
 
         See GET /22/applications/{app_id}/consensus_release/{consensus_release_id}/upstream_assertions.
         """
-        params = {}
-        if limit is not None:
-            params['limit'] = limit
+        async for item in self._paged_release_items(consensus_release_id, 'upstream_assertions', limit, cursor):
+            yield item
+
+    async def _paged_release_items(self, consensus_release_id, kind, limit=None, cursor=None):
+        """Shared async generator draining a paged consensus_release sub-collection."""
+        params = []
+        if limit:
+            assert(limit > 0)
+            params.append('limit=%d' % min(limit, 100))
         if cursor is not None:
-            params['cursor'] = cursor
-        resp = await self._cc._get(
-            "/22/applications/%s/consensus_release/%s/upstream_assertions" % (self.application_id, consensus_release_id),
-            params=params)
-        return resp.json()
+            params.append("cursor=%s" % cursor)
+
+        url = "/22/applications/%s/consensus_release/%s/%s?" % (self.application_id, consensus_release_id, kind)
+        url += "&".join(params)
+
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+        async def get_next(url):
+            resp = await self._cc._get(url)
+            return resp.json()
+
+        count = 0
+        while url:
+            resp = await get_next(url)
+            data = resp['data'] if isinstance(resp, dict) and 'data' in resp else resp
+            for item in data:
+                yield item
+                count += 1
+                if limit and count == limit:
+                    return
+            url = resp.get('paging', {}).get('next') if isinstance(resp, dict) else None
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     async def consensus_detection_release(self):

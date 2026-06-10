@@ -190,6 +190,24 @@ class CogniacApplication(object):
         self._app_keys = None
         self.connection = None
 
+    ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def update(self, body):
+        """
+        Update this application's mutable fields with the given body dict and
+        return the updated application JSON.
+
+        body (dict):  fields to update
+
+        See POST /1/applications/{application_id}.
+        """
+        resp = self._cc._post("/1/applications/%s" % self.application_id, json=body)
+        result = resp.json()
+        self.__parse_app_dict__(result)
+        return result
+
     def __post_update__(self, data):
         resp = self._cc._post("/1/applications/%s" % self.application_id, json=data)
         self.__parse_app_dict__(resp.json())
@@ -874,15 +892,40 @@ class CogniacApplication(object):
     ##
     #  feedback
     ##
-    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    def feedback(self, limit=10):
+    def feedback(self, limit=None, cursor=None):
         """
-        Return up to {limit} feedback requests for this application.
+        Yield this application's feedback requests, following pagination.
+
+        limit (int)    yield maximum of limit results
+        cursor (str)   opaque pagination cursor to resume from
 
         See GET /21/applications/{app_id}/feedbackRequests.
         """
-        resp = self._cc._get("/21/applications/%s/feedbackRequests?limit=%d" % (self.application_id, limit))
-        return resp.json()
+        params = []
+        if limit:
+            assert(limit > 0)
+            params.append('limit=%d' % min(limit, 100))
+        if cursor is not None:
+            params.append("cursor=%s" % cursor)
+
+        url = "/21/applications/%s/feedbackRequests?" % self.application_id
+        url += "&".join(params)
+
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+        def get_next(url):
+            resp = self._cc._get(url)
+            return resp.json()
+
+        count = 0
+        while url:
+            resp = get_next(url)
+            data = resp['data'] if isinstance(resp, dict) and 'data' in resp else resp
+            for item in data:
+                yield item
+                count += 1
+                if limit and count == limit:
+                    return
+            url = resp.get('paging', {}).get('next') if isinstance(resp, dict) else None
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def feedback_request(self, feedback_id):
@@ -1013,39 +1056,55 @@ class CogniacApplication(object):
         resp = self._cc._get("/22/applications/%s/consensus_release/%s" % (self.application_id, consensus_release_id))
         return resp.json()
 
-    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def consensus_release_items(self, consensus_release_id, limit=None, cursor=None):
         """
-        Download the consensus items for a consensus release.
+        Yield the consensus items for a consensus release, following pagination.
+
+        limit (int)    yield maximum of limit results
+        cursor (str)   opaque pagination cursor to resume from
 
         See GET /22/applications/{app_id}/consensus_release/{consensus_release_id}/consensus_items.
         """
-        params = {}
-        if limit is not None:
-            params['limit'] = limit
-        if cursor is not None:
-            params['cursor'] = cursor
-        resp = self._cc._get(
-            "/22/applications/%s/consensus_release/%s/consensus_items" % (self.application_id, consensus_release_id),
-            params=params)
-        return resp.json()
+        return self._paged_release_items(consensus_release_id, 'consensus_items', limit, cursor)
 
-    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def consensus_release_upstream_assertions(self, consensus_release_id, limit=None, cursor=None):
         """
-        Return the upstream assertions for a consensus release.
+        Yield the upstream assertions for a consensus release, following pagination.
+
+        limit (int)    yield maximum of limit results
+        cursor (str)   opaque pagination cursor to resume from
 
         See GET /22/applications/{app_id}/consensus_release/{consensus_release_id}/upstream_assertions.
         """
-        params = {}
-        if limit is not None:
-            params['limit'] = limit
+        return self._paged_release_items(consensus_release_id, 'upstream_assertions', limit, cursor)
+
+    def _paged_release_items(self, consensus_release_id, kind, limit=None, cursor=None):
+        """Shared generator draining a paged consensus_release sub-collection."""
+        params = []
+        if limit:
+            assert(limit > 0)
+            params.append('limit=%d' % min(limit, 100))
         if cursor is not None:
-            params['cursor'] = cursor
-        resp = self._cc._get(
-            "/22/applications/%s/consensus_release/%s/upstream_assertions" % (self.application_id, consensus_release_id),
-            params=params)
-        return resp.json()
+            params.append("cursor=%s" % cursor)
+
+        url = "/22/applications/%s/consensus_release/%s/%s?" % (self.application_id, consensus_release_id, kind)
+        url += "&".join(params)
+
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+        def get_next(url):
+            resp = self._cc._get(url)
+            return resp.json()
+
+        count = 0
+        while url:
+            resp = get_next(url)
+            data = resp['data'] if isinstance(resp, dict) and 'data' in resp else resp
+            for item in data:
+                yield item
+                count += 1
+                if limit and count == limit:
+                    return
+            url = resp.get('paging', {}).get('next') if isinstance(resp, dict) else None
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def consensus_detection_release(self):
