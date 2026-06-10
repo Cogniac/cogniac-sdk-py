@@ -555,6 +555,54 @@ class CogniacConnection(object):
         """
         return CogniacEdgeFlow.get(self, edgeflow_id)
 
+    def edgeflows(self):
+        """
+        return CogniacEdgeFlow for all EdgeFlows belonging to the currently authenticated tenant.
+
+        This is the preferred name for get_all_edgeflows().
+        """
+        return CogniacEdgeFlow.get_all(self)
+
+    def gateways(self):
+        """
+        DEPRECATED: use edgeflows() instead.
+
+        return CogniacEdgeFlow for all EdgeFlows belonging to the currently authenticated tenant.
+        """
+        return self.edgeflows()
+
+    def get_all_deployments(self):
+        """
+        return CogniacDeployment for all deployment groups belonging to the currently authenticated tenant
+        """
+        from .deployment import CogniacDeployment
+        return CogniacDeployment.get_all(self)
+
+    def get_deployment(self, deployment_group_id):
+        """
+        return an existing CogniacDeployment (deployment group)
+
+        deployment_group_id (String):  The id of the deployment group to return
+        """
+        from .deployment import CogniacDeployment
+        return CogniacDeployment.get(self, deployment_group_id)
+
+    def get_all_workflows(self):
+        """
+        return CogniacWorkflow for all workflows belonging to the currently authenticated tenant
+        """
+        from .workflow import CogniacWorkflow
+        return CogniacWorkflow.get_all(self)
+
+    def get_workflow(self, workflow_id):
+        """
+        return an existing CogniacWorkflow
+
+        workflow_id (String):  The id of the workflow to return
+        """
+        from .workflow import CogniacWorkflow
+        return CogniacWorkflow.get(self, workflow_id)
+
 
 if __name__ == "__main__":
     c = CogniacConnection()

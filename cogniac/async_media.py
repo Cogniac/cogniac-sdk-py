@@ -403,3 +403,53 @@ class AsyncCogniacMedia(object):
         """
         resp = await self._cc._get("/1/media/%s/subjects" % (self.media_id))
         return resp.json()['data']
+
+    ##
+    #  share
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def share(self, body=None):
+        """
+        Share this media item.
+
+        See POST /1/media/{media_id}/share.
+        """
+        resp = await self._cc._post("/1/media/%s/share" % self.media_id,
+                                   json=body if body is not None else {})
+        try:
+            return resp.json()
+        except Exception:
+            return None
+
+    ##
+    #  create_detection
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def create_detection(self, body=None):
+        """
+        Submit detection(s) for this media item.
+
+        See POST /1/media/{media_id}/detections.
+        """
+        resp = await self._cc._post("/1/media/%s/detections" % self.media_id,
+                                   json=body if body is not None else {})
+        return resp.json()
+
+    ##
+    #  embeddings
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def embeddings(self, model_id=None, focus=None):
+        """
+        Return media embeddings for this media item.
+
+        See GET /22/media/{media_id}/embeddings.
+        """
+        params = {}
+        if model_id is not None:
+            params['model_id'] = model_id
+        if focus is not None:
+            import json as _json
+            params['focus'] = _json.dumps(focus)
+        resp = await self._cc._get("/22/media/%s/embeddings" % self.media_id, params=params)
+        return resp.json()

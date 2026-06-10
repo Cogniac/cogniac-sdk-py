@@ -346,3 +346,33 @@ class CogniacNetworkCamera(object):
 
     def __repr__(self):
         return self.__str__()
+
+    ##
+    #  genicam
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def genicam(self):
+        """
+        Return the GenICam XML for this network camera.
+
+        See GET /1/networkCameras/{camera_id}/genicam.
+        """
+        resp = self._cc._get("/1/networkCameras/%s/genicam" % self.network_camera_id)
+        return resp.text
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def upload_genicam(self, filename):
+        """
+        Upload a GenICam XML file for this network camera.
+
+        filename (str):  path to a local GenICam XML file
+
+        See POST /1/networkCameras/{camera_id}/genicam.
+        """
+        with open(filename, 'rb') as f:
+            resp = self._cc._post("/1/networkCameras/%s/genicam" % self.network_camera_id,
+                                 files={'file': f})
+        try:
+            return resp.json()
+        except Exception:
+            return None

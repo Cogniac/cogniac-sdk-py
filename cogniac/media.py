@@ -414,3 +414,60 @@ class CogniacMedia(object):
         """
         resp = self._cc._get("/1/media/%s/subjects" % (self.media_id))
         return resp.json()['data']
+
+    ##
+    #  share
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def share(self, body=None):
+        """
+        Share this media item.
+
+        body (dict):  optional ShareMediaRequest body
+
+        See POST /1/media/{media_id}/share.
+        """
+        resp = self._cc._post("/1/media/%s/share" % self.media_id,
+                             json=body if body is not None else {})
+        try:
+            return resp.json()
+        except Exception:
+            return None
+
+    ##
+    #  create_detection
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def create_detection(self, body=None):
+        """
+        Submit detection(s) for this media item.
+
+        body (dict):  SubmitDetectionsRequest body
+
+        See POST /1/media/{media_id}/detections.
+        """
+        resp = self._cc._post("/1/media/%s/detections" % self.media_id,
+                             json=body if body is not None else {})
+        return resp.json()
+
+    ##
+    #  embeddings
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def embeddings(self, model_id=None, focus=None):
+        """
+        Return media embeddings for this media item.
+
+        model_id (str):  optional model_id to retrieve embeddings for
+        focus (dict):    optional focus context
+
+        See GET /22/media/{media_id}/embeddings.
+        """
+        params = {}
+        if model_id is not None:
+            params['model_id'] = model_id
+        if focus is not None:
+            import json as _json
+            params['focus'] = _json.dumps(focus)
+        resp = self._cc._get("/22/media/%s/embeddings" % self.media_id, params=params)
+        return resp.json()

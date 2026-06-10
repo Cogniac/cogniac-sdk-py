@@ -6,7 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 import os
 from time import time
-from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors
 
 
 class AsyncCogniacEdgeFlow(object):
@@ -50,6 +50,39 @@ class AsyncCogniacEdgeFlow(object):
         resp = await connection._get('/1/tenants/%s/gateways' % connection.tenant_id)
         edgeflows = resp.json()['data']
         return [AsyncCogniacEdgeFlow(connection, edgeflow) for edgeflow in edgeflows]
+
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def create(cls, connection, body=None):
+        """
+        Create a new EdgeFlow (gateway).
+
+        See POST /1/gateways.
+        """
+        resp = await connection._post("/1/gateways", json=body if body is not None else {})
+        return AsyncCogniacEdgeFlow(connection, resp.json())
+
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def metric_names(cls, connection):
+        """
+        Return the list of available EdgeFlow metric names for the tenant.
+
+        See GET /1/metrics_name (ef-metrics-api).
+        """
+        resp = await connection._get("/1/metrics_name")
+        return resp.json()
+
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def all_metrics(cls, connection, **params):
+        """
+        Return EdgeFlow metrics across the tenant.
+
+        See GET /1/metrics (ef-metrics-api).
+        """
+        resp = await connection._get("/1/metrics", params=params)
+        return resp.json()
 
     ##
     #  __init__
@@ -315,3 +348,77 @@ class AsyncCogniacEdgeFlow(object):
         if trigger_domain_unit is not None:
             event['trigger_domain_unit'] = trigger_domain_unit
         await self._cc._post("/1/gateways/%s/event/trigger_camera_capture" % self.gateway_id, json=event)
+
+    ##
+    #  delete
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def delete(self):
+        """
+        Delete this EdgeFlow (gateway).
+
+        See DELETE /1/gateways/{gw_id}.
+        """
+        await self._cc._delete("/1/gateways/%s" % self.gateway_id)
+
+    ##
+    #  TLS certificate
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def get_certificate(self):
+        """
+        Return this EdgeFlow's TLS certificate.
+
+        See GET /1/gateways/{gateway_id}/certificate.
+        """
+        resp = await self._cc._get("/1/gateways/%s/certificate" % self.gateway_id)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def set_certificate(self, body=None):
+        """
+        Create/set this EdgeFlow's TLS certificate.
+
+        See POST /1/gateways/{gateway_id}/certificate.
+        """
+        resp = await self._cc._post("/1/gateways/%s/certificate" % self.gateway_id,
+                                   json=body if body is not None else {})
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def replace_certificate(self, body=None):
+        """
+        Replace this EdgeFlow's TLS certificate (idempotent PUT).
+
+        See PUT /1/gateways/{gateway_id}/certificate.
+        """
+        url = self._cc._build_url("/1/gateways/%s/certificate" % self.gateway_id)
+        resp = await self._cc.session.request('PUT', url, json=body if body is not None else {},
+                                              timeout=self._cc.timeout)
+        raise_errors(resp)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def delete_certificate(self):
+        """
+        Delete this EdgeFlow's TLS certificate.
+
+        See DELETE /1/gateways/{gateway_id}/certificate.
+        """
+        await self._cc._delete("/1/gateways/%s/certificate" % self.gateway_id)
+
+    ##
+    #  metrics
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def metrics(self, **params):
+        """
+        Return runtime metrics for this EdgeFlow.
+
+        The EdgeFlow is identified via the gateway_id query parameter.
+
+        See GET /1/metrics/ef (ef-metrics-api).
+        """
+        params.setdefault('gateway_id', self.gateway_id)
+        resp = await self._cc._get("/1/metrics/ef", params=params)
+        return resp.json()

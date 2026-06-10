@@ -172,3 +172,99 @@ class AsyncCogniacTenant(object):
             for record in resp['data']:
                 yield record
             url = resp.get('paging', {}).get('next')
+
+    ##
+    #  EdgeFlow TLS certificate
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def get_edgeflow_certificate(self):
+        """
+        Return the tenant-wide EdgeFlow TLS certificate.
+
+        See GET /1/tenants/{tenant_id}/edgeflow_certificate.
+        """
+        resp = await self._cc._get("/1/tenants/%s/edgeflow_certificate" % self.tenant_id)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def set_edgeflow_certificate(self, body=None):
+        """
+        Upload/set the tenant-wide EdgeFlow TLS certificate.
+
+        See POST /1/tenants/{tenant_id}/edgeflow_certificate.
+        """
+        resp = await self._cc._post("/1/tenants/%s/edgeflow_certificate" % self.tenant_id,
+                                   json=body if body is not None else {})
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def delete_edgeflow_certificate(self):
+        """
+        Delete the tenant-wide EdgeFlow TLS certificate.
+
+        See DELETE /1/tenants/{tenant_id}/edgeflow_certificate.
+        """
+        resp = await self._cc._delete("/1/tenants/%s/edgeflow_certificate" % self.tenant_id)
+        try:
+            return resp.json()
+        except Exception:
+            return None
+
+    ##
+    #  Meraki API key
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def delete_meraki_api_key(self):
+        """
+        Delete the tenant's stored Meraki API key.
+
+        See DELETE /1/tenants/{tenant_id}/meraki_api_key.
+        """
+        await self._cc._delete("/1/tenants/%s/meraki_api_key" % self.tenant_id)
+
+    ##
+    #  invitations
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def invites(self, invitation_status='pending'):
+        """
+        Return invitations for this tenant.
+
+        See GET /1/tenants/{tenant_id}/invites.
+        """
+        resp = await self._cc._get("/1/tenants/%s/invites" % self.tenant_id,
+                                  params={'invitation_status': invitation_status})
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def create_invite(self, body):
+        """
+        Create an invitation for this tenant.
+
+        See POST /1/tenants/{tenant_id}/invites.
+        """
+        resp = await self._cc._post("/1/tenants/%s/invites" % self.tenant_id, json=body)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def delete_invite(self, body):
+        """
+        Delete (revoke) an invitation for this tenant.
+
+        See DELETE /1/tenants/{tenant_id}/invites.
+        """
+        await self._cc._delete("/1/tenants/%s/invites" % self.tenant_id, json=body)
+
+    ##
+    #  CloudCore import key
+    ##
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def get_cloudcore_import(cls, connection, tenant_id, cloudcore_import_key):
+        """
+        Return the CloudCore import payload for a tenant via an unguessable import key.
+
+        See GET /1/tenants/{tenant_id}/import/{cloudcore_import_key}.
+        """
+        resp = await connection._get("/1/tenants/%s/import/%s" % (tenant_id, cloudcore_import_key))
+        return resp.json()

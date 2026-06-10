@@ -34,6 +34,9 @@ from .user import CogniacUser
 from .external_results import CogniacExternalResult
 from .ops_review import CogniacOpsReview
 from .network_camera import CogniacNetworkCamera
+from .deployment import CogniacDeployment, CogniacDeploymentCapacityClass
+from .workflow import CogniacWorkflow
+from .build import CogniacBuild
 
 # Async API
 from .async_connection import AsyncCogniacConnection
@@ -46,3 +49,6 @@ from .async_edgeflow import AsyncCogniacEdgeFlow
 from .async_external_results import AsyncCogniacExternalResult
 from .async_ops_review import AsyncCogniacOpsReview
 from .async_network_camera import AsyncCogniacNetworkCamera
+from .async_deployment import AsyncCogniacDeployment, AsyncCogniacDeploymentCapacityClass
+from .async_workflow import AsyncCogniacWorkflow
+from .async_build import AsyncCogniacBuild

@@ -112,6 +112,44 @@ class CogniacApplication(object):
         return [CogniacApplication(connection, appd) for appd in apps]
 
     ##
+    #  application types
+    ##
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def get_all_types(cls, connection, production=None, deprecated=None, reverse=False):
+        """
+        Return the list of application types available to the authenticated tenant.
+
+        production (bool):   optionally filter by the production flag
+        deprecated (bool):   optionally filter by the deprecated flag
+        reverse (bool):      reverse the (name-ascending) sort order
+
+        See GET /1/applications/all/types.
+        """
+        params = {}
+        if production is not None:
+            params['production'] = production
+        if deprecated is not None:
+            params['deprecated'] = deprecated
+        if reverse:
+            params['reverse'] = True
+        resp = connection._get("/1/applications/all/types", params=params)
+        return resp.json()
+
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def get_type(cls, connection, application_type):
+        """
+        Return a single application type.
+
+        application_type (str):  the application-type name
+
+        See GET /1/applications/all/types/{application_type}.
+        """
+        resp = connection._get("/1/applications/all/types/%s" % application_type)
+        return resp.json()
+
+    ##
     #  __init__
     ##
     def __init__(self, connection, application_dict):
@@ -487,6 +525,561 @@ class CogniacApplication(object):
         resp = self._cc._get(url)
         data = resp.json()['data']
         return data[0] if len(data) else None
+
+    ##
+    #  classify
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def classify(self, image_file):
+        """
+        Run inference/classification on a single uploaded image and return the
+        resulting detections.
+
+        image_file (str):  path to a local image file (image/* content type)
+
+        See POST /1/applications/{app_id}/classify.
+        """
+        with open(image_file, 'rb') as f:
+            resp = self._cc._post("/1/applications/%s/classify" % self.application_id,
+                                  files={'file': f})
+        return resp.json()
+
+    ##
+    #  donate_model
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def donate_model(self, source_application_id):
+        """
+        Donate the active model of source_application_id into this (target) application.
+
+        source_application_id (str):  application_id whose model should be donated
+
+        See POST /1/applications/{app_id}/donateModel (this application is the target).
+        """
+        resp = self._cc._post("/1/applications/%s/donateModel" % self.application_id,
+                              json={'source_application_id': source_application_id})
+        return resp.json()
+
+    ##
+    #  export_model_to_meraki
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def export_model_to_meraki(self):
+        """
+        Export this application's active model to the tenant's Meraki organization.
+
+        See POST /1/applications/{app_id}/exportModelToMeraki.
+        """
+        resp = self._cc._post("/1/applications/%s/exportModelToMeraki" % self.application_id)
+        return resp.json()
+
+    ##
+    #  replay_status
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def replay_status(self):
+        """
+        Return the current replay status for this application.
+
+        See GET /1/applications/{app_id}/replay.
+        """
+        resp = self._cc._get("/1/applications/%s/replay" % self.application_id)
+        return resp.json()
+
+    ##
+    #  replay_start
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def replay_start(self, body=None):
+        """
+        Start an application replay.
+
+        body (dict):  optional StartReplayRequest body controlling the replay scope.
+
+        See POST /1/applications/{app_id}/replay.
+        """
+        resp = self._cc._post("/1/applications/%s/replay" % self.application_id,
+                              json=body if body is not None else {})
+        return resp.json()
+
+    ##
+    #  replay_stop
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def replay_stop(self):
+        """
+        Stop an in-progress application replay.
+
+        See POST /1/applications/{app_id}/replay (with a stop request body).
+        """
+        resp = self._cc._post("/1/applications/%s/replay" % self.application_id,
+                              json={'replay': False})
+        return resp.json()
+
+    ##
+    #  detections_pending
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def detections_pending(self):
+        """
+        Return the count of pending (unreviewed) detections for this application.
+
+        See GET /1/applications/{app_id}/detections/pending.
+        """
+        resp = self._cc._get("/1/applications/%s/detections/pending" % self.application_id)
+        return resp.json()
+
+    ##
+    #  event_types
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def event_types(self):
+        """
+        Return the list of available event types for this application.
+
+        See GET /1/applications/{app_id}/eventTypes.
+        """
+        resp = self._cc._get("/1/applications/%s/eventTypes" % self.application_id)
+        return resp.json()
+
+    ##
+    #  events
+    ##
+    def events(self, start=None, end=None, limit=None, cursor=None, reverse=False, event_types=None):
+        """
+        Yield application events sorted by timestamp.
+
+        start (float)        filter by timestamp > start (seconds since epoch)
+        end (float)          filter by timestamp < end   (seconds since epoch)
+        limit (int)          yield maximum of limit results
+        cursor (float)       opaque pagination cursor (timestamp)
+        reverse (bool)       reverse the sorting order: sort high to low
+        event_types (list)   optional list of event-type names to filter by
+
+        See GET /1/applications/{app_id}/events.
+        """
+        params = []
+        if start is not None:
+            params.append("start=%f" % start)
+        if end is not None:
+            params.append("end=%f" % end)
+        if limit:
+            assert(limit > 0)
+            params.append('limit=%d' % limit)
+        if cursor is not None:
+            params.append("cursor=%s" % cursor)
+        if reverse:
+            params.append('reverse=True')
+        if event_types:
+            for et in event_types:
+                params.append("event_types=%s" % et)
+
+        url = "/1/applications/%s/events?" % self.application_id
+        url += "&".join(params)
+
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+        def get_next(url):
+            resp = self._cc._get(url)
+            return resp.json()
+
+        count = 0
+        while url:
+            resp = get_next(url)
+            for item in resp['data']:
+                yield item
+                count += 1
+                if limit and count == limit:
+                    return
+            url = resp.get('paging', {}).get('next')
+
+    ##
+    #  consensus_history
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def consensus_history(self, start=None, end=None, limit=None, subject_uid=None):
+        """
+        Return consensus-history counts for this application's output subjects.
+
+        start (float)      filter by timestamp > start (seconds since epoch)
+        end (float)        filter by timestamp < end   (seconds since epoch)
+        limit (int)        maximum number of history points to return
+        subject_uid (str)  optionally restrict to a single subject
+
+        See GET /1/applications/{app_id}/consensusHistory.
+        """
+        params = {}
+        if start is not None:
+            params['start'] = start
+        if end is not None:
+            params['end'] = end
+        if limit is not None:
+            params['limit'] = limit
+        if subject_uid is not None:
+            params['subject_uid'] = subject_uid
+        resp = self._cc._get("/1/applications/%s/consensusHistory" % self.application_id, params=params)
+        return resp.json()
+
+    def _performance(self, kind, start=None, end=None, limit=None, reverse=False, duration=None):
+        """Shared helper for the performance/* endpoints."""
+        params = {}
+        if start is not None:
+            params['start'] = start
+        if end is not None:
+            params['end'] = end
+        if limit is not None:
+            params['limit'] = limit
+        if reverse:
+            params['reverse'] = True
+        if duration is not None:
+            params['duration'] = duration
+        resp = self._cc._get("/1/applications/%s/performance/%s" % (self.application_id, kind), params=params)
+        return resp.json()
+
+    ##
+    #  performance_current_validation
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def performance_current_validation(self, start=None, end=None, limit=None, reverse=False, duration=None):
+        """
+        Return the current-validation performance series for this application.
+
+        See GET /1/applications/{app_id}/performance/currentValidation.
+        """
+        return self._performance('currentValidation', start=start, end=end, limit=limit,
+                                 reverse=reverse, duration=duration)
+
+    ##
+    #  performance_release_validation
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def performance_release_validation(self, start=None, end=None, limit=None, reverse=False, duration=None):
+        """
+        Return the release-validation performance series for this application.
+
+        See GET /1/applications/{app_id}/performance/releaseValidation.
+        """
+        return self._performance('releaseValidation', start=start, end=end, limit=limit,
+                                 reverse=reverse, duration=duration)
+
+    ##
+    #  performance_new_random
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def performance_new_random(self, limit=None):
+        """
+        Return the new-random test-set performance for this application.
+
+        See GET /1/applications/{app_id}/performance/newRandom.
+        """
+        params = {}
+        if limit is not None:
+            params['limit'] = limit
+        resp = self._cc._get("/1/applications/%s/performance/newRandom" % self.application_id, params=params)
+        return resp.json()
+
+    ##
+    #  model_performance
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def model_performance(self, subject_uid, consensus=None, reverse=False,
+                          probability_lower=None, probability_upper=None,
+                          limit=None, cursor=None, set_assignment='validation'):
+        """
+        Return model performance data for a given subject of this application.
+
+        subject_uid (str):       required output subject_uid to evaluate
+        consensus (str):         optional consensus filter
+        reverse (bool):          reverse the sorting order
+        probability_lower:       filter by probability > probability_lower
+        probability_upper:       filter by probability < probability_upper
+        limit (int):             maximum number of results
+        cursor (str):            opaque pagination cursor
+        set_assignment (str):    'validation' (default) or 'training'
+
+        This is an asynchronous endpoint; if the evaluation job is still
+        running the response is a dict like {'type': 'results_pending', ...}.
+
+        See GET /1/applications/{app_id}/modelPerformance.
+        """
+        params = {'subject_uid': subject_uid, 'set_assignment': set_assignment}
+        if consensus is not None:
+            params['consensus'] = consensus
+        if reverse:
+            params['reverse'] = True
+        if probability_lower is not None:
+            params['probability_lower'] = probability_lower
+        if probability_upper is not None:
+            params['probability_upper'] = probability_upper
+        if limit is not None:
+            params['limit'] = limit
+        if cursor is not None:
+            params['cursor'] = cursor
+        resp = self._cc._get("/1/applications/%s/modelPerformance" % self.application_id, params=params)
+        return resp.json()
+
+    ##
+    #  push notifications
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def push_notifications(self):
+        """
+        Return the push-notification subscriptions for this application.
+
+        See GET /1/applications/{app_id}/pushNotifications.
+        """
+        resp = self._cc._get("/1/applications/%s/pushNotifications" % self.application_id)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def subscribe_push(self, device_id=None, app_bundle_id=None, event_type=None, unsubscribe=False):
+        """
+        Subscribe (or unsubscribe) a device to this application's event topic.
+
+        device_id (str):      device identifier
+        app_bundle_id (str):  iOS app bundle id
+        event_type (str):     event type to (un)subscribe to
+        unsubscribe (bool):   True to unsubscribe instead of subscribe
+
+        See POST /1/applications/{app_id}/pushNotifications.
+        """
+        data = {}
+        if device_id is not None:
+            data['device_id'] = device_id
+        if app_bundle_id is not None:
+            data['app_bundle_id'] = app_bundle_id
+        if event_type is not None:
+            data['event_type'] = event_type
+        if unsubscribe:
+            data['unsubscribe'] = True
+        resp = self._cc._post("/1/applications/%s/pushNotifications" % self.application_id, json=data)
+        return resp.json()
+
+    ##
+    #  feedback
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def feedback(self, limit=10):
+        """
+        Return up to {limit} feedback items for this application.
+
+        See GET /21/applications/{app_id}/feedback.
+        """
+        resp = self._cc._get("/21/applications/%s/feedback?limit=%d" % (self.application_id, limit))
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def feedback_request(self, feedback_id):
+        """
+        Return a single feedback request for this application.
+
+        See GET /21/applications/{app_id}/feedbackRequests/{feedback_id}.
+        """
+        resp = self._cc._get("/21/applications/%s/feedbackRequests/%s" % (self.application_id, feedback_id))
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def submit_feedback(self, body):
+        """
+        Submit feedback for a feedback request.
+
+        body (dict):  SubmitFeedbackRequest body
+
+        See POST /21/applications/{app_id}/feedback.
+        """
+        resp = self._cc._post("/21/applications/%s/feedback" % self.application_id, json=body)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def feedback_request_count(self):
+        """
+        Return the count of feedback requests pending for the requesting user.
+
+        See GET /21/applications/{app_id}/feedbackRequests/count.
+        """
+        resp = self._cc._get("/21/applications/%s/feedbackRequests/count" % self.application_id)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def pending_feedback_requests(self, limit=1):
+        """
+        Return pending (unsatisfied) feedback requests for the caller.
+
+        See GET /21/applications/{app_id}/feedbackRequests/pending.
+        """
+        resp = self._cc._get("/21/applications/%s/feedbackRequests/pending?limit=%d" % (self.application_id, limit))
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def purge_feedback(self):
+        """
+        Purge feedback requests for this application.
+
+        See POST /1/applications/{app_id}/feedback/purge.
+        """
+        self._cc._post("/1/applications/%s/feedback/purge" % self.application_id)
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def delete_feedback_requests(self):
+        """
+        Delete all feedback requests for this application.
+
+        See DELETE /21/applications/{app_id}/feedbackRequests.
+        """
+        resp = self._cc._delete("/21/applications/%s/feedbackRequests" % self.application_id)
+        try:
+            return resp.json()
+        except Exception:
+            return None
+
+    ##
+    #  evaluation metrics (configuration; versioned /22/)
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def create_evaluation_metric(self, body):
+        """
+        Create an evaluation metric for this application.
+
+        body (dict):  PostEvaluationMetricRequest body
+
+        See POST /22/applications/{application_id}/evaluation_metrics.
+        """
+        resp = self._cc._post("/22/applications/%s/evaluation_metrics" % self.application_id, json=body)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def register_default_evaluation_metric(self, body=None):
+        """
+        Register the default evaluation metric for a newly-created application.
+
+        See POST /22/applications/{application_id}/evaluation_metrics/register_new_app_default.
+        """
+        resp = self._cc._post(
+            "/22/applications/%s/evaluation_metrics/register_new_app_default" % self.application_id,
+            json=body if body is not None else {})
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def copy_evaluation_metrics(self, target_application_id, body=None):
+        """
+        Copy this application's evaluation metrics into a target application.
+
+        target_application_id (str):  destination application_id (sent in the body)
+
+        This application is the *source*; see
+        POST /22/applications/{source_application_id}/evaluation_metrics/copy.
+        """
+        data = dict(body) if body else {}
+        data.setdefault('target_application_id', target_application_id)
+        resp = self._cc._post("/22/applications/%s/evaluation_metrics/copy" % self.application_id, json=data)
+        return resp.json()
+
+    ##
+    #  consensus releases (versioned /22/)
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def consensus_releases(self):
+        """
+        List consensus releases for this application.
+
+        See GET /22/applications/{app_id}/consensus_release.
+        """
+        resp = self._cc._get("/22/applications/%s/consensus_release" % self.application_id)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def consensus_release(self, consensus_release_id):
+        """
+        Return metadata/statistics for a single consensus release.
+
+        See GET /22/applications/{app_id}/consensus_release/{consensus_release_id}.
+        """
+        resp = self._cc._get("/22/applications/%s/consensus_release/%s" % (self.application_id, consensus_release_id))
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def consensus_release_items(self, consensus_release_id, limit=None, cursor=None):
+        """
+        Download the consensus items for a consensus release.
+
+        See GET /22/applications/{app_id}/consensus_release/{consensus_release_id}/consensus_items.
+        """
+        params = {}
+        if limit is not None:
+            params['limit'] = limit
+        if cursor is not None:
+            params['cursor'] = cursor
+        resp = self._cc._get(
+            "/22/applications/%s/consensus_release/%s/consensus_items" % (self.application_id, consensus_release_id),
+            params=params)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def consensus_release_upstream_assertions(self, consensus_release_id, limit=None, cursor=None):
+        """
+        Return the upstream assertions for a consensus release.
+
+        See GET /22/applications/{app_id}/consensus_release/{consensus_release_id}/upstream_assertions.
+        """
+        params = {}
+        if limit is not None:
+            params['limit'] = limit
+        if cursor is not None:
+            params['cursor'] = cursor
+        resp = self._cc._get(
+            "/22/applications/%s/consensus_release/%s/upstream_assertions" % (self.application_id, consensus_release_id),
+            params=params)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def consensus_detection_release(self):
+        """
+        Return combined consensus detections for this application's output subjects.
+
+        See GET /22/applications/{app_id}/consensus_detection_release.
+        """
+        resp = self._cc._get("/22/applications/%s/consensus_detection_release" % self.application_id)
+        return resp.json()
+
+    ##
+    #  labeling embedding model helpers (media-embedding; versioned /22/)
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def labeling_image_encoder(self, body):
+        """
+        Get an image embedding from this application's labeling image-encoder model.
+
+        body (dict):  GetAppMediaEmbeddingRequest body (e.g. {'media_id': ..., 'focus': {...}})
+
+        See POST /22/applications/{app_id}/labelingImageEncoderModel.
+        """
+        resp = self._cc._post("/22/applications/%s/labelingImageEncoderModel" % self.application_id, json=body)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def labeling_mask_decoder(self, filep=None):
+        """
+        Retrieve this application's labeling mask-decoder model (ONNX).
+
+        filep:  open file object (wb) to write the model into; if None the raw
+                bytes are returned.
+
+        See GET /22/applications/{application_id}/labelingMaskDecoderModel.
+        """
+        resp = self._cc._get("/22/applications/%s/labelingMaskDecoderModel" % self.application_id)
+        if filep is None:
+            return resp.content
+        filep.write(resp.content)
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def labeling_mask_decoder_head(self):
+        """
+        Return the response headers for this application's labeling mask-decoder
+        model without downloading the body (HEAD request).
+
+        See HEAD /22/applications/{application_id}/labelingMaskDecoderModel.
+        """
+        resp = self._cc._head("/22/applications/%s/labelingMaskDecoderModel" % self.application_id)
+        return dict(resp.headers)
 
     def usage(self, start, end):
         """

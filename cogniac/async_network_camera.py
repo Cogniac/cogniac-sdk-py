@@ -220,3 +220,31 @@ class AsyncCogniacNetworkCamera(object):
             delattr(self, k)
         self._cam_keys = None
         self._cc = None
+
+    ##
+    #  genicam
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def genicam(self):
+        """
+        Return the GenICam XML for this network camera.
+
+        See GET /1/networkCameras/{camera_id}/genicam.
+        """
+        resp = await self._cc._get("/1/networkCameras/%s/genicam" % self.network_camera_id)
+        return resp.text
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def upload_genicam(self, filename):
+        """
+        Upload a GenICam XML file for this network camera.
+
+        See POST /1/networkCameras/{camera_id}/genicam.
+        """
+        with open(filename, 'rb') as f:
+            resp = await self._cc._post("/1/networkCameras/%s/genicam" % self.network_camera_id,
+                                       files={'file': f})
+        try:
+            return resp.json()
+        except Exception:
+            return None
