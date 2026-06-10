@@ -364,7 +364,7 @@ CATALOG_COMMANDS = [
     # application model
     ['application', 'model', 'performance', 'A1', '--subject-uid', 's1'],
     ['application', 'model', 'donate', 'A1', '--source', 'A2'],
-    ['application', 'model', 'meraki-export', 'A1'], ['application', 'model', 'list', 'A1'],
+    ['application', 'model', 'export', 'A1', '--target', 'meraki'], ['application', 'model', 'list', 'A1'],
     # application consensus
     ['application', 'consensus', 'history', 'A1'],
     ['application', 'consensus', 'release', 'list', 'A1'],
@@ -452,7 +452,7 @@ DEPRECATED_FLAT_COMMANDS = [
     ['application', 'evaluation-metrics-create', 'A1'],
     ['application', 'evaluation-metrics-register-default', 'A1'],
     ['application', 'evaluation-metrics-copy', 'S1', 'T1'],
-    ['application', 'donate-model', 'A1', 'A2'], ['application', 'export-meraki', 'A1'],
+    ['application', 'donate-model', 'A1', 'A2'],
     ['application', 'replay-start', 'A1'], ['application', 'replay-stop', 'A1'],
     ['application', 'detections-pending', 'A1'], ['application', 'event-types', 'A1'],
     ['application', 'performance-current', 'A1'], ['application', 'performance-release', 'A1'],

@@ -760,11 +760,18 @@ def cmd_app_donate_model(args):
         error_exit("ClientError", str(e))
 
 
-def cmd_app_export_meraki(args):
+def cmd_app_model_export(args):
     cc = get_connection(args)
     try:
         app = cc.get_application(args.application_id)
-        output(app.export_model_to_meraki(), args)
+        # --target is a required choice; today only 'meraki' is supported,
+        # additional targets can be wired here as they are added.
+        if args.target == 'meraki':
+            result = app.export_model_to_meraki()
+        else:
+            error_exit("UsageError", "unsupported export target: %s" % args.target)
+            return
+        output(result, args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -2078,9 +2085,11 @@ def build_parser():
                   [(('application_id',), {'help': 'Target application ID'}),
                    (('--source',), {'dest': 'source_application_id', 'required': True, 'help': 'Source application ID'})],
                   help='Donate a model from a source application into this one', hidden=hidden)
-        _add_verb(sub, 'meraki-export', cmd_app_export_meraki,
-                  [(('application_id',), {'help': 'Application ID'})],
-                  help="Export the app's model to Meraki", hidden=hidden)
+        _add_verb(sub, 'export', cmd_app_model_export,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--target',), {'required': True, 'choices': ['meraki'],
+                                    'help': 'Export target (currently: meraki)'})],
+                  help="Export the app's model to an external target", hidden=hidden)
         _add_verb(sub, 'list', cmd_app_model_list,
                   [(('application_id',), {'help': 'Application ID'}),
                    (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
@@ -2164,7 +2173,6 @@ def build_parser():
     _add_verb(apps_sub, 'donate-model', cmd_app_donate_model,
               [(('application_id',), {'help': 'Target application ID'}),
                (('source_application_id',), {'help': 'Source application ID'})], hidden=True)
-    _add_verb(apps_sub, 'export-meraki', cmd_app_export_meraki, _APP_ID, hidden=True)
     # bare `replay` / `push` are superseded by `replay status` / `push get`
     # (those tokens are now sub-nouns); the hyphenated variants below have no clash.
     _add_verb(apps_sub, 'replay-start', cmd_app_replay_start, _APP_ID + _BODY, hidden=True)
