@@ -104,7 +104,11 @@ class TestApplicationReadCoverage:
         if not apps:
             pytest.skip("no applications on tenant")
         app = apps[0]
-        releases = app.consensus_releases()
+        # consensus releases can be permission-gated per tenant/role
+        try:
+            releases = app.consensus_releases()
+        except cogniac.ClientError:
+            pytest.skip("consensus releases not available / not permitted on this tenant")
         items = releases.get('data', releases) if isinstance(releases, dict) else releases
         rel_id = None
         if isinstance(items, list) and items:
