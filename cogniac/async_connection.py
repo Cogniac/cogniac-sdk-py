@@ -234,7 +234,13 @@ class AsyncCogniacConnection(object):
             timeout = self.timeout
         kwargs.pop('stream', None)  # httpx handles streaming differently
         try:
-            resp = await self.session.get(url, timeout=timeout, **kwargs)
+            # httpx's .get() rejects a request body; route body-bearing GETs
+            # (e.g. the model-package fetch) through .request(), which is
+            # otherwise equivalent to .get() for bodyless calls.
+            if any(k in kwargs for k in ('json', 'data', 'content')):
+                resp = await self.session.request("GET", url, timeout=timeout, **kwargs)
+            else:
+                resp = await self.session.get(url, timeout=timeout, **kwargs)
             raise_errors(resp)
         except CredentialError:
             await self.__authenticate()

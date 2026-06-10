@@ -224,6 +224,34 @@ class AsyncCogniacApplication(object):
             super(AsyncCogniacApplication, self).__setattr__(k, v)
         return result
 
+    ##
+    #  download_model
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def download_model(self, model_id=None):
+        """
+        Download the current active model package for this application to a file
+        in the current working directory and return the local filename (which is
+        the model name).
+
+        model_id (str):  optional specific model id; default downloads the active model
+
+        See GET /1/applications/{application_id}/ccp and /ccppkg.
+        """
+        if model_id is None:
+            resp = await self._cc._get("/1/applications/%s/ccp" % self.application_id)
+            resp = resp.json()
+            url = resp['best_model_ccp_url']
+            modelname = url.split('/')[-1]
+        else:
+            modelname = model_id.split('/')[-1]
+
+        resp = await self._cc._get("/1/applications/%s/ccppkg" % self.application_id,
+                                   json={"ccp_filename": modelname})
+        with open(modelname, "wb") as fp:
+            fp.write(resp.content)
+        return modelname
+
     def __setattr__(self, name, value):
         if name in self.immutable_keys:
             raise AttributeError("%s is immutable" % name)

@@ -731,6 +731,107 @@ def _json_body(args):
         error_exit("BadRequest", "Invalid --body JSON: %s" % e)
 
 
+# ---- per-field update flags --------------------------------------------------
+#
+# `<resource> update` accepts both a whole-object `--body JSON` and per-field
+# flags for that resource's mutable fields. The flags are convenient for simple
+# edits; `--body` is the escape hatch for the full object. Supplied flags are
+# layered on top of `--body` (flags win on key collisions). A field flag left
+# unset (value None) is omitted entirely, so an update only touches the fields
+# the caller named.
+
+def _bool_value(s):
+    """argparse type: parse a true/false flag value (tri-state via default None)."""
+    v = str(s).strip().lower()
+    if v in ('true', '1', 'yes', 'y', 'on'):
+        return True
+    if v in ('false', '0', 'no', 'n', 'off'):
+        return False
+    raise argparse.ArgumentTypeError("expected true/false, got %r" % s)
+
+
+def _json_value(s):
+    """argparse type: parse a JSON-valued flag (object/array/scalar)."""
+    try:
+        return json.loads(s)
+    except (ValueError, TypeError) as e:
+        raise argparse.ArgumentTypeError("invalid JSON: %s" % e)
+
+
+# (flag, dest/body-key, kind). kind drives both the argparse type and how the
+# value is read back when assembling the request body.
+_UPDATE_FIELDS = {
+    'application': [
+        ('--name', 'name', 'str'),
+        ('--description', 'description', 'str'),
+        ('--active', 'active', 'bool'),
+        ('--input-subjects', 'input_subjects', 'strlist'),
+        ('--output-subjects', 'output_subjects', 'strlist'),
+        ('--app-managers', 'app_managers', 'strlist'),
+        ('--detection-post-urls', 'detection_post_urls', 'json'),
+        ('--detection-thresholds', 'detection_thresholds', 'json'),
+        ('--subject-weights', 'subject_weights', 'json'),
+        ('--custom-fields', 'custom_fields', 'json'),
+        ('--app-type-config', 'app_type_config', 'json'),
+        ('--edgeflow-upload-policies', 'edgeflow_upload_policies', 'json'),
+        ('--override-upstream-detection-filter', 'override_upstream_detection_filter', 'bool'),
+        ('--feedback-resample-ratio', 'feedback_resample_ratio', 'float'),
+        ('--reviewers', 'reviewers', 'json'),
+        ('--inference-execution-policies', 'inference_execution_policies', 'json'),
+    ],
+    'subject': [
+        ('--name', 'name', 'str'),
+        ('--description', 'description', 'str'),
+        ('--expires-in', 'expires_in', 'float'),
+        ('--external-id', 'external_id', 'str'),
+        ('--custom-data', 'custom_data', 'json'),
+    ],
+    'media': [
+        ('--set-assignment', 'set_assignment', 'str'),
+        ('--force-set', 'force_set', 'bool'),
+        ('--meta-tags', 'meta_tags', 'strlist'),
+        ('--custom-data', 'custom_data', 'json'),
+    ],
+    'camera': [
+        ('--url', 'url', 'str'),
+        ('--current-ip', 'current_IP', 'str'),
+        ('--camera-name', 'camera_name', 'str'),
+        ('--description', 'description', 'str'),
+        ('--active', 'active', 'bool'),
+        ('--lat', 'lat', 'float'),
+        ('--lon', 'lon', 'float'),
+        ('--hae', 'hae', 'float'),
+        ('--alt-subject-uid', 'alt_subject_uid', 'str'),
+        ('--custom-configuration', 'custom_configuration', 'json'),
+    ],
+}
+
+_FIELD_TYPES = {'str': str, 'int': int, 'float': float, 'bool': _bool_value, 'json': _json_value}
+
+
+def _update_arg_specs(resource):
+    """Build argparse arg-specs for a resource's per-field update flags."""
+    specs = []
+    for flag, dest, kind in _UPDATE_FIELDS[resource]:
+        kw = {'dest': dest, 'default': None, 'help': 'Set %s' % dest}
+        if kind == 'strlist':
+            kw['nargs'] = '+'
+        else:
+            kw['type'] = _FIELD_TYPES[kind]
+        specs.append(((flag,), kw))
+    return specs
+
+
+def _assemble_update_body(args, resource):
+    """Merge --body JSON with any per-field update flags (flags win)."""
+    body = dict(_json_body(args) or {})
+    for _flag, dest, _kind in _UPDATE_FIELDS[resource]:
+        val = getattr(args, dest, None)
+        if val is not None:
+            body[dest] = val
+    return body
+
+
 # ---- application (extended) ----
 
 def cmd_app_evaluation_metrics(args):
@@ -1607,9 +1708,12 @@ def cmd_apps_create(args):
 
 def cmd_apps_update(args):
     cc = get_connection(args)
+    body = _assemble_update_body(args, 'application')
+    if not body:
+        error_exit("BadRequest", "no fields to update; pass per-field flags or --body")
     try:
         app = cc.get_application(args.application_id)
-        output(app.update(_json_body(args) or {}), args)
+        output(app.update(body), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -1634,13 +1738,26 @@ def cmd_app_model_list(args):
         error_exit("ClientError", str(e))
 
 
+def cmd_app_model_download(args):
+    cc = get_connection(args)
+    try:
+        app = cc.get_application(args.application_id)
+        filename = app.download_model(model_id=getattr(args, 'model_id', None))
+        output({"application_id": args.application_id, "filename": filename, "status": "downloaded"}, args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
 # ---- subject update / delete / disassociate ----
 
 def cmd_subjects_update(args):
     cc = get_connection(args)
+    body = _assemble_update_body(args, 'subject')
+    if not body:
+        error_exit("BadRequest", "no fields to update; pass per-field flags or --body")
     try:
         subject = cc.get_subject(args.subject_uid)
-        output(subject.update(_json_body(args) or {}), args)
+        output(subject.update(body), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -1669,9 +1786,12 @@ def cmd_subjects_disassociate(args):
 
 def cmd_media_update(args):
     cc = get_connection(args)
+    body = _assemble_update_body(args, 'media')
+    if not body:
+        error_exit("BadRequest", "no fields to update; pass per-field flags or --body")
     try:
         media = cc.get_media(args.media_id)
-        output(media.update(_json_body(args) or {}), args)
+        output(media.update(body), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -1715,9 +1835,12 @@ def cmd_cameras_create(args):
 
 def cmd_cameras_update(args):
     cc = get_connection(args)
+    body = _assemble_update_body(args, 'camera')
+    if not body:
+        error_exit("BadRequest", "no fields to update; pass per-field flags or --body")
     try:
         cam = cc.get_camera(args.network_camera_id)
-        output(cam.update(_json_body(args) or {}), args)
+        output(cam.update(body), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -1739,6 +1862,138 @@ def cmd_edgeflows_update(args):
     try:
         ef = cc.get_edgeflow(args.edgeflow_id)
         output(ef.update(_json_body(args) or {}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+# ---- edgeflow device-control events ----
+#
+# These POST /1/gateways/{id}/event/<name>. The SDK methods return None (the
+# device acts asynchronously), so each handler reports the dispatched event.
+
+def _ef_event_result(args, event, extra=None):
+    out = {"edgeflow_id": args.edgeflow_id, "event": event, "status": "sent"}
+    if extra:
+        out.update(extra)
+    return out
+
+
+def cmd_ef_event_reboot(args):
+    cc = get_connection(args)
+    try:
+        cc.get_edgeflow(args.edgeflow_id).reboot()
+        output(_ef_event_result(args, "reboot"), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_ef_event_ping(args):
+    cc = get_connection(args)
+    try:
+        cc.get_edgeflow(args.edgeflow_id).ping(ping_id=getattr(args, 'ping_id', None))
+        output(_ef_event_result(args, "ping"), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_ef_event_upgrade(args):
+    cc = get_connection(args)
+    try:
+        cc.get_edgeflow(args.edgeflow_id).upgrade(args.software_version)
+        output(_ef_event_result(args, "upgrade", {"software_version": args.software_version}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_ef_event_set_boot(args):
+    cc = get_connection(args)
+    try:
+        cc.get_edgeflow(args.edgeflow_id).set_boot_software_version(args.software_version)
+        output(_ef_event_result(args, "set_boot_software_version",
+                                {"software_version": args.software_version}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_ef_event_factory_reset(args):
+    cc = get_connection(args)
+    try:
+        cc.get_edgeflow(args.edgeflow_id).factory_reset()
+        output(_ef_event_result(args, "factory_reset"), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_ef_event_flush_upload_queue(args):
+    cc = get_connection(args)
+    try:
+        cc.get_edgeflow(args.edgeflow_id).flush_upload_queue(
+            start_time=getattr(args, 'start_time', None),
+            end_time=getattr(args, 'end_time', None))
+        output(_ef_event_result(args, "flush_upload_queue"), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_ef_event_time_bound_upload(args):
+    cc = get_connection(args)
+    try:
+        cc.get_edgeflow(args.edgeflow_id).time_bound_media_upload(args.start_time, args.end_time)
+        output(_ef_event_result(args, "time_bound_media_upload",
+                                {"start_time": args.start_time, "end_time": args.end_time}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_ef_event_trigger_capture(args):
+    cc = get_connection(args)
+    try:
+        cc.get_edgeflow(args.edgeflow_id).trigger_camera_capture(
+            args.subject_uid, trigger_domain_unit=getattr(args, 'trigger_domain_unit', None))
+        output(_ef_event_result(args, "trigger_camera_capture", {"subject_uid": args.subject_uid}), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+# ---- user api keys ----
+
+def cmd_user_apikey_list(args):
+    cc = get_connection(args)
+    from .user import CogniacUser
+    try:
+        user = CogniacUser.get_by_id(cc, args.user_id)
+        output(user.api_keys(), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_user_apikey_get(args):
+    cc = get_connection(args)
+    from .user import CogniacUser
+    try:
+        user = CogniacUser.get_by_id(cc, args.user_id)
+        output(user.api_key(args.api_key_id), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_user_apikey_create(args):
+    cc = get_connection(args)
+    from .user import CogniacUser
+    try:
+        user = CogniacUser.get_by_id(cc, args.user_id)
+        output(user.create_api_key(args.description), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_user_apikey_delete(args):
+    cc = get_connection(args)
+    from .user import CogniacUser
+    try:
+        user = CogniacUser.get_by_id(cc, args.user_id)
+        user.delete_api_key(args.api_key_id)
+        output({"user_id": args.user_id, "api_key_id": args.api_key_id, "status": "deleted"}, args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -1868,18 +2123,26 @@ def build_parser():
     _add_verb(tenant_sub, 'get', cmd_tenant, help='Show the current tenant')
     _add_verb(tenant_sub, 'list', cmd_tenants, help='List tenants you are authorized for')
 
-    # tenant edgeflow certificate (type-less) + tenant edgeflow ... nested noun
-    ten_ef_parser = tenant_sub.add_parser('edgeflow', help='Tenant-wide EdgeFlow settings')
-    ten_ef_sub = ten_ef_parser.add_subparsers(dest='tenant_edgeflow_command')
-    ten_cert_parser = ten_ef_sub.add_parser('certificate', aliases=resource_aliases('certificate'),
+    # tenant edgeflow-certificate get/set/delete (single nested sub-noun; the
+    # gateway-certificate / edgeflow-cert / ... spellings come for free via
+    # resource_aliases()).
+    def _reg_tenant_cert(sub, hidden=False):
+        _add_verb(sub, 'get', cmd_tenant_ef_cert_get, help='Get the tenant-wide EdgeFlow certificate', hidden=hidden)
+        _add_verb(sub, 'set', cmd_tenant_ef_cert_set, _BODY, help='Set the tenant-wide EdgeFlow certificate', hidden=hidden)
+        _add_verb(sub, 'delete', cmd_tenant_ef_cert_delete, help='Delete the tenant-wide EdgeFlow certificate', hidden=hidden)
+    ten_cert_parser = tenant_sub.add_parser('edgeflow-certificate',
+                                            aliases=resource_aliases('edgeflow-certificate'),
                                             help='Tenant-wide EdgeFlow TLS certificate')
     ten_cert_sub = ten_cert_parser.add_subparsers(dest='tenant_edgeflow_certificate_command')
-
-    def _reg_tenant_cert(sub, hidden=False):
-        _add_verb(sub, 'get', cmd_tenant_ef_cert_get, help='Get the tenant EdgeFlow certificate', hidden=hidden)
-        _add_verb(sub, 'set', cmd_tenant_ef_cert_set, _BODY, help='Set the tenant EdgeFlow certificate', hidden=hidden)
-        _add_verb(sub, 'delete', cmd_tenant_ef_cert_delete, help='Delete the tenant EdgeFlow certificate', hidden=hidden)
     _reg_tenant_cert(ten_cert_sub)
+
+    # deprecated: the older two-token `tenant edgeflow certificate ...` form,
+    # kept (hidden) so it still resolves to the same handlers.
+    ten_ef_parser = tenant_sub.add_parser('edgeflow')
+    ten_ef_sub = ten_ef_parser.add_subparsers(dest='tenant_edgeflow_command')
+    ten_ef_cert_parser = ten_ef_sub.add_parser('certificate', aliases=resource_aliases('certificate'))
+    ten_ef_cert_sub = ten_ef_cert_parser.add_subparsers(dest='tenant_edgeflow_certificate_compat_command')
+    _reg_tenant_cert(ten_ef_cert_sub, hidden=True)
 
     # tenant meraki-api-key delete
     ten_meraki_parser = tenant_sub.add_parser('meraki-api-key', help='Tenant Meraki API key')
@@ -1946,7 +2209,8 @@ def build_parser():
               [(('application_id',), {'help': 'Application ID'})], help='Show one application')
     _add_verb(apps_sub, 'create', cmd_apps_create, _BODY_REQ, help='Create an application')
     _add_verb(apps_sub, 'update', cmd_apps_update,
-              [(('application_id',), {'help': 'Application ID'})] + _BODY_REQ, help="Update an application's fields")
+              [(('application_id',), {'help': 'Application ID'})] + _update_arg_specs('application') + _BODY,
+              help="Update an application's mutable fields (per-field flags and/or --body)")
     _add_verb(apps_sub, 'delete', cmd_apps_delete,
               [(('application_id',), {'help': 'Application ID'})], help='Delete an application')
     _add_verb(apps_sub, 'leaderboard', cmd_apps_leaderboard, _LEADERBOARD_ARGS,
@@ -2097,6 +2361,10 @@ def build_parser():
                    (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
                    (('--reverse',), {'action': 'store_true', 'help': 'Sort high to low'})],
                   help="Stream the app's models", hidden=hidden)
+        _add_verb(sub, 'download', cmd_app_model_download,
+                  [(('application_id',), {'help': 'Application ID'}),
+                   (('--model-id',), {'dest': 'model_id', 'help': 'Specific model ID (default: active model)'})],
+                  help='Download the active model package (.ccp/.ccppkg)', hidden=hidden)
     app_model_parser = apps_sub.add_parser('model', aliases=resource_aliases('model'), help='Application model')
     app_model_sub = app_model_parser.add_subparsers(dest='app_model_command')
     _reg_app_model(app_model_sub)
@@ -2289,7 +2557,8 @@ def build_parser():
                (('--external-id',), {'dest': 'external_id', 'help': 'External ID'})],
               help='Create a subject')
     _add_verb(subjects_sub, 'update', cmd_subjects_update,
-              [(('subject_uid',), {'help': 'Subject UID'})] + _BODY_REQ, help="Update a subject's fields")
+              [(('subject_uid',), {'help': 'Subject UID'})] + _update_arg_specs('subject') + _BODY,
+              help="Update a subject's mutable fields (per-field flags and/or --body)")
     _add_verb(subjects_sub, 'delete', cmd_subjects_delete,
               [(('subject_uid',), {'help': 'Subject UID'})], help='Delete a subject')
     _add_verb(subjects_sub, 'search', cmd_subjects_search,
@@ -2349,7 +2618,8 @@ def build_parser():
                (('--meta-tags',), {'dest': 'meta_tags', 'nargs': '+', 'help': 'Metadata tags'})],
               help='Upload a media file')
     _add_verb(media_sub, 'update', cmd_media_update,
-              [(('media_id',), {'help': 'Media ID'})] + _BODY_REQ, help="Update a media item's fields")
+              [(('media_id',), {'help': 'Media ID'})] + _update_arg_specs('media') + _BODY,
+              help="Update a media item's mutable fields (per-field flags and/or --body)")
     _add_verb(media_sub, 'delete', cmd_media_delete,
               [(('media_id',), {'help': 'Media ID'})], help='Delete a media item')
     _add_verb(media_sub, 'download', cmd_media_download,
@@ -2432,6 +2702,44 @@ def build_parser():
     _reg_ef_cert(ef_cert_sub)
     _flat_alias(subparsers, 'edgeflow-certificate', _reg_ef_cert)
 
+    # edgeflow event (device control). The 'gateway event ...' spelling resolves
+    # via the edgeflow<->gateway synonym group on the parent noun.
+    def _reg_ef_event(sub, hidden=False):
+        eid = [(('edgeflow_id',), {'help': 'EdgeFlow ID (gateway_id)'})]
+        _add_verb(sub, 'reboot', cmd_ef_event_reboot, eid, help='Reboot the EdgeFlow', hidden=hidden)
+        _add_verb(sub, 'ping', cmd_ef_event_ping,
+                  eid + [(('--ping-id',), {'dest': 'ping_id', 'help': 'Optional ping correlation ID'})],
+                  help='Ping the EdgeFlow', hidden=hidden)
+        _add_verb(sub, 'upgrade', cmd_ef_event_upgrade,
+                  eid + [(('--software-version',), {'dest': 'software_version', 'required': True,
+                                                    'help': 'Target software version'})],
+                  help='Upgrade to a software version', hidden=hidden)
+        _add_verb(sub, 'set-boot-software-version', cmd_ef_event_set_boot,
+                  eid + [(('--software-version',), {'dest': 'software_version', 'required': True,
+                                                    'help': 'Boot software version'})],
+                  help='Set the boot software version', hidden=hidden)
+        _add_verb(sub, 'factory-reset', cmd_ef_event_factory_reset, eid,
+                  help='Factory-reset the EdgeFlow', hidden=hidden)
+        _add_verb(sub, 'flush-upload-queue', cmd_ef_event_flush_upload_queue,
+                  eid + [(('--start-time',), {'dest': 'start_time', 'type': float, 'help': 'Window start (epoch seconds)'}),
+                         (('--end-time',), {'dest': 'end_time', 'type': float, 'help': 'Window end (epoch seconds)'})],
+                  help='Flush the media upload queue', hidden=hidden)
+        _add_verb(sub, 'time-bound-media-upload', cmd_ef_event_time_bound_upload,
+                  eid + [(('--start-time',), {'dest': 'start_time', 'type': float, 'required': True,
+                                              'help': 'Window start (epoch seconds)'}),
+                         (('--end-time',), {'dest': 'end_time', 'type': float, 'required': True,
+                                            'help': 'Window end (epoch seconds)'})],
+                  help='Upload media within a time window', hidden=hidden)
+        _add_verb(sub, 'trigger-camera-capture', cmd_ef_event_trigger_capture,
+                  eid + [(('--subject-uid',), {'dest': 'subject_uid', 'required': True, 'help': 'Trigger subject UID'}),
+                         (('--trigger-domain-unit',), {'dest': 'trigger_domain_unit',
+                                                       'help': 'Optional trigger domain unit'})],
+                  help='Trigger a camera capture', hidden=hidden)
+    ef_event_parser = ef_sub.add_parser('event', aliases=resource_aliases('event'),
+                                        help='EdgeFlow device-control events')
+    ef_event_sub = ef_event_parser.add_subparsers(dest='edgeflow_event_command')
+    _reg_ef_event(ef_event_sub)
+
     # edgeflow metrics list/names
     def _reg_ef_metrics(sub, hidden=False):
         _add_verb(sub, 'list', cmd_edgeflow_metrics_list,
@@ -2458,8 +2766,8 @@ def build_parser():
               [(('network_camera_id',), {'help': 'Network camera ID'})], help='Show one network camera')
     _add_verb(cam_sub, 'create', cmd_cameras_create, _BODY_REQ, help='Create a network camera')
     _add_verb(cam_sub, 'update', cmd_cameras_update,
-              [(('network_camera_id',), {'help': 'Network camera ID'})] + _BODY_REQ,
-              help="Update a network camera's fields")
+              [(('network_camera_id',), {'help': 'Network camera ID'})] + _update_arg_specs('camera') + _BODY,
+              help="Update a network camera's mutable fields (per-field flags and/or --body)")
     _add_verb(cam_sub, 'delete', cmd_cameras_delete,
               [(('network_camera_id',), {'help': 'Network camera ID'})], help='Delete a network camera')
     _add_verb(cam_sub, 'genicam', cmd_cameras_genicam,
@@ -2570,6 +2878,21 @@ def build_parser():
     user_pw_sub = user_pw_parser.add_subparsers(dest='user_password_command')
     _add_verb(user_pw_sub, 'reset', cmd_users_request_password_reset,
               [(('email',), {'help': 'Email or user ID'})], help='Trigger a password-reset email')
+
+    # user api-key list/get/create/delete
+    def _reg_user_apikey(sub, hidden=False):
+        uid = [(('user_id',), {'help': 'User ID (or "current")'})]
+        _add_verb(sub, 'list', cmd_user_apikey_list, uid, help="List a user's API keys", hidden=hidden)
+        _add_verb(sub, 'get', cmd_user_apikey_get,
+                  uid + [(('api_key_id',), {'help': 'API key ID'})], help='Show one API key', hidden=hidden)
+        _add_verb(sub, 'create', cmd_user_apikey_create,
+                  uid + [(('--description',), {'required': True, 'help': 'Key description'})],
+                  help='Create an API key', hidden=hidden)
+        _add_verb(sub, 'delete', cmd_user_apikey_delete,
+                  uid + [(('api_key_id',), {'help': 'API key ID'})], help='Delete an API key', hidden=hidden)
+    user_apikey_parser = user_sub.add_parser('api-key', aliases=resource_aliases('api-key'), help='User API keys')
+    user_apikey_sub = user_apikey_parser.add_subparsers(dest='user_apikey_command')
+    _reg_user_apikey(user_apikey_sub)
 
     # 'cogniac user' with no subcommand keeps the historical current-user behavior
     user_parser.set_defaults(func=cmd_user)

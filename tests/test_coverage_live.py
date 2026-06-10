@@ -126,6 +126,19 @@ class TestApplicationReadCoverage:
         # should not raise; may be empty
         assert isinstance(list(apps[0].models(limit=2)), list)
 
+    def test_model_download(self, cc, tmp_path, monkeypatch):
+        apps = cc.get_all_applications()
+        if not apps:
+            pytest.skip("no applications on tenant")
+        # download_model writes the package to the cwd; isolate it to tmp_path and
+        # skip when the app has no active model package to download.
+        monkeypatch.chdir(tmp_path)
+        try:
+            filename = apps[0].download_model()
+        except (cogniac.ClientError, KeyError):
+            pytest.skip("no downloadable model package for this application")
+        assert filename and (tmp_path / filename).exists()
+
 
 @requires_live
 class TestSubjectReadCoverage:
@@ -175,6 +188,20 @@ class TestEdgeFlowReadCoverage:
         except cogniac.ClientError:
             pytest.skip("no certificate configured / not permitted on this tenant")
         assert isinstance(cert, dict)
+
+    def test_edgeflow_event_methods_present(self, cc):
+        efs = cc.get_all_edgeflows()
+        if not efs:
+            pytest.skip("no edgeflows on tenant")
+        ef = efs[0]
+        # device-control events (reboot, factory_reset, upgrade, ...) are
+        # side-effecting and must not be invoked against a live device here;
+        # confirm the bound methods exist on a real instance. Behavior is
+        # exercised manually / against a disposable device.
+        for m in ['reboot', 'ping', 'upgrade', 'set_boot_software_version',
+                  'factory_reset', 'flush_upload_queue', 'time_bound_media_upload',
+                  'trigger_camera_capture']:
+            assert callable(getattr(ef, m, None)), "edgeflow.%s missing" % m
 
 
 @requires_live
@@ -252,6 +279,15 @@ class TestUserReadCoverage:
         assert isinstance(user, cogniac.CogniacUser)
         assert user.user_id == cc.user.user_id
 
+    def test_user_api_keys_list(self, cc):
+        # read the current user's API keys; permission-gated on some tenants/roles.
+        user = cogniac.CogniacUser.get_by_id(cc, cc.user.user_id)
+        try:
+            keys = user.api_keys()
+        except cogniac.ClientError:
+            pytest.skip("api key listing not permitted on this tenant/role")
+        assert isinstance(keys, (list, dict))
+
     def test_users_query(self, cc):
         # the user collection is queried by id (listing all users in a tenant is
         # done via tenant.users()). This collection endpoint is intermittently
@@ -282,3 +318,12 @@ class TestTenantReadCoverage:
     def test_tenant_invites_read(self, cc):
         invites = cc.tenant.invites()
         assert isinstance(invites, (dict, list))
+
+    def test_tenant_edgeflow_certificate_read(self, cc):
+        # the tenant-wide cert may not be configured / may be permission-gated;
+        # assert the call path works when it returns a value.
+        try:
+            cert = cc.tenant.get_edgeflow_certificate()
+        except cogniac.ClientError:
+            pytest.skip("no tenant edgeflow certificate configured / not permitted")
+        assert isinstance(cert, (dict, list))

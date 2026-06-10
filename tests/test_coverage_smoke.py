@@ -52,7 +52,7 @@ _APP_METHODS = [
     'copy_evaluation_metrics',
     'consensus_releases', 'consensus_release', 'consensus_release_items',
     'consensus_release_upstream_assertions', 'consensus_detection_release',
-    'labeling_image_encoder', 'labeling_mask_decoder',
+    'labeling_image_encoder', 'labeling_mask_decoder', 'download_model',
 ]
 
 _APP_CLASSMETHODS = ['create', 'get', 'get_all', 'get_all_types', 'get_type']
@@ -63,7 +63,11 @@ _SUBJECT_METHODS = ['update', 'delete', 'detections', 'consensus_history',
 _MEDIA_METHODS = ['update', 'delete', 'share', 'create_detection', 'detections',
                   'embeddings', 'download']
 _EDGEFLOW_METHODS = ['update', 'delete', 'get_certificate', 'set_certificate',
-                     'replace_certificate', 'delete_certificate', 'metrics', 'status']
+                     'replace_certificate', 'delete_certificate', 'metrics', 'status',
+                     # device-control events
+                     'reboot', 'ping', 'upgrade', 'set_boot_software_version',
+                     'factory_reset', 'flush_upload_queue', 'time_bound_media_upload',
+                     'trigger_camera_capture']
 _EDGEFLOW_CLASSMETHODS = ['create', 'get', 'get_all', 'metric_names', 'all_metrics']
 _TENANT_METHODS = ['get_edgeflow_certificate', 'set_edgeflow_certificate',
                    'delete_edgeflow_certificate', 'delete_meraki_api_key',
@@ -124,9 +128,18 @@ def test_network_camera_methods_exist(method):
 _USER_METHODS = ['get_all', 'get_by_id', 'delete_by_id', 'tenants',
                  'request_password_reset', 'invites', 'respond_invite']
 
+# instance methods (api-key management) — present on sync + async
+_USER_INSTANCE_METHODS = ['api_keys', 'api_key', 'create_api_key', 'delete_api_key']
+
 
 @pytest.mark.parametrize("method", _USER_METHODS)
 def test_user_classmethods_exist(method):
+    assert callable(getattr(cogniac.CogniacUser, method, None))
+    assert callable(getattr(cogniac.AsyncCogniacUser, method, None))
+
+
+@pytest.mark.parametrize("method", _USER_INSTANCE_METHODS)
+def test_user_instance_methods_exist(method):
     assert callable(getattr(cogniac.CogniacUser, method, None))
     assert callable(getattr(cogniac.AsyncCogniacUser, method, None))
 
@@ -180,6 +193,41 @@ def test_gateways_is_deprecated_alias_of_edgeflows():
     assert callable(cogniac.CogniacConnection.gateways)
     src = inspect.getsource(cogniac.CogniacConnection.gateways)
     assert 'edgeflows' in src
+
+
+def test_get_routes_body_bearing_get_through_request():
+    # Regression: httpx's Client.get() rejects a request body, but the model
+    # package fetch (download_model -> GET /ccppkg) sends a json body. _get must
+    # route body-bearing GETs through .request("GET", ...) while keeping plain
+    # GETs on .get().
+    from cogniac.cogniac import CogniacConnection
+
+    class _Resp:
+        status_code = 200
+
+    class _Session:
+        def __init__(self):
+            self.last = None
+
+        def get(self, url, **kw):
+            self.last = ('get', kw)
+            return _Resp()
+
+        def request(self, method, url, **kw):
+            self.last = ('request', method, kw)
+            return _Resp()
+
+    conn = object.__new__(CogniacConnection)
+    conn.session = _Session()
+    conn.url_prefix = 'https://example.invalid'
+    conn.timeout = 60
+
+    conn._get('/1/thing')
+    assert conn.session.last[0] == 'get'
+
+    conn._get('/1/thing', json={'ccp_filename': 'm.tgz'})
+    assert conn.session.last[0] == 'request' and conn.session.last[1] == 'GET'
+    assert conn.session.last[2].get('json') == {'ccp_filename': 'm.tgz'}
 
 
 # ---------------------------------------------------------------------------
@@ -250,7 +298,7 @@ def test_update_body_method_present(sync_cls, async_cls):
     (cogniac.CogniacMedia, cogniac.AsyncCogniacMedia, _MEDIA_METHODS),
     (cogniac.CogniacEdgeFlow, cogniac.AsyncCogniacEdgeFlow, _EDGEFLOW_METHODS + _EDGEFLOW_CLASSMETHODS),
     (cogniac.CogniacTenant, cogniac.AsyncCogniacTenant, _TENANT_METHODS),
-    (cogniac.CogniacUser, cogniac.AsyncCogniacUser, _USER_METHODS),
+    (cogniac.CogniacUser, cogniac.AsyncCogniacUser, _USER_METHODS + _USER_INSTANCE_METHODS),
     (cogniac.CogniacNetworkCamera, cogniac.AsyncCogniacNetworkCamera, _NETCAM_METHODS),
     (cogniac.CogniacDeployment, cogniac.AsyncCogniacDeployment, _DEPLOYMENT_METHODS),
     (cogniac.CogniacWorkflow, cogniac.AsyncCogniacWorkflow, _WORKFLOW_METHODS),
@@ -336,9 +384,9 @@ CATALOG_COMMANDS = [
     ['auth'], ['auth', 'login'], ['auth', 'logout'],
     # tenant
     ['tenant', 'get'], ['tenant', 'list'],
-    ['tenant', 'edgeflow', 'certificate', 'get'],
-    ['tenant', 'edgeflow', 'certificate', 'set'],
-    ['tenant', 'edgeflow', 'certificate', 'delete'],
+    ['tenant', 'edgeflow-certificate', 'get'],
+    ['tenant', 'edgeflow-certificate', 'set'],
+    ['tenant', 'edgeflow-certificate', 'delete'],
     ['tenant', 'meraki-api-key', 'delete'],
     ['tenant', 'cloudcore-import-key', 'get', 'KEY'],
     ['tenant', 'user', 'list'],
@@ -365,6 +413,7 @@ CATALOG_COMMANDS = [
     ['application', 'model', 'performance', 'A1', '--subject-uid', 's1'],
     ['application', 'model', 'donate', 'A1', '--source', 'A2'],
     ['application', 'model', 'export', 'A1', '--target', 'meraki'], ['application', 'model', 'list', 'A1'],
+    ['application', 'model', 'download', 'A1'],
     # application consensus
     ['application', 'consensus', 'history', 'A1'],
     ['application', 'consensus', 'release', 'list', 'A1'],
@@ -403,6 +452,13 @@ CATALOG_COMMANDS = [
     ['edgeflow', 'certificate', 'get', 'g1'], ['edgeflow', 'certificate', 'set', 'g1'],
     ['edgeflow', 'certificate', 'replace', 'g1'], ['edgeflow', 'certificate', 'delete', 'g1'],
     ['edgeflow', 'metrics', 'list'], ['edgeflow', 'metrics', 'names'],
+    # edgeflow device-control events
+    ['edgeflow', 'event', 'reboot', 'g1'], ['edgeflow', 'event', 'ping', 'g1'],
+    ['edgeflow', 'event', 'upgrade', 'g1', '--software-version', '2.0'],
+    ['edgeflow', 'event', 'set-boot-software-version', 'g1', '--software-version', '2.0'],
+    ['edgeflow', 'event', 'factory-reset', 'g1'], ['edgeflow', 'event', 'flush-upload-queue', 'g1'],
+    ['edgeflow', 'event', 'time-bound-media-upload', 'g1', '--start-time', '1', '--end-time', '2'],
+    ['edgeflow', 'event', 'trigger-camera-capture', 'g1', '--subject-uid', 's1'],
     # camera
     ['camera', 'list'], ['camera', 'get', 'c1'], ['camera', 'create', '--body', '{}'],
     ['camera', 'update', 'c1', '--body', '{}'], ['camera', 'delete', 'c1'], ['camera', 'genicam', 'c1'],
@@ -419,6 +475,8 @@ CATALOG_COMMANDS = [
     # user
     ['user', 'list'], ['user', 'get', 'u1'], ['user', 'delete', 'u1'],
     ['user', 'tenants', 'u1'], ['user', 'password', 'reset', 'a@b.co'],
+    ['user', 'api-key', 'list', 'u1'], ['user', 'api-key', 'get', 'u1', 'k1'],
+    ['user', 'api-key', 'create', 'u1', '--description', 'd'], ['user', 'api-key', 'delete', 'u1', 'k1'],
 ]
 
 
@@ -515,8 +573,10 @@ ALIAS_PAIRS = [
     (['edgeflow-certificate', 'get', 'g1'], ['edgeflow', 'certificate', 'get', 'g1']),
     (['edgeflow-metrics', 'list'], ['edgeflow', 'metrics', 'list']),
     (['edgeflow-metric-names'], ['edgeflow', 'metrics', 'names']),
-    (['tenant-edgeflow-certificate', 'get'], ['tenant', 'edgeflow', 'certificate', 'get']),
-    (['tenant-gateway-cert', 'get'], ['tenant', 'edgeflow', 'certificate', 'get']),
+    (['tenant-edgeflow-certificate', 'get'], ['tenant', 'edgeflow-certificate', 'get']),
+    (['tenant-gateway-cert', 'get'], ['tenant', 'edgeflow-certificate', 'get']),
+    (['tenant', 'gateway-certificate', 'get'], ['tenant', 'edgeflow-certificate', 'get']),
+    (['tenant', 'edgeflow', 'certificate', 'get'], ['tenant', 'edgeflow-certificate', 'get']),  # deprecated two-token
     (['tenant-meraki-key', 'delete'], ['tenant', 'meraki-api-key', 'delete']),
     (['deployment-capacity', 'list'], ['deployment', 'capacity', 'list']),
     (['workflow-version', 'get', 'b1', '3'], ['workflow', 'version', 'get', 'b1', '3']),
@@ -528,6 +588,11 @@ ALIAS_PAIRS = [
     (['application', 'eval-metrics', 'A1'], ['application', 'evaluation', 'metrics', 'get', 'A1']),
     (['application', 'detections-pending', 'A1'], ['application', 'detections', 'pending', 'A1']),
     (['application', 'event-types', 'A1'], ['application', 'event', 'types', 'A1']),
+    # edgeflow<->gateway in compound positions; event plural; api-key plural
+    (['gateway', 'event', 'reboot', 'g1'], ['edgeflow', 'event', 'reboot', 'g1']),
+    (['edgeflow', 'events', 'reboot', 'g1'], ['edgeflow', 'event', 'reboot', 'g1']),
+    (['gateways', 'event', 'factory-reset', 'g1'], ['edgeflow', 'event', 'factory-reset', 'g1']),
+    (['user', 'api-keys', 'list', 'u1'], ['user', 'api-key', 'list', 'u1']),
 ]
 
 
