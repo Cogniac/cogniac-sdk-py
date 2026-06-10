@@ -505,13 +505,17 @@ class AsyncCogniacApplication(object):
     #  replay
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    async def replay_status(self):
+    async def replay_status(self, timeout=None):
         """
         Return the current replay status for this application.
 
+        This endpoint long-polls: it blocks until the replay state changes (or
+        the server's long-poll window elapses). Pass timeout (seconds) to bound
+        the client-side wait.
+
         See GET /1/applications/{app_id}/replay.
         """
-        resp = await self._cc._get("/1/applications/%s/replay" % self.application_id)
+        resp = await self._cc._get("/1/applications/%s/replay" % self.application_id, timeout=timeout)
         return resp.json()
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
@@ -708,13 +712,26 @@ class AsyncCogniacApplication(object):
     #  push notifications
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    async def push_notifications(self):
+    async def push_notifications(self, device_id=None, app_bundle_id=None, event_type=None):
         """
-        Return the push-notification subscriptions for this application.
+        Return the push-notification subscription status for a device on this
+        application. The endpoint identifies the subscription by device, so
+        device_id and app_bundle_id are required by the API.
+
+        device_id (str):      device identifier
+        app_bundle_id (str):  app bundle id
+        event_type (str):     optional event type filter
 
         See GET /1/applications/{app_id}/pushNotifications.
         """
-        resp = await self._cc._get("/1/applications/%s/pushNotifications" % self.application_id)
+        params = {}
+        if device_id is not None:
+            params['device_id'] = device_id
+        if app_bundle_id is not None:
+            params['app_bundle_id'] = app_bundle_id
+        if event_type is not None:
+            params['event_type'] = event_type
+        resp = await self._cc._get("/1/applications/%s/pushNotifications" % self.application_id, params=params)
         return resp.json()
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
@@ -742,11 +759,11 @@ class AsyncCogniacApplication(object):
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     async def feedback(self, limit=10):
         """
-        Return up to {limit} feedback items for this application.
+        Return up to {limit} feedback requests for this application.
 
-        See GET /21/applications/{app_id}/feedback.
+        See GET /21/applications/{app_id}/feedbackRequests.
         """
-        resp = await self._cc._get("/21/applications/%s/feedback?limit=%d" % (self.application_id, limit))
+        resp = await self._cc._get("/21/applications/%s/feedbackRequests?limit=%d" % (self.application_id, limit))
         return resp.json()
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))

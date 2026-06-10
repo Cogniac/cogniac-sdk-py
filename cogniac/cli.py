@@ -866,7 +866,9 @@ def cmd_app_push(args):
     cc = get_connection(args)
     try:
         app = cc.get_application(args.application_id)
-        output(app.push_notifications(), args)
+        output(app.push_notifications(device_id=args.device_id,
+                                      app_bundle_id=args.app_bundle_id,
+                                      event_type=args.event_type), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -1685,8 +1687,11 @@ def build_parser():
     p.add_argument('--limit', type=int, default=None, help='Max results')
     p.set_defaults(func=cmd_app_performance_new_random)
 
-    p = apps_sub.add_parser('push', help='List push-notification subscriptions')
+    p = apps_sub.add_parser('push', help='Push-notification subscription status for a device')
     p.add_argument('application_id', help='Application ID')
+    p.add_argument('--device-id', dest='device_id', help='Device ID')
+    p.add_argument('--app-bundle-id', dest='app_bundle_id', help='App bundle ID')
+    p.add_argument('--event-type', dest='event_type', help='Event type')
     p.set_defaults(func=cmd_app_push)
 
     p = apps_sub.add_parser('push-subscribe', help='Subscribe/unsubscribe a device to app events')

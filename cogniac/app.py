@@ -577,13 +577,17 @@ class CogniacApplication(object):
     #  replay_status
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    def replay_status(self):
+    def replay_status(self, timeout=None):
         """
         Return the current replay status for this application.
 
+        This endpoint long-polls: it blocks until the replay state changes (or
+        the server's long-poll window elapses). Pass timeout (seconds) to bound
+        the client-side wait.
+
         See GET /1/applications/{app_id}/replay.
         """
-        resp = self._cc._get("/1/applications/%s/replay" % self.application_id)
+        resp = self._cc._get("/1/applications/%s/replay" % self.application_id, timeout=timeout)
         return resp.json()
 
     ##
@@ -821,13 +825,26 @@ class CogniacApplication(object):
     #  push notifications
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    def push_notifications(self):
+    def push_notifications(self, device_id=None, app_bundle_id=None, event_type=None):
         """
-        Return the push-notification subscriptions for this application.
+        Return the push-notification subscription status for a device on this
+        application. The endpoint identifies the subscription by device, so
+        device_id and app_bundle_id are required by the API.
+
+        device_id (str):      device identifier
+        app_bundle_id (str):  app bundle id
+        event_type (str):     optional event type filter
 
         See GET /1/applications/{app_id}/pushNotifications.
         """
-        resp = self._cc._get("/1/applications/%s/pushNotifications" % self.application_id)
+        params = {}
+        if device_id is not None:
+            params['device_id'] = device_id
+        if app_bundle_id is not None:
+            params['app_bundle_id'] = app_bundle_id
+        if event_type is not None:
+            params['event_type'] = event_type
+        resp = self._cc._get("/1/applications/%s/pushNotifications" % self.application_id, params=params)
         return resp.json()
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
@@ -860,11 +877,11 @@ class CogniacApplication(object):
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def feedback(self, limit=10):
         """
-        Return up to {limit} feedback items for this application.
+        Return up to {limit} feedback requests for this application.
 
-        See GET /21/applications/{app_id}/feedback.
+        See GET /21/applications/{app_id}/feedbackRequests.
         """
-        resp = self._cc._get("/21/applications/%s/feedback?limit=%d" % (self.application_id, limit))
+        resp = self._cc._get("/21/applications/%s/feedbackRequests?limit=%d" % (self.application_id, limit))
         return resp.json()
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
