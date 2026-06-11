@@ -234,7 +234,13 @@ class AsyncCogniacConnection(object):
             timeout = self.timeout
         kwargs.pop('stream', None)  # httpx handles streaming differently
         try:
-            resp = await self.session.get(url, timeout=timeout, **kwargs)
+            # httpx's .get() rejects a request body; route body-bearing GETs
+            # (e.g. the model-package fetch) through .request(), which is
+            # otherwise equivalent to .get() for bodyless calls.
+            if any(k in kwargs for k in ('json', 'data', 'content')):
+                resp = await self.session.request("GET", url, timeout=timeout, **kwargs)
+            else:
+                resp = await self.session.get(url, timeout=timeout, **kwargs)
             raise_errors(resp)
         except CredentialError:
             await self.__authenticate()
@@ -278,6 +284,20 @@ class AsyncCogniacConnection(object):
             timeout = self.timeout
         try:
             resp = await self.session.request('DELETE', url, timeout=timeout, **kwargs)
+            raise_errors(resp)
+        except CredentialError:
+            await self.__authenticate()
+            raise
+        return resp
+
+    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
+    async def _put(self, url, timeout=None, **kwargs):
+        """Async PUT with auto re-authentication on credential expiry."""
+        url = self._build_url(url)
+        if timeout is None:
+            timeout = self.timeout
+        try:
+            resp = await self.session.request('PUT', url, timeout=timeout, **kwargs)
             raise_errors(resp)
         except CredentialError:
             await self.__authenticate()

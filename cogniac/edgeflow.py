@@ -69,6 +69,45 @@ class CogniacEdgeFlow(object):
         edgeflows = resp.json()['data']
         return [CogniacEdgeFlow(connection, edgeflow) for edgeflow in edgeflows]
 
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def create(cls, connection, body=None):
+        """
+        Create a new EdgeFlow (gateway).
+
+        connection (CogniacConnection):  Authenticated CogniacConnection object
+        body (dict):                     CreateGatewayRequest body
+
+        See POST /1/gateways.
+        """
+        resp = connection._post("/1/gateways", json=body if body is not None else {})
+        return CogniacEdgeFlow(connection, resp.json())
+
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def metric_names(cls, connection):
+        """
+        Return the list of available EdgeFlow metric names for the tenant.
+
+        See GET /1/metrics_name (ef-metrics-api).
+        """
+        resp = connection._get("/1/metrics_name")
+        return resp.json()
+
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def all_metrics(cls, connection, **params):
+        """
+        Return EdgeFlow metrics across the tenant.
+
+        Extra keyword args are passed through as query parameters (e.g. metric
+        name / time window); the exact set is service-defined.
+
+        See GET /1/metrics (ef-metrics-api).
+        """
+        resp = connection._get("/1/metrics", params=params)
+        return resp.json()
+
     def __init__(self, connection, edgeflow_dict, timeout=60):
         """
         Initialize a CogniacEdgeFlow object.
@@ -407,3 +446,100 @@ class CogniacEdgeFlow(object):
         aggregated_stats['start_timestamp'] = start
         aggregated_stats['end_timestamp'] = end
         return aggregated_stats
+
+    ##
+    #  delete
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def delete(self):
+        """
+        Delete this EdgeFlow (gateway).
+
+        See DELETE /1/gateways/{gw_id}.
+        """
+        self._cc._delete("/1/gateways/%s" % self.gateway_id)
+
+    ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def update(self, body):
+        """
+        Update this EdgeFlow's mutable fields with the given body dict and
+        return the updated EdgeFlow JSON.
+
+        body (dict):  fields to update
+
+        See POST /1/gateways/{gateway_id}.
+        """
+        resp = self._cc._post("/1/gateways/%s" % self.gateway_id, json=body)
+        result = resp.json()
+        for k, v in result.items():
+            super(CogniacEdgeFlow, self).__setattr__(k, v)
+        return result
+
+    ##
+    #  TLS certificate
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def get_certificate(self):
+        """
+        Return this EdgeFlow's TLS certificate.
+
+        See GET /1/gateways/{gateway_id}/certificate.
+        """
+        resp = self._cc._get("/1/gateways/%s/certificate" % self.gateway_id)
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def set_certificate(self, body=None):
+        """
+        Create/set this EdgeFlow's TLS certificate.
+
+        body (dict):  TLS certificate/key pair body
+
+        See POST /1/gateways/{gateway_id}/certificate.
+        """
+        resp = self._cc._post("/1/gateways/%s/certificate" % self.gateway_id,
+                             json=body if body is not None else {})
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def replace_certificate(self, body=None):
+        """
+        Replace this EdgeFlow's TLS certificate (idempotent PUT).
+
+        body (dict):  TLS certificate/key pair body
+
+        See PUT /1/gateways/{gateway_id}/certificate.
+        """
+        resp = self._cc._put("/1/gateways/%s/certificate" % self.gateway_id,
+                             json=body if body is not None else {})
+        return resp.json()
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def delete_certificate(self):
+        """
+        Delete this EdgeFlow's TLS certificate.
+
+        See DELETE /1/gateways/{gateway_id}/certificate.
+        """
+        self._cc._delete("/1/gateways/%s/certificate" % self.gateway_id)
+
+    ##
+    #  metrics
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def metrics(self, **params):
+        """
+        Return runtime metrics for this EdgeFlow.
+
+        Extra keyword args are passed through as query parameters (e.g. metric
+        name / time window); the exact set is service-defined. The EdgeFlow is
+        identified via the gateway_id query parameter.
+
+        See GET /1/metrics/ef (ef-metrics-api).
+        """
+        params.setdefault('gateway_id', self.gateway_id)
+        resp = self._cc._get("/1/metrics/ef", params=params)
+        return resp.json()

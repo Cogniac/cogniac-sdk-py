@@ -26,6 +26,10 @@ COG_TENANT='w26eek85g3o1' pytest tests/ -v
 
 No CI/CD pipeline exists in this repo.
 
+The coverage suite (`tests/test_coverage_smoke.py` / `tests/test_coverage_live.py`) keeps a few conventions:
+- **Smoke (no creds)** walks the built parser and asserts every command resolves to a handler, and that every `args.<x>` a handler reads is a dest its command actually defines — a mechanical check that catches handler/parser attribute mismatches. Pagination generators are exercised against a mocked transport (empty/`null` response, bare list, paging envelope, client-side limit); pure existence checks miss those.
+- **Live (`@requires_live`, read-only)** does one round-trip per resource group. Skip on 403 (and on a documented 404/405 only where "not configured / not allowed on this backend" is legitimate), but let an unexpected 404 **fail** — a stray 404 usually means a wrong path and must not masquerade as "not permitted." Don't burn API calls before an unconditional skip — mark the whole test `@pytest.mark.skip`. Destructive operations (create/delete, EdgeFlow device-control events) are not invoked live.
+
 ## Architecture
 
 ### Sync and Async APIs
@@ -66,12 +70,16 @@ Each API resource has a sync class and an async counterpart:
 | `CogniacOpsReview` | `AsyncCogniacOpsReview` | ops_review.py / async_ops_review.py |
 
 Common patterns (both sync and async):
-- **Factory classmethods**: `get(connection, id)`, `get_all(connection)`, `create(connection, ...)`
-- **Mutable/immutable key separation**: each class defines which attributes can be updated
-- **Pagination**: sync generators / async generators using `paging.next` from API responses
+- **Factory classmethods**: `get(connection, <id>)` (one), `get_all(connection, ...)` (the tenant's collection), `create(connection, ...)` with required fields as explicit keyword args. Additional explicit lookups are named `get_by_<key>` (e.g. `get_by_id`).
+- **Instance lifecycle**: `update(self, body)` POSTs the body to `/N/<resource>/<id>`, refreshes the instance's attributes from the response, and returns the response JSON; `delete(self)` removes the resource.
+- **Mutable/immutable key separation**: each class declares which attributes can be updated.
+- **Pagination**: multi-item reads are generators that drain the API's pagination (`paging.next`, or a cursor such as a DynamoDB `last_key`) and honor `limit`/`reverse`/filter args; async counterparts are async generators. Single object/count/status reads return the value directly.
+- **Method naming**: snake_case; verb-first for actions (`download_model`, `create_api_key`, `disassociate_media`), noun for reads that return a thing (`api_keys`, `events`).
 
 Sync-only: `__setattr__` override auto-POSTs mutable attribute changes.
-Async-only: explicit `await entity.set(key=value)` method (can batch multiple fields in one call).
+Async-only: explicit `await entity.set(key=value)` method (can batch multiple fields in one call); assigning a mutable attribute directly raises with a hint to use `set()`.
+
+**Sync/async symmetry is required**: every method on a sync class has an async counterpart with the same name and signature (an async generator where the sync one is a generator). Both are re-exported from `cogniac/__init__.py` (see Package Exports). The smoke tests assert this pairing — a sync-only method is a bug.
 
 ### Media Download
 
@@ -104,6 +112,8 @@ The `@retry` decorator from `tenacity` is used on connection and entity methods.
 
 URLs are version-prefixed (e.g., `/1/tenants`, `/21/users/current`). Connection classes strip and re-prefix versions when constructing request URLs. When adding new endpoints, follow the existing `url_prefix + "/N/" + path` pattern.
 
+Go through the connection wrappers `_get` / `_post` / `_put` / `_delete` — they version-prefix the URL, apply the default timeout, and re-authenticate on 401. Don't hit the raw httpx session from an entity method. `_get` retries only on 401; a method that should tolerate transient 5xx adds the `@retry(... server_error, 8 attempts)` decorator itself. **Body-bearing GETs** are routed through `session.request("GET", ...)` because httpx's `.get()` rejects a request body — so pass `json=`/`params=` to `_get` as needed rather than constructing requests by hand.
+
 ### CLI Tools (bin/)
 
 - `icogniac` — IPython shell with pre-loaded cogniac magic commands and auto-authentication
@@ -119,6 +129,19 @@ The CLI uses the sync API only.
 ## `cogniac` CLI Tool
 
 Agent-friendly CLI. JSON output by default, `--format table` for human-readable. Auth via env vars (`COG_USER`/`COG_PASS` or `COG_API_KEY`, plus `COG_TENANT`) **or** a stored login from `cogniac auth login`. The tenant can also be specified per-invocation with the top-level `--tenant <tenant_id>` flag, which overrides `COG_TENANT`.
+
+### Command structure & conventions
+
+The command surface is **nested, noun-first / verb-last**: `cogniac <noun> [<sub-noun> ...] <verb>` (max depth ~3–4). Read verb is `get` (one) / `list` (collection); CRUD verbs are `create`/`get`/`list`/`update`/`delete`. Mutually-exclusive operations are sibling verbs under one sub-noun (e.g. `application replay status|start|stop`). Compound names split into separate nested tokens (`application consensus release items`), never hyphenated together; hyphens survive only inside an atomic terminal verb / model name (`new-random`, `label-mask-decoder-model`).
+
+- **Resource ids are required `--<resource>-id` flags** (`--application-id`, `--subject-uid`, …), so there is no positional/flag ambiguity. Build them with the `_id(dest, help)` helper: the dest keeps the resource name, so handlers read `args.application_id` unchanged. Secondary ids use the same full naming (`--source-application-id`, `--workflow-id`). Only genuine file-path inputs stay positional (e.g. `media upload <filename>`).
+- **Aliases, two layers, both routing to the same handler:** (1) token synonyms / plurals / abbreviations via `_SYNONYM_GROUPS` + `resource_aliases()`, accepted in every position including compounds (`app`/`apps`/`application`, `edgeflow`/`gateway`, `cert`/`certificate`, `detection`/`assertion`) — so `gateway event reboot` resolves exactly like `edgeflow event reboot`; (2) every prior flat / hyphenated spelling stays as a **hidden, deprecated** alias. To hide a deprecated parser/verb, **omit the `help` kwarg** — never `help=argparse.SUPPRESS` (an aliased subparser with `SUPPRESS` renders a literal `==SUPPRESS==` line in `--help`).
+- **Register with the helpers**, not raw `add_parser` chains: `_add_resource` (top-level noun + aliases), `_add_verb(sub, name, handler, arg_specs, help, aliases, hidden)` where `arg_specs` is a list of `(names_tuple, add_argument_kwargs)`, and `_flat_alias` (a hidden flat compound whose verbs come from the same registrar function as the nested sub-noun, so both bind one handler set).
+- **Pagination is automatic**: list commands `list(...)` the SDK generator and emit one JSON array. Keep `--limit` / `--cursor` / sort / filter flags; `--limit` caps the total.
+- **`update` takes per-field flags and/or `--body`**: per-field flags for the resource's mutable fields (driven by the `_UPDATE_FIELDS` table; bool flags default to `None` so an unset flag is omitted) merged over a whole-object `--body JSON`, flags winning on overlap. A resource with dynamic fields stays `--body`-only.
+- **Handlers** are `cmd_*` functions: call `get_connection(args)`, do the work inside `try/except ClientError → error_exit(...)`, then `output(result, args, table_type)` (JSON by default, table when a table type is given). For a fire-and-forget action whose SDK method returns `None`, print a synthesized status dict. Every command must resolve to a callable handler (`set_defaults(func=...)`); the smoke tests parse every command and alias and assert it.
+
+The examples below use the historical flat spellings, which remain valid as hidden aliases; the canonical forms are nested (e.g. `cogniac application list`, `cogniac subject create <name>`).
 
 Auth commands:
 ```
@@ -147,7 +170,6 @@ cogniac edgeflows get <id>      # get specific edgeflow
 cogniac edgeflows status <id>   # status events: --subsystem, --limit
 cogniac cameras list            # list all cameras
 cogniac cameras get <id>        # get specific camera
-cogniac version                 # API version info
 ```
 
 Write commands:

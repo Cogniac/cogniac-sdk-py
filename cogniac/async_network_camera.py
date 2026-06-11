@@ -207,6 +207,33 @@ class AsyncCogniacNetworkCamera(object):
             super(AsyncCogniacNetworkCamera, self).__setattr__(k, v)
 
     ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def update(self, body=None, **kwargs):
+        """
+        Update this network camera's mutable fields and return the updated JSON.
+
+        body (dict):  fields to update
+
+        Deprecated: passing per-field keyword arguments (e.g. update(url=...)) is
+        still accepted for backward compatibility — they are merged into the body —
+        but emits a DeprecationWarning. Prefer passing a body dict.
+
+        See POST /1/networkCameras/{network_camera_id}.
+        """
+        if kwargs:
+            import warnings
+            warnings.warn("AsyncCogniacNetworkCamera.update(**kwargs) is deprecated; "
+                          "pass a body dict instead.", DeprecationWarning, stacklevel=2)
+            body = dict(body or {}, **kwargs)
+        resp = await self._cc._post("/1/networkCameras/%s" % self.network_camera_id, json=body or {})
+        result = resp.json()
+        for k, v in result.items():
+            super(AsyncCogniacNetworkCamera, self).__setattr__(k, v)
+        return result
+
+    ##
     #  delete
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
@@ -220,3 +247,31 @@ class AsyncCogniacNetworkCamera(object):
             delattr(self, k)
         self._cam_keys = None
         self._cc = None
+
+    ##
+    #  genicam
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def genicam(self):
+        """
+        Return the GenICam XML for this network camera.
+
+        See GET /1/networkCameras/{camera_id}/genicam.
+        """
+        resp = await self._cc._get("/1/networkCameras/%s/genicam" % self.network_camera_id)
+        return resp.text
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def upload_genicam(self, filename):
+        """
+        Upload a GenICam XML file for this network camera.
+
+        See POST /1/networkCameras/{camera_id}/genicam.
+        """
+        with open(filename, 'rb') as f:
+            resp = await self._cc._post("/1/networkCameras/%s/genicam" % self.network_camera_id,
+                                       files={'file': f})
+        try:
+            return resp.json()
+        except Exception:
+            return None
