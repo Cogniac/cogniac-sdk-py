@@ -26,6 +26,10 @@ COG_TENANT='w26eek85g3o1' pytest tests/ -v
 
 No CI/CD pipeline exists in this repo.
 
+The coverage suite (`tests/test_coverage_smoke.py` / `tests/test_coverage_live.py`) keeps a few conventions:
+- **Smoke (no creds)** walks the built parser and asserts every command resolves to a handler, and that every `args.<x>` a handler reads is a dest its command actually defines — a mechanical check that catches handler/parser attribute mismatches. Pagination generators are exercised against a mocked transport (empty/`null` response, bare list, paging envelope, client-side limit); pure existence checks miss those.
+- **Live (`@requires_live`, read-only)** does one round-trip per resource group. Skip on 403 (and on a documented 404/405 only where "not configured / not allowed on this backend" is legitimate), but let an unexpected 404 **fail** — a stray 404 usually means a wrong path and must not masquerade as "not permitted." Don't burn API calls before an unconditional skip — mark the whole test `@pytest.mark.skip`. Destructive operations (create/delete, EdgeFlow device-control events) are not invoked live.
+
 ## Architecture
 
 ### Sync and Async APIs
@@ -130,7 +134,7 @@ Agent-friendly CLI. JSON output by default, `--format table` for human-readable.
 
 The command surface is **nested, noun-first / verb-last**: `cogniac <noun> [<sub-noun> ...] <verb>` (max depth ~3–4). Read verb is `get` (one) / `list` (collection); CRUD verbs are `create`/`get`/`list`/`update`/`delete`. Mutually-exclusive operations are sibling verbs under one sub-noun (e.g. `application replay status|start|stop`). Compound names split into separate nested tokens (`application consensus release items`), never hyphenated together; hyphens survive only inside an atomic terminal verb / model name (`new-random`, `label-mask-decoder-model`).
 
-- **Positionals are unique IDs / file paths only**, named in full (`<application-id>`); everything else — including secondary IDs (`--source`, `--workflow`) and payloads — is a flag.
+- **Resource ids are required `--<resource>-id` flags** (`--application-id`, `--subject-uid`, …), so there is no positional/flag ambiguity. Build them with the `_id(dest, help)` helper: the dest keeps the resource name, so handlers read `args.application_id` unchanged. Secondary ids use the same full naming (`--source-application-id`, `--workflow-id`). Only genuine file-path inputs stay positional (e.g. `media upload <filename>`).
 - **Aliases, two layers, both routing to the same handler:** (1) token synonyms / plurals / abbreviations via `_SYNONYM_GROUPS` + `resource_aliases()`, accepted in every position including compounds (`app`/`apps`/`application`, `edgeflow`/`gateway`, `cert`/`certificate`, `detection`/`assertion`) — so `gateway event reboot` resolves exactly like `edgeflow event reboot`; (2) every prior flat / hyphenated spelling stays as a **hidden, deprecated** alias. To hide a deprecated parser/verb, **omit the `help` kwarg** — never `help=argparse.SUPPRESS` (an aliased subparser with `SUPPRESS` renders a literal `==SUPPRESS==` line in `--help`).
 - **Register with the helpers**, not raw `add_parser` chains: `_add_resource` (top-level noun + aliases), `_add_verb(sub, name, handler, arg_specs, help, aliases, hidden)` where `arg_specs` is a list of `(names_tuple, add_argument_kwargs)`, and `_flat_alias` (a hidden flat compound whose verbs come from the same registrar function as the nested sub-noun, so both bind one handler set).
 - **Pagination is automatic**: list commands `list(...)` the SDK generator and emit one JSON array. Keep `--limit` / `--cursor` / sort / filter flags; `--limit` caps the total.
