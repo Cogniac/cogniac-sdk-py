@@ -549,13 +549,18 @@ class _Resp:
 
 
 class _Conn:
-    """Minimal fake connection: each _get returns the next queued payload."""
+    """Minimal fake connection: each _get/_post returns the next queued payload."""
     def __init__(self, payloads):
         self._payloads = list(payloads)
         self.urls = []
+        self.posted = []
 
     def _get(self, url, **kwargs):
         self.urls.append(url)
+        return _Resp(self._payloads.pop(0))
+
+    def _post(self, url, **kwargs):
+        self.posted.append((url, kwargs.get('json')))
         return _Resp(self._payloads.pop(0))
 
 
@@ -597,3 +602,39 @@ def test_feedback_follows_paging_envelope():
         {'data': [3], 'paging': {}},
     ])
     assert list(app.feedback()) == [1, 2, 3]
+
+
+# ---------------------------------------------------------------------------
+# CogniacNetworkCamera.update back-compat shim: deprecated per-field kwargs are
+# still accepted (merged into the body) but warn; the body form is unchanged.
+# ---------------------------------------------------------------------------
+
+def _camera_with(payloads):
+    cam = object.__new__(cogniac.CogniacNetworkCamera)
+    object.__setattr__(cam, '_cc', _Conn(payloads))
+    object.__setattr__(cam, 'network_camera_id', 'c1')
+    return cam
+
+
+def test_network_camera_update_body_form():
+    cam = _camera_with([{'network_camera_id': 'c1', 'url': 'u'}])
+    cam.update({'url': 'u'})
+    assert cam._cc.posted[0][1] == {'url': 'u'}
+
+
+def test_network_camera_update_kwargs_compat_warns_and_merges():
+    import warnings
+    cam = _camera_with([{'network_camera_id': 'c1', 'url': 'u', 'current_IP': '10.0.0.1'}])
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        cam.update(url='u', current_IP='10.0.0.1')
+    assert any(issubclass(w.category, DeprecationWarning) for w in caught)
+    # deprecated kwargs are merged into the request body
+    assert cam._cc.posted[0][1] == {'url': 'u', 'current_IP': '10.0.0.1'}
+
+
+def test_async_network_camera_update_accepts_kwargs():
+    import inspect
+    sig = inspect.signature(cogniac.AsyncCogniacNetworkCamera.update)
+    assert any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()), \
+        "async update should accept **kwargs for back-compat"

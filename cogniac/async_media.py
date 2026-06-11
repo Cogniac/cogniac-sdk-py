@@ -435,10 +435,9 @@ class AsyncCogniacMedia(object):
         """
         resp = await self._cc._post("/1/media/%s/share" % self.media_id,
                                    json=body if body is not None else {})
-        try:
-            return resp.json()
-        except Exception:
+        if resp.status_code == 204 or not resp.content:
             return None
+        return resp.json()
 
     ##
     #  create_detection

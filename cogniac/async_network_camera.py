@@ -210,16 +210,24 @@ class AsyncCogniacNetworkCamera(object):
     #  update
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    async def update(self, body):
+    async def update(self, body=None, **kwargs):
         """
-        Update this network camera's mutable fields with the given body dict and
-        return the updated network camera JSON.
+        Update this network camera's mutable fields and return the updated JSON.
 
         body (dict):  fields to update
 
+        Deprecated: passing per-field keyword arguments (e.g. update(url=...)) is
+        still accepted for backward compatibility — they are merged into the body —
+        but emits a DeprecationWarning. Prefer passing a body dict.
+
         See POST /1/networkCameras/{network_camera_id}.
         """
-        resp = await self._cc._post("/1/networkCameras/%s" % self.network_camera_id, json=body)
+        if kwargs:
+            import warnings
+            warnings.warn("AsyncCogniacNetworkCamera.update(**kwargs) is deprecated; "
+                          "pass a body dict instead.", DeprecationWarning, stacklevel=2)
+            body = dict(body or {}, **kwargs)
+        resp = await self._cc._post("/1/networkCameras/%s" % self.network_camera_id, json=body or {})
         result = resp.json()
         for k, v in result.items():
             super(AsyncCogniacNetworkCamera, self).__setattr__(k, v)
