@@ -6,7 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 import os
 from time import time
-from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
 
 
 class AsyncCogniacEdgeFlow(object):
