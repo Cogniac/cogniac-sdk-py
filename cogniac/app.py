@@ -616,12 +616,15 @@ class CogniacApplication(object):
         """
         Start an application replay.
 
-        body (dict):  optional StartReplayRequest body controlling the replay scope.
+        body (dict):  the server requires `replay` (defaulted
+                      to True here) and one of `replay_subjects` or `replay_media` to
+                      scope the replay.
 
         See POST /1/applications/{app_id}/replay.
         """
-        resp = self._cc._post("/1/applications/%s/replay" % self.application_id,
-                              json=body if body is not None else {})
+        data = dict(body) if body else {}
+        data.setdefault('replay', True)
+        resp = self._cc._post("/1/applications/%s/replay" % self.application_id, json=data)
         return resp.json()
 
     ##
@@ -632,10 +635,13 @@ class CogniacApplication(object):
         """
         Stop an in-progress application replay.
 
+        The server requires one of `replay_subjects`/`replay_media` to be present
+        before it honors `replay=False`, so an empty `replay_subjects` is sent.
+
         See POST /1/applications/{app_id}/replay (with a stop request body).
         """
         resp = self._cc._post("/1/applications/%s/replay" % self.application_id,
-                              json={'replay': False})
+                              json={'replay': False, 'replay_subjects': []})
         return resp.json()
 
     ##
@@ -870,22 +876,23 @@ class CogniacApplication(object):
         """
         Subscribe (or unsubscribe) a device to this application's event topic.
 
-        device_id (str):      device identifier
-        app_bundle_id (str):  iOS app bundle id
-        event_type (str):     event type to (un)subscribe to
-        unsubscribe (bool):   True to unsubscribe instead of subscribe
+        device_id (str):      device identifier (required by the server)
+        app_bundle_id (str):  iOS app bundle id (required by the server)
+        event_type (str):     event type to (un)subscribe to (required by the server)
+        unsubscribe (bool):   True to unsubscribe (sends enabled=False) instead of subscribe
+
+        The server requires device_id, app_bundle_id,
+        event_type and a boolean `enabled` (there is no `unsubscribe` field).
 
         See POST /1/applications/{app_id}/pushNotifications.
         """
-        data = {}
+        data = {'enabled': not unsubscribe}
         if device_id is not None:
             data['device_id'] = device_id
         if app_bundle_id is not None:
             data['app_bundle_id'] = app_bundle_id
         if event_type is not None:
             data['event_type'] = event_type
-        if unsubscribe:
-            data['unsubscribe'] = True
         resp = self._cc._post("/1/applications/%s/pushNotifications" % self.application_id, json=data)
         return resp.json()
 
@@ -894,17 +901,21 @@ class CogniacApplication(object):
     ##
     def feedback(self, limit=None, cursor=None):
         """
-        Yield this application's feedback requests, following pagination.
+        Yield this application's feedback requests.
 
-        limit (int)    yield maximum of limit results
-        cursor (str)   opaque pagination cursor to resume from
+        limit (int)    yield at most limit results
+        cursor (str)   best-effort pagination cursor (this endpoint currently
+                       returns the full set in one response and ignores cursor)
+
+        Note: this endpoint is role-gated (cogniac_support / cogniac_admin) and
+        returns a bare list with no paging envelope.
 
         See GET /21/applications/{app_id}/feedbackRequests.
         """
         params = []
         if limit:
             assert(limit > 0)
-            params.append('limit=%d' % min(limit, 100))
+            params.append('limit=%d' % limit)
         if cursor is not None:
             params.append("cursor=%s" % cursor)
 
@@ -920,6 +931,8 @@ class CogniacApplication(object):
         while url:
             resp = get_next(url)
             data = resp['data'] if isinstance(resp, dict) and 'data' in resp else resp
+            if not data:
+                break
             for item in data:
                 yield item
                 count += 1
@@ -1011,6 +1024,8 @@ class CogniacApplication(object):
         """
         Register the default evaluation metric for a newly-created application.
 
+        body (dict):  the server requires `type` and `output_subjects`.
+
         See POST /22/applications/{application_id}/evaluation_metrics/register_new_app_default.
         """
         resp = self._cc._post(
@@ -1024,6 +1039,8 @@ class CogniacApplication(object):
         Copy this application's evaluation metrics into a target application.
 
         target_application_id (str):  destination application_id (sent in the body)
+        body (dict):                  optional extra fields; the server also requires
+                                      `output_subjects`.
 
         This application is the *source*; see
         POST /22/applications/{source_application_id}/evaluation_metrics/copy.
@@ -1079,11 +1096,16 @@ class CogniacApplication(object):
         return self._paged_release_items(consensus_release_id, 'upstream_assertions', limit, cursor)
 
     def _paged_release_items(self, consensus_release_id, kind, limit=None, cursor=None):
-        """Shared generator draining a paged consensus_release sub-collection."""
+        """Shared generator over a consensus_release sub-collection.
+
+        Note: this endpoint returns the full collection in one response (it does not
+        honor server-side limit/cursor), so `limit` is applied client-side and
+        `cursor` is best-effort.
+        """
         params = []
         if limit:
             assert(limit > 0)
-            params.append('limit=%d' % min(limit, 100))
+            params.append('limit=%d' % limit)
         if cursor is not None:
             params.append("cursor=%s" % cursor)
 
@@ -1099,6 +1121,8 @@ class CogniacApplication(object):
         while url:
             resp = get_next(url)
             data = resp['data'] if isinstance(resp, dict) and 'data' in resp else resp
+            if not data:
+                break
             for item in data:
                 yield item
                 count += 1

@@ -513,10 +513,8 @@ class CogniacEdgeFlow(object):
 
         See PUT /1/gateways/{gateway_id}/certificate.
         """
-        resp = self._cc.session.request(
-            'PUT', self._cc.url_prefix + "/1/gateways/%s/certificate" % self.gateway_id,
-            json=body if body is not None else {}, timeout=self._cc.timeout)
-        raise_errors(resp)
+        resp = self._cc._put("/1/gateways/%s/certificate" % self.gateway_id,
+                             json=body if body is not None else {})
         return resp.json()
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))

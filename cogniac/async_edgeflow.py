@@ -411,10 +411,8 @@ class AsyncCogniacEdgeFlow(object):
 
         See PUT /1/gateways/{gateway_id}/certificate.
         """
-        url = self._cc._build_url("/1/gateways/%s/certificate" % self.gateway_id)
-        resp = await self._cc.session.request('PUT', url, json=body if body is not None else {},
-                                              timeout=self._cc.timeout)
-        raise_errors(resp)
+        resp = await self._cc._put("/1/gateways/%s/certificate" % self.gateway_id,
+                                   json=body if body is not None else {})
         return resp.json()
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))

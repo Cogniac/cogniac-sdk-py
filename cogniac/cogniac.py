@@ -344,6 +344,28 @@ class CogniacConnection(object):
             raise
         return resp
 
+    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
+    def _put(self, url, timeout=None, **kwargs):
+        """
+        wrap httpx client to re-authenticate on credential expiration
+        """
+        if not url.startswith("http"):
+            # Prepend /1/ version if no version is specified in the URL (backward compatibility).
+            m = re.search(r'^/\d+(/)?', url)
+            if m is None:
+                url = '/1' + url
+
+            url = self.url_prefix + url
+        if timeout is None:
+            timeout = self.timeout
+        try:
+            resp = self.session.request('PUT', url, timeout=timeout, **kwargs)
+            raise_errors(resp)
+        except CredentialError:
+            self.__authenticate()
+            raise
+        return resp
+
     def get_tenant(self):
         """
         return the currently authenticated CogniacTenant
@@ -575,6 +597,9 @@ class CogniacConnection(object):
 
         return CogniacEdgeFlow for all EdgeFlows belonging to the currently authenticated tenant.
         """
+        import warnings
+        warnings.warn("CogniacConnection.gateways() is deprecated; use edgeflows() instead.",
+                      DeprecationWarning, stacklevel=2)
         return self.edgeflows()
 
     def get_all_deployments(self):

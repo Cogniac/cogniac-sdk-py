@@ -13,7 +13,9 @@ These tests do NOT require credentials. They verify:
   - the resource-alias helper expands sing/plur + abbreviation/synonym variants.
 """
 
+import argparse
 import inspect
+import re
 import pytest
 
 import cogniac
@@ -376,201 +378,131 @@ def test_removed_label_mask_decoder_head():
 
 
 # ---------------------------------------------------------------------------
-# Every catalog command parses to a callable handler (the full nested catalog).
+# Every command parses to a callable handler, and every handler only reads
+# argparse dests its command defines. These walk the built parser (including
+# hidden deprecated spellings), so new commands are covered automatically — the
+# kind of mechanical check that catches the dest/flag mismatches that bit us.
 # ---------------------------------------------------------------------------
 
-CATALOG_COMMANDS = [
-    # auth
-    ['auth'], ['auth', 'login'], ['auth', 'logout'],
-    # tenant
-    ['tenant', 'get'], ['tenant', 'list'],
-    ['tenant', 'edgeflow-certificate', 'get'],
-    ['tenant', 'edgeflow-certificate', 'set'],
-    ['tenant', 'edgeflow-certificate', 'delete'],
-    ['tenant', 'meraki-api-key', 'delete'],
-    ['tenant', 'cloudcore-import-key', 'get', 'KEY'],
-    ['tenant', 'user', 'list'],
-    ['tenant', 'user', 'add', '--body', '{}'],
-    ['tenant', 'user', 'delete', '--body', '{}'],
-    ['tenant', 'user', 'role', 'set', '--body', '{}'],
-    # application top-level
-    ['application', 'list'], ['application', 'get', 'A1'], ['application', 'create', '--body', '{}'],
-    ['application', 'update', 'A1', '--body', '{}'], ['application', 'delete', 'A1'],
-    ['application', 'leaderboard', 'A1'], ['application', 'classify', 'A1', 'img.jpg'],
-    ['application', 'events', 'A1'], ['application', 'event', 'types', 'A1'],
-    ['application', 'detections', 'pending', 'A1'],
-    ['application', 'replay', 'status', 'A1'], ['application', 'replay', 'start', 'A1'],
-    ['application', 'replay', 'stop', 'A1'],
-    ['application', 'performance', 'current', 'A1'], ['application', 'performance', 'release', 'A1'],
-    ['application', 'performance', 'new-random', 'A1'],
-    ['application', 'push', 'get', 'A1'], ['application', 'push', 'subscribe', 'A1'],
-    # application feedback
-    ['application', 'feedback', 'list', 'A1'], ['application', 'feedback', 'get', 'A1', 'F1'],
-    ['application', 'feedback', 'create', 'A1', '--body', '{}'], ['application', 'feedback', 'count', 'A1'],
-    ['application', 'feedback', 'pending', 'A1'], ['application', 'feedback', 'purge', 'A1'],
-    ['application', 'feedback', 'purge-requests', 'A1'],
-    # application model
-    ['application', 'model', 'performance', 'A1', '--subject-uid', 's1'],
-    ['application', 'model', 'donate', 'A1', '--source', 'A2'],
-    ['application', 'model', 'export', 'A1', '--target', 'meraki'], ['application', 'model', 'list', 'A1'],
-    ['application', 'model', 'download', 'A1'],
-    # application consensus
-    ['application', 'consensus', 'history', 'A1'],
-    ['application', 'consensus', 'release', 'list', 'A1'],
-    ['application', 'consensus', 'release', 'get', 'A1', 'R1'],
-    ['application', 'consensus', 'release', 'items', 'A1', 'R1'],
-    ['application', 'consensus', 'release', 'upstream', 'A1', 'R1'],
-    ['application', 'consensus', 'release', 'detections', 'A1'],
-    # application evaluation metrics
-    ['application', 'evaluation', 'metrics', 'get', 'A1'],
-    ['application', 'evaluation', 'metrics', 'create', 'A1', '--body', '{}'],
-    ['application', 'evaluation', 'metrics', 'register-default', 'A1'],
-    ['application', 'evaluation', 'metrics', 'copy', '--source', 'S1', '--target', 'T1'],
-    # application labeling models
-    ['application', 'label-image-encoder-model', 'download', 'A1'],
-    ['application', 'label-mask-decoder-model', 'download', 'A1'],
-    # application type
-    ['application', 'type', 'list'], ['application', 'type', 'get', 'box_detection'],
-    # application build
-    ['application', 'build', 'list'], ['application', 'build', 'get', 'B1'],
-    ['application', 'build', 'create', '--body', '{}'], ['application', 'build', 'delete', 'B1'],
-    ['application', 'build', 'names', 'list'], ['application', 'build', 'lint', 'f.py'],
-    # subject
-    ['subject', 'list'], ['subject', 'get', 's1'], ['subject', 'create', 'myname'],
-    ['subject', 'update', 's1', '--body', '{}'], ['subject', 'delete', 's1'],
-    ['subject', 'search'], ['subject', 'media', 's1'],
-    ['subject', 'associate', 's1', 'M1'], ['subject', 'disassociate', 's1', 'M1'],
-    ['subject', 'consensus', 'history', 's1'], ['subject', 'detections', 's1', '--media-id', 'M1'],
-    # media
-    ['media', 'get', 'M1'], ['media', 'upload', 'f.jpg'], ['media', 'update', 'M1', '--body', '{}'],
-    ['media', 'delete', 'M1'], ['media', 'download', 'M1'], ['media', 'search'], ['media', 'share', 'M1'],
-    ['media', 'embeddings', 'get', 'M1'], ['media', 'detection', 'list', 'M1'],
-    ['media', 'detection', 'create', 'M1'],
-    # edgeflow
-    ['edgeflow', 'list'], ['edgeflow', 'get', 'g1'], ['edgeflow', 'create'],
-    ['edgeflow', 'update', 'g1', '--body', '{}'], ['edgeflow', 'delete', 'g1'], ['edgeflow', 'status', 'g1'],
-    ['edgeflow', 'certificate', 'get', 'g1'], ['edgeflow', 'certificate', 'set', 'g1'],
-    ['edgeflow', 'certificate', 'replace', 'g1'], ['edgeflow', 'certificate', 'delete', 'g1'],
-    ['edgeflow', 'metrics', 'list'], ['edgeflow', 'metrics', 'names'],
-    # edgeflow device-control events
-    ['edgeflow', 'event', 'reboot', 'g1'], ['edgeflow', 'event', 'ping', 'g1'],
-    ['edgeflow', 'event', 'upgrade', 'g1', '--software-version', '2.0'],
-    ['edgeflow', 'event', 'set-boot-software-version', 'g1', '--software-version', '2.0'],
-    ['edgeflow', 'event', 'factory-reset', 'g1'], ['edgeflow', 'event', 'flush-upload-queue', 'g1'],
-    ['edgeflow', 'event', 'time-bound-media-upload', 'g1', '--start-time', '1', '--end-time', '2'],
-    ['edgeflow', 'event', 'trigger-camera-capture', 'g1', '--subject-uid', 's1'],
-    # camera
-    ['camera', 'list'], ['camera', 'get', 'c1'], ['camera', 'create', '--body', '{}'],
-    ['camera', 'update', 'c1', '--body', '{}'], ['camera', 'delete', 'c1'], ['camera', 'genicam', 'c1'],
-    # deployment
-    ['deployment', 'list'], ['deployment', 'get', 'd1'], ['deployment', 'create'],
-    ['deployment', 'delete', 'd1'], ['deployment', 'edgeflows', 'd1'], ['deployment', 'history', 'd1'],
-    ['deployment', 'prepull', 'status', 'd1'], ['deployment', 'prepull', 'start', 'd1', '--workflow', 'w1'],
-    ['deployment', 'target', 'workflow', 'set', 'd1', '--workflow', 'w1'],
-    ['deployment', 'capacity', 'list'], ['deployment', 'capacity', 'get', 'cc1'],
-    # workflow
-    ['workflow', 'list'], ['workflow', 'get', 'w1'], ['workflow', 'create'], ['workflow', 'delete', 'w1'],
-    ['workflow', 'edgeflow', 'deployment-targets', 'list'],
-    ['workflow', 'version', 'new', 'w1', '--body', '{}'], ['workflow', 'version', 'get', 'b1', '3'],
-    # user
-    ['user', 'list'], ['user', 'get', 'u1'], ['user', 'delete', 'u1'],
-    ['user', 'tenants', 'u1'], ['user', 'password', 'reset', 'a@b.co'],
-    ['user', 'api-key', 'list', 'u1'], ['user', 'api-key', 'get', 'u1', 'k1'],
-    ['user', 'api-key', 'create', 'u1', '--description', 'd'], ['user', 'api-key', 'delete', 'u1', 'k1'],
-]
+def _leaf_commands(parser, path=(), seen=None):
+    """Yield (path, leaf_parser) for every command that binds a handler. Aliases
+    (the same parser object reached under multiple names) are visited once under
+    their canonical (first-registered) name."""
+    if seen is None:
+        seen = set()
+    if parser.get_default('func') is not None:
+        yield path, parser
+    for spa in [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]:
+        canon = {}
+        for name, sub in spa.choices.items():
+            canon.setdefault(id(sub), name)
+        done = set()
+        for name, sub in spa.choices.items():
+            if id(sub) in done:
+                continue
+            done.add(id(sub))
+            yield from _leaf_commands(sub, path + (canon[id(sub)],), seen)
 
 
-@pytest.mark.parametrize("argv", CATALOG_COMMANDS)
-def test_catalog_command_resolves_to_handler(argv):
+def _dummy_value(action):
+    if action.choices:
+        return str(list(action.choices)[0])
+    if action.type in (int, float):
+        return '1'
+    return 'x'
+
+
+def _minimal_argv(path, leaf):
+    """The command path plus a dummy value for each required argument."""
+    argv = list(path)
+    for a in leaf._actions:
+        if isinstance(a, (argparse._HelpAction, argparse._SubParsersAction)):
+            continue
+        if not a.option_strings:                       # positional
+            if a.nargs not in ('?', '*'):
+                argv.append(_dummy_value(a))
+        elif getattr(a, 'required', False):            # required flag
+            argv.append(a.option_strings[0])
+            if a.nargs != 0:
+                argv.append(_dummy_value(a))
+    return argv
+
+
+def _all_leaves():
+    return list(_leaf_commands(build_parser()))
+
+
+def test_every_command_parses_to_a_handler():
     parser = build_parser()
-    ns = parser.parse_args(argv)
-    assert hasattr(ns, 'func') and callable(ns.func), "no handler for %r" % (argv,)
+    leaves = _all_leaves()
+    assert len(leaves) > 100, "expected the full command tree, got %d" % len(leaves)
+    for path, leaf in leaves:
+        argv = _minimal_argv(path, leaf)
+        ns = parser.parse_args(argv)
+        assert hasattr(ns, 'func') and callable(ns.func), "no handler for %r" % (argv,)
 
 
-# ---------------------------------------------------------------------------
-# Hidden deprecated flat / hyphenated spellings still resolve to a handler.
-# ---------------------------------------------------------------------------
-
-DEPRECATED_FLAT_COMMANDS = [
-    ['application-feedback', 'list', 'A1'],
-    ['application-feedback', 'get', 'A1', 'F1'],
-    ['application-model', 'performance', 'A1', '--subject-uid', 's1'],
-    ['application-type', 'list'], ['application-type', 'get', 'box_detection'],
-    ['application-types', 'list'],
-    ['application-build', 'list'], ['application-build', 'names', 'list'],
-    ['application-evaluation-metrics', 'get', 'A1'],
-    ['application-label', 'image-encoder', 'A1'], ['application-label', 'mask-decoder', 'A1'],
-    ['application', 'consensus-history', 'A1'],
-    ['application', 'consensus-releases', 'A1'],
-    ['application', 'consensus-release', 'A1', 'R1'],
-    ['application', 'consensus-release-items', 'A1', 'R1'],
-    ['application', 'consensus-release-upstream', 'A1', 'R1'],
-    ['application', 'consensus-detection-releases', 'A1'],
-    ['application', 'eval-metrics', 'A1'], ['application', 'evaluation-metrics', 'A1'],
-    ['application', 'evaluation-metrics-create', 'A1'],
-    ['application', 'evaluation-metrics-register-default', 'A1'],
-    ['application', 'evaluation-metrics-copy', 'S1', 'T1'],
-    ['application', 'donate-model', 'A1', 'A2'],
-    ['application', 'replay-start', 'A1'], ['application', 'replay-stop', 'A1'],
-    ['application', 'detections-pending', 'A1'], ['application', 'event-types', 'A1'],
-    ['application', 'performance-current', 'A1'], ['application', 'performance-release', 'A1'],
-    ['application', 'performance-new-random', 'A1'], ['application', 'push-subscribe', 'A1'],
-    ['edgeflow-certificate', 'get', 'g1'], ['edgeflow-certificate', 'set', 'g1'],
-    ['edgeflow-certificate', 'replace', 'g1'], ['edgeflow-certificate', 'delete', 'g1'],
-    ['edgeflow-metrics', 'list'], ['edgeflow-metric-names'],
-    ['tenant-edgeflow-certificate', 'get'], ['tenant-edgeflow-certificate', 'set'],
-    ['tenant-edgeflow-certificate', 'delete'], ['tenant-meraki-key', 'delete'],
-    ['tenant-import', 'KEY123'],
-    ['deployment-capacity', 'list'], ['deployment-capacity', 'get', 'cc1'],
-    ['workflow-version', 'new', 'w1', '--body', '{}'], ['workflow-version', 'get', 'b1', '3'],
-    ['media-embeddings', 'M1'],
-]
+# globals/inherited dests a handler may read besides its command's own args
+_SHARED_DESTS = {'format', 'tenant', 'command', 'func'}
 
 
-@pytest.mark.parametrize("argv", DEPRECATED_FLAT_COMMANDS)
-def test_deprecated_flat_command_resolves_to_handler(argv):
-    parser = build_parser()
-    ns = parser.parse_args(argv)
-    assert hasattr(ns, 'func') and callable(ns.func), "no handler for deprecated %r" % (argv,)
+def test_handlers_only_read_defined_dests():
+    """Every direct ``args.<x>`` a handler reads must be a dest its command
+    defines (or a shared/global). Catches handler/parser attribute mismatches
+    (e.g. a handler reading args.build_id when the parser registers it as
+    application_build_id)."""
+    bad = []
+    for path, leaf in _all_leaves():
+        func = leaf.get_default('func')
+        try:
+            src = inspect.getsource(func)
+        except (OSError, TypeError):
+            continue
+        dests = {a.dest for a in leaf._actions if a.dest and a.dest != 'help'}
+        # reads only: \b forces a full-identifier capture; the lookahead drops
+        # assignment targets `args.x =` while keeping `==` comparisons
+        for attr in set(re.findall(r"args\.([A-Za-z_]\w*)\b(?!\s*=(?!=))", src)):
+            if attr in dests or attr in _SHARED_DESTS or attr.endswith('_command'):
+                continue
+            bad.append("%s reads args.%s (not a dest of `%s`)" % (func.__name__, attr, ' '.join(path)))
+    assert not bad, "handler/parser attribute mismatches:\n" + "\n".join(sorted(set(bad)))
 
 
 # ---------------------------------------------------------------------------
 # Aliases (flat, synonym, plural) route to the SAME handler as canonical.
+# Resource ids are required --<resource>-id flags (the canonical CLI surface).
 # ---------------------------------------------------------------------------
 
 ALIAS_PAIRS = [
     # plural / synonym top-level nouns
     (['apps', 'list'], ['application', 'list']),
-    (['app', 'get', 'A1'], ['application', 'get', 'A1']),
-    (['applications', 'get', 'A1'], ['application', 'get', 'A1']),
+    (['app', 'get', '--application-id', 'A1'], ['application', 'get', '--application-id', 'A1']),
+    (['applications', 'get', '--application-id', 'A1'], ['application', 'get', '--application-id', 'A1']),
     (['subjects', 'list'], ['subject', 'list']),
     (['gateway', 'list'], ['edgeflow', 'list']),
-    (['gateways', 'get', 'g1'], ['edgeflow', 'get', 'g1']),
+    (['gateways', 'get', '--edgeflow-id', 'g1'], ['edgeflow', 'get', '--edgeflow-id', 'g1']),
     (['cameras', 'list'], ['camera', 'list']),
     (['network-camera', 'list'], ['camera', 'list']),
     (['deployments', 'list'], ['deployment', 'list']),
     (['deployment-group', 'list'], ['deployment', 'list']),
-    (['workflows', 'get', 'w1'], ['workflow', 'get', 'w1']),
+    (['workflows', 'get', '--workflow-id', 'w1'], ['workflow', 'get', '--workflow-id', 'w1']),
     (['users', 'list'], ['user', 'list']),
     # sub-noun synonyms / plurals / abbreviations
     (['apps', 'types', 'list'], ['application', 'type', 'list']),
     (['application', 'types', 'list'], ['application', 'type', 'list']),
-    (['app', 'eval', 'metrics', 'get', 'A1'], ['application', 'evaluation', 'metrics', 'get', 'A1']),
-    (['edgeflow', 'cert', 'get', 'g1'], ['edgeflow', 'certificate', 'get', 'g1']),
-    (['gateway', 'cert', 'get', 'g1'], ['edgeflow', 'certificate', 'get', 'g1']),
-    (['media', 'assertion', 'list', 'M1'], ['media', 'detection', 'list', 'M1']),
-    (['media', 'assertions', 'create', 'M1'], ['media', 'detection', 'create', 'M1']),
+    (['app', 'eval', 'metrics', 'get', '--application-id', 'A1'],
+     ['application', 'evaluation', 'metrics', 'get', '--application-id', 'A1']),
+    (['edgeflow', 'cert', 'get', '--edgeflow-id', 'g1'], ['edgeflow', 'certificate', 'get', '--edgeflow-id', 'g1']),
+    (['gateway', 'cert', 'get', '--edgeflow-id', 'g1'], ['edgeflow', 'certificate', 'get', '--edgeflow-id', 'g1']),
+    (['media', 'assertion', 'list', '--media-id', 'M1'], ['media', 'detection', 'list', '--media-id', 'M1']),
+    (['media', 'assertions', 'create', '--media-id', 'M1'], ['media', 'detection', 'create', '--media-id', 'M1']),
     (['deployment', 'capacities', 'list'], ['deployment', 'capacity', 'list']),
-    (['workflow', 'versions', 'get', 'b1', '3'], ['workflow', 'version', 'get', 'b1', '3']),
     # flat / hyphenated deprecated -> nested
-    (['application-feedback', 'list', 'A1'], ['application', 'feedback', 'list', 'A1']),
-    (['app-feedback', 'get', 'A1', 'F1'], ['application', 'feedback', 'get', 'A1', 'F1']),
-    (['application-model', 'performance', 'A1', '--subject-uid', 's1'],
-     ['application', 'model', 'performance', 'A1', '--subject-uid', 's1']),
+    (['application-feedback', 'list', '--application-id', 'A1'],
+     ['application', 'feedback', 'list', '--application-id', 'A1']),
     (['application-type', 'list'], ['application', 'type', 'list']),
     (['application-build', 'list'], ['application', 'build', 'list']),
-    (['application-evaluation-metrics', 'get', 'A1'], ['application', 'evaluation', 'metrics', 'get', 'A1']),
-    (['edgeflow-certificate', 'get', 'g1'], ['edgeflow', 'certificate', 'get', 'g1']),
+    (['edgeflow-certificate', 'get', '--edgeflow-id', 'g1'], ['edgeflow', 'certificate', 'get', '--edgeflow-id', 'g1']),
     (['edgeflow-metrics', 'list'], ['edgeflow', 'metrics', 'list']),
     (['edgeflow-metric-names'], ['edgeflow', 'metrics', 'names']),
     (['tenant-edgeflow-certificate', 'get'], ['tenant', 'edgeflow-certificate', 'get']),
@@ -579,20 +511,19 @@ ALIAS_PAIRS = [
     (['tenant', 'edgeflow', 'certificate', 'get'], ['tenant', 'edgeflow-certificate', 'get']),  # deprecated two-token
     (['tenant-meraki-key', 'delete'], ['tenant', 'meraki-api-key', 'delete']),
     (['deployment-capacity', 'list'], ['deployment', 'capacity', 'list']),
-    (['workflow-version', 'get', 'b1', '3'], ['workflow', 'version', 'get', 'b1', '3']),
-    (['media-embeddings', 'M1'], ['media', 'embeddings', 'get', 'M1']),
     # old flat application verbs -> nested
-    (['application', 'consensus-history', 'A1'], ['application', 'consensus', 'history', 'A1']),
-    (['application', 'consensus-release-items', 'A1', 'R1'],
-     ['application', 'consensus', 'release', 'items', 'A1', 'R1']),
-    (['application', 'eval-metrics', 'A1'], ['application', 'evaluation', 'metrics', 'get', 'A1']),
-    (['application', 'detections-pending', 'A1'], ['application', 'detections', 'pending', 'A1']),
-    (['application', 'event-types', 'A1'], ['application', 'event', 'types', 'A1']),
+    (['application', 'consensus-history', '--application-id', 'A1'],
+     ['application', 'consensus', 'history', '--application-id', 'A1']),
+    (['application', 'detections-pending', '--application-id', 'A1'],
+     ['application', 'detections', 'pending', '--application-id', 'A1']),
+    (['application', 'event-types', '--application-id', 'A1'],
+     ['application', 'event', 'types', '--application-id', 'A1']),
     # edgeflow<->gateway in compound positions; event plural; api-key plural
-    (['gateway', 'event', 'reboot', 'g1'], ['edgeflow', 'event', 'reboot', 'g1']),
-    (['edgeflow', 'events', 'reboot', 'g1'], ['edgeflow', 'event', 'reboot', 'g1']),
-    (['gateways', 'event', 'factory-reset', 'g1'], ['edgeflow', 'event', 'factory-reset', 'g1']),
-    (['user', 'api-keys', 'list', 'u1'], ['user', 'api-key', 'list', 'u1']),
+    (['gateway', 'event', 'reboot', '--edgeflow-id', 'g1'], ['edgeflow', 'event', 'reboot', '--edgeflow-id', 'g1']),
+    (['edgeflow', 'events', 'reboot', '--edgeflow-id', 'g1'], ['edgeflow', 'event', 'reboot', '--edgeflow-id', 'g1']),
+    (['gateways', 'event', 'factory-reset', '--edgeflow-id', 'g1'],
+     ['edgeflow', 'event', 'factory-reset', '--edgeflow-id', 'g1']),
+    (['user', 'api-keys', 'list', '--user-id', 'u1'], ['user', 'api-key', 'list', '--user-id', 'u1']),
 ]
 
 
@@ -601,3 +532,68 @@ def test_aliases_route_to_same_handler(alias_argv, canonical_argv):
     parser = build_parser()
     assert parser.parse_args(alias_argv).func is parser.parse_args(canonical_argv).func, \
         "%r should route to the same handler as %r" % (alias_argv, canonical_argv)
+
+
+# ---------------------------------------------------------------------------
+# Mocked-transport pagination (no creds): exercises the generator bodies that
+# pure existence/parser checks can't — empty responses, bare lists, paging
+# envelopes, and client-side limit. Guards the bugs the review surfaced.
+# ---------------------------------------------------------------------------
+
+class _Resp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _Conn:
+    """Minimal fake connection: each _get returns the next queued payload."""
+    def __init__(self, payloads):
+        self._payloads = list(payloads)
+        self.urls = []
+
+    def _get(self, url, **kwargs):
+        self.urls.append(url)
+        return _Resp(self._payloads.pop(0))
+
+
+def _app_with(payloads):
+    # bypass CogniacApplication.__setattr__ (it guards immutable keys / auto-POSTs)
+    app = object.__new__(cogniac.CogniacApplication)
+    object.__setattr__(app, '_cc', _Conn(payloads))
+    object.__setattr__(app, 'application_id', 'A1')
+    return app
+
+
+def test_paged_release_items_empty_does_not_crash():
+    # an empty consensus release serializes to JSON null -> must not raise
+    app = _app_with([None])
+    assert list(app.consensus_release_items('R1')) == []
+
+
+def test_paged_release_items_bare_list():
+    app = _app_with([['a', 'b', 'c']])
+    assert list(app.consensus_release_items('R1')) == ['a', 'b', 'c']
+
+
+def test_feedback_empty_does_not_crash():
+    app = _app_with([None])
+    assert list(app.feedback()) == []
+
+
+def test_feedback_limit_not_truncated_at_100():
+    # bare list of 150, limit 120 -> client-side cap returns 120 (not min(100))
+    app = _app_with([list(range(150))])
+    got = list(app.feedback(limit=120))
+    assert len(got) == 120
+    assert got[-1] == 119
+
+
+def test_feedback_follows_paging_envelope():
+    app = _app_with([
+        {'data': [1, 2], 'paging': {'next': '/21/applications/A1/feedbackRequests?page=2'}},
+        {'data': [3], 'paging': {}},
+    ])
+    assert list(app.feedback()) == [1, 2, 3]

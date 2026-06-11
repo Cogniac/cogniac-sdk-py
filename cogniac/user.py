@@ -27,23 +27,25 @@ class CogniacUser(object):
     ##
     @classmethod
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    def get_all(cls, connection, id=None, tenant_id=None):
+    def get_all(cls, connection, user_id=None, tenant_id=None):
         """
-        Query users by id and/or tenant_id.
+        Query users by user_id and/or tenant_id, returning CogniacUser instances.
 
         connection (CogniacConnection):  Authenticated CogniacConnection object
-        id (str):                        optional user id filter
+        user_id (str):                   optional user id filter
         tenant_id (str):                 optional tenant id filter
 
         See GET /1/users.
         """
         params = {}
-        if id is not None:
-            params['id'] = id
+        if user_id is not None:
+            params['id'] = user_id
         if tenant_id is not None:
             params['tenant_id'] = tenant_id
         resp = connection._get("/1/users", params=params)
-        return resp.json()
+        data = resp.json()
+        items = data.get('data', []) if isinstance(data, dict) else data
+        return [CogniacUser(connection, u) for u in items]
 
     @classmethod
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
