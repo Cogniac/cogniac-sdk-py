@@ -306,8 +306,15 @@ class CogniacEdgeFlow(object):
                limit=None,
                sort=None):
         """
-        Yields EdgeFlow status, optionally only for a particular subsytem,
-         sorted by timestamp.
+        Yields EdgeFlow status records, optionally filtered by subsystem,
+        sorted by timestamp.
+
+        WARNING: called with no arguments this generator pages through the
+        appliance's full status history, which can be arbitrarily long on a
+        long-lived device.  Always pass limit= or end= to bound the result:
+
+            list(ef.status(limit=10))               # last 10 records
+            list(ef.status(subsystem_name='ping', limit=1))  # latest ping
 
         start (float)          filter by last update timestamp > start
                                (seconds since epoch)
