@@ -4,6 +4,8 @@ Cogniac API common definitions
 Copyright (C) 2016 Cogniac Corporation
 """
 
+import json
+
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from httpx import ConnectError
 
@@ -39,6 +41,22 @@ def credential_error(exception):
 def server_error(exception):
     """Return True if we should retry (in this case when it's an ServerError, False otherwise"""
     return isinstance(exception, ServerError) or isinstance(exception, ConnectError)
+
+
+def parse_json_str(val):
+    """Return val parsed as JSON if it's a string, otherwise return it unchanged.
+
+    The API occasionally serializes app_data and custom_data as JSON strings
+    instead of inline objects. Callers should not need to guard for this.
+    Non-string values (dict, list, None) are passed through untouched.
+    A string that is not valid JSON is also returned as-is.
+    """
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except (ValueError, TypeError):
+            pass
+    return val
 
 
 def raise_errors(response):
