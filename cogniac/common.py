@@ -71,6 +71,14 @@ def raise_errors(response):
         msg = "Invalid username password credentials (%d): %s" % (response.status_code, response.text)
         raise CredentialError(msg)
 
+    if response.status_code == 429:
+        # Raise as ServerError so the tenacity retry path picks it up.
+        # Callers using the shared retry decorator get automatic backoff;
+        # the Retry-After header is not currently honored (improvement tracked
+        # in cogniac-sdk-py#158).
+        msg = "RateLimited (429): %s" % response.text
+        raise ServerError(msg)
+
     if response.status_code >= 400:
         msg = "ClientError (%d): %s" % (response.status_code, response.text)
         raise ClientError(msg, response.status_code)

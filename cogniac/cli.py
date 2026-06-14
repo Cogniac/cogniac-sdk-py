@@ -342,6 +342,7 @@ def cmd_subjects_media(args):
             probability_upper=args.probability_upper,
             consensus=args.consensus,
             limit=args.limit,
+            abridged_media=not args.full_media,
         )
         results = list(associations)
         fmt = getattr(args, 'format', 'json')
@@ -735,6 +736,8 @@ def build_parser():
     p.add_argument('--consensus', choices=['True', 'False', 'Sidelined'], help='Filter by consensus')
     p.add_argument('--probability-lower', dest='probability_lower', type=float, help='Min probability')
     p.add_argument('--probability-upper', dest='probability_upper', type=float, help='Max probability')
+    p.add_argument('--full-media', dest='full_media', action='store_true',
+                   help='Return full media records (includes domain_unit, sequence_ix, timestamps)')
     p.set_defaults(func=cmd_subjects_media)
 
     p = subjects_sub.add_parser('search', help='Search subjects')
