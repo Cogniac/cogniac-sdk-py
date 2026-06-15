@@ -512,7 +512,7 @@ class CogniacSubject(object):
         while url:
             resp = get_next(url)
             for sma in resp['data']:
-                yield sma
+                yield normalize_association(sma)
                 count += 1
                 if limit and count == limit:
                     return

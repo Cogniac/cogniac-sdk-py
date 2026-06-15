@@ -15,11 +15,14 @@ These tests do NOT require credentials. They verify:
 
 import argparse
 import inspect
+import json
 import re
 import pytest
 
 import cogniac
-from cogniac.cli import build_parser, resource_aliases, _SYNONYM_GROUPS, _resolve_positional_ids
+from cogniac.cli import (build_parser, resource_aliases, _SYNONYM_GROUPS, _resolve_positional_ids,
+                         error_exit, output, _command_catalog, _timestamp, _body_arg)
+from cogniac.common import server_error, normalize_association, maybe_json, ClientError, ServerError
 
 
 # ---------------------------------------------------------------------------
@@ -736,3 +739,118 @@ def test_invalid_command_suggests_close_match(capsys):
     err = capsys.readouterr().err
     assert 'did you mean' in err and 'application' in err
     assert 'gateways' not in err          # concise: not the full alias list
+
+
+# ---------------------------------------------------------------------------
+# SDK retry + field normalization (issues #158 / #157).
+# ---------------------------------------------------------------------------
+
+def test_server_error_retries_429_not_other_4xx():
+    assert server_error(ClientError('rate limited', 429)) is True
+    assert server_error(ServerError('boom')) is True
+    assert server_error(ClientError('bad request', 400)) is False
+
+
+def test_normalize_association_parses_json_strings():
+    rec = {'app_data': '{"k": 1}', 'media': {'custom_data': '[1, 2]'}, 'subject': {'app_data': '{"s": 2}'}}
+    out = normalize_association(rec)
+    assert out['app_data'] == {'k': 1}
+    assert out['media']['custom_data'] == [1, 2]
+    assert out['subject']['app_data'] == {'s': 2}
+
+
+def test_maybe_json_leaves_non_json_untouched():
+    assert maybe_json('plain') == 'plain'
+    assert maybe_json('{not valid') == '{not valid'
+    assert maybe_json(42) == 42
+
+
+# ---------------------------------------------------------------------------
+# Structured error envelope (wskish #6): typed, un-nested server JSON, hints.
+# ---------------------------------------------------------------------------
+
+def test_error_envelope_unnests_server_json(capsys):
+    with pytest.raises(SystemExit) as exc:
+        error_exit("ClientError", 'ClientError (400): {"message": "bad subject"}')
+    assert exc.value.code == 1
+    env = json.loads(capsys.readouterr().err)["error"]
+    assert env == {"type": "client", "status": 400, "message": "bad subject"}
+
+
+def test_error_envelope_auth_carries_hint(capsys):
+    with pytest.raises(SystemExit):
+        error_exit("CredentialError", 'Invalid username password credentials (401): nope')
+    env = json.loads(capsys.readouterr().err)["error"]
+    assert env["type"] == "auth" and env["status"] == 401 and "login" in env["hint"]
+
+
+def test_error_envelope_rate_limit(capsys):
+    with pytest.raises(SystemExit):
+        error_exit("ClientError", 'RateLimited (429): slow down')
+    env = json.loads(capsys.readouterr().err)["error"]
+    assert env["type"] == "rate_limit" and env["status"] == 429
+
+
+# ---------------------------------------------------------------------------
+# Output: JSON Lines (wskish #8) and the truncation signal (wskish #7).
+# ---------------------------------------------------------------------------
+
+def test_output_jsonl_one_object_per_line(capsys):
+    output([{'a': 1}, {'a': 2}], argparse.Namespace(format='jsonl', limit=None))
+    assert capsys.readouterr().out.strip().split("\n") == ['{"a": 1}', '{"a": 2}']
+
+
+def test_output_truncation_notice_to_stderr_only(capsys):
+    output([1, 2], argparse.Namespace(format='json', limit=2))
+    cap = capsys.readouterr()
+    assert json.loads(cap.err)["truncated"] is True
+    assert json.loads(cap.out) == [1, 2]            # stdout stays a clean array
+
+
+def test_output_no_truncation_when_under_limit(capsys):
+    output([1, 2], argparse.Namespace(format='json', limit=10))
+    assert capsys.readouterr().err == ""
+
+
+# ---------------------------------------------------------------------------
+# commands catalog (wskish #3); --body @file/stdin (wskish #2); typed
+# timestamps (wskish #5); trailing global flags (#4); --full-media (#160).
+# ---------------------------------------------------------------------------
+
+def test_commands_catalog_is_complete_and_honest():
+    cat = {c['command']: c for c in _command_catalog(build_parser())}
+    assert len(cat) > 100
+    get = cat['application get']
+    aid = next(a for a in get['args'] if a['name'] == '--application-id')
+    assert aid['required'] is True                  # required via _reqid even though the flag isn't argparse-required
+    assert all(a['name'] not in ('--format', '--tenant') for a in get['args'])   # globals omitted
+
+
+def test_body_arg_reads_file_and_passes_inline_through(tmp_path):
+    f = tmp_path / "b.json"
+    f.write_text('{"x": 1}')
+    assert _body_arg('@' + str(f)) == '{"x": 1}'
+    assert _body_arg('{"y": 2}') == '{"y": 2}'
+
+
+def test_timestamp_accepts_epoch_and_iso():
+    assert _timestamp('1700000000') == 1700000000.0
+    assert isinstance(_timestamp('2026-01-02T03:04:05Z'), float)
+    with pytest.raises(argparse.ArgumentTypeError):
+        _timestamp('not-a-timestamp')
+
+
+def test_trailing_global_flags_after_command():
+    p = build_parser()
+    assert p.parse_args(['application', 'list', '--format', 'table']).format == 'table'
+    ns = p.parse_args(['subject', 'get', 'S1', '--tenant', 't9'])
+    _resolve_positional_ids(p, ns)
+    assert ns.tenant == 't9' and ns.subject_uid == 'S1'
+
+
+def test_subject_media_full_media_flag():
+    p = build_parser()
+    ns = p.parse_args(['subject', 'media', 'S1', '--full-media']); _resolve_positional_ids(p, ns)
+    assert ns.full_media is True
+    ns = p.parse_args(['subject', 'media', 'S1']); _resolve_positional_ids(p, ns)
+    assert ns.full_media is False and ns.limit == 100

@@ -59,6 +59,7 @@ import json
 import re
 import sys
 import os
+from datetime import datetime
 from importlib.metadata import version as _pkg_version, PackageNotFoundError
 
 from tabulate import tabulate
@@ -181,9 +182,27 @@ def obj_to_dict(obj):
 
 
 def output(data, args, table_type=None):
-    """Output data as JSON or table based on --format flag."""
+    """Emit data on stdout as JSON (default), JSON Lines (`--format jsonl`), or a
+    table (`--format table`, when a table type is known).
+
+    When a list result is capped by `--limit`, a one-line truncation notice is
+    written to **stderr** (stdout stays a clean array / JSONL stream) so an agent
+    knows more may exist."""
     fmt = getattr(args, 'format', 'json')
-    if fmt == 'table' and table_type:
+    limit = getattr(args, 'limit', None)
+    if isinstance(data, list) and limit and len(data) >= limit:
+        sys.stderr.write(json.dumps({
+            "truncated": True,
+            "count": len(data),
+            "hint": "results capped by --limit %d; raise --limit or use --cursor to fetch more" % limit,
+        }) + "\n")
+    if fmt == 'jsonl':
+        if isinstance(data, list):
+            for item in data:
+                print(json.dumps(item, default=str))
+        else:
+            print(json.dumps(data, default=str))
+    elif fmt == 'table' and table_type:
         _output_table(data, table_type)
     else:
         print(json.dumps(data, indent=2, default=str))
@@ -216,9 +235,55 @@ def _truncate(s, maxlen):
     return s if len(s) <= maxlen else s[:maxlen - 3] + '...'
 
 
+# legacy error-type label -> structured envelope "type"
+_ERROR_TYPES = {
+    'CredentialError': 'auth',
+    'ClientError': 'client',
+    'ServerError': 'server',
+    'ConnectionError': 'connection',
+    'BadRequest': 'client',
+}
+_ERROR_HINTS = {
+    'auth': "check COG_API_KEY / COG_USER+COG_PASS, or run 'cogniac auth login'",
+    'connection': "check network connectivity and COG_URL_PREFIX",
+    'server': "transient server error; retry shortly",
+}
+
+
 def error_exit(error_type, detail, exit_code=1):
-    """Print JSON error to stderr and exit."""
-    sys.stderr.write(json.dumps({"error": error_type, "detail": detail}) + "\n")
+    """Print a structured JSON error envelope to stderr and exit.
+
+    Envelope: ``{"error": {"type", "status", "message", "hint"}}`` — agents
+    branch on ``type``; ``status`` is the HTTP status when known; ``message`` is
+    the server's message (un-nested from the wrapper text, and from the server's
+    JSON body when it sent one, rather than double-encoded); ``hint`` is a
+    self-heal suggestion when one applies."""
+    etype = _ERROR_TYPES.get(error_type, 'error')
+    detail = detail or ''
+    status = None
+    m = re.search(r'\((\d{3})\)', detail)
+    if m:
+        status = int(m.group(1))
+    message = detail
+    # un-nest the server's JSON body if present so it isn't double-encoded
+    jm = re.search(r'(\{.*\}|\[.*\])\s*$', detail, re.S)
+    if jm:
+        try:
+            body = json.loads(jm.group(1))
+            if isinstance(body, dict):
+                message = body.get('message') or body.get('detail') or body.get('error') or message
+        except ValueError:
+            pass
+    hint = _ERROR_HINTS.get(etype)
+    if status == 429:
+        etype, hint = 'rate_limit', "rate-limited; retry after a short backoff"
+    env = {"type": etype}
+    if status is not None:
+        env["status"] = status
+    env["message"] = message
+    if hint:
+        env["hint"] = hint
+    sys.stderr.write(json.dumps({"error": env}) + "\n")
     sys.exit(exit_code)
 
 
@@ -422,6 +487,7 @@ def cmd_subjects_media(args):
             consensus=args.consensus,
             reverse=getattr(args, 'reverse', True),
             limit=args.limit,
+            abridged_media=not getattr(args, 'full_media', False),
         )
         results = list(associations)
         fmt = getattr(args, 'format', 'json')
@@ -2044,6 +2110,28 @@ def _apply_args(parser, arg_specs):
                 parser.set_defaults(**{'_reqid_' + dest: True})
 
 
+_GLOBAL_PARENT = None
+
+
+def _global_parent():
+    """A parent parser carrying the global flags (`--format`, `--tenant`) so they
+    are also accepted *after* the command (`cogniac application list --format table`),
+    not just before it. The flags default to SUPPRESS here so a trailing flag
+    never clobbers a value given before the command; the top-level parser keeps
+    the real defaults."""
+    global _GLOBAL_PARENT
+    if _GLOBAL_PARENT is None:
+        gp = argparse.ArgumentParser(add_help=False)
+        gp.add_argument('--format', choices=['json', 'table', 'jsonl'],
+                        default=argparse.SUPPRESS,
+                        help='Output format: json (default), table, or jsonl')
+        gp.add_argument('--tenant', '--tenant_id', dest='tenant',
+                        default=argparse.SUPPRESS,
+                        help='Tenant ID for this invocation (overrides COG_TENANT)')
+        _GLOBAL_PARENT = gp
+    return _GLOBAL_PARENT
+
+
 def _add_verb(sub, name, handler, arg_specs=None, help='', aliases=None, hidden=False):
     """Add a verb subparser to a subparsers object and bind its handler.
 
@@ -2061,7 +2149,7 @@ def _add_verb(sub, name, handler, arg_specs=None, help='', aliases=None, hidden=
     kw = {'aliases': list(aliases)} if aliases else {}
     if not hidden and help:
         kw['help'] = help
-    p = sub.add_parser(name, **kw)
+    p = sub.add_parser(name, parents=[_global_parent()], **kw)
     _apply_args(p, arg_specs)
     p.set_defaults(func=handler)
     return p
@@ -2090,8 +2178,39 @@ def _flat_alias(subparsers, canonical, registrar, extra_aliases=None):
 
 # Common reusable argument specs ------------------------------------------------
 
-_BODY = [(('--body',), {'help': 'JSON request body'})]
-_BODY_REQ = [(('--body',), {'required': True, 'help': 'JSON request body'})]
+def _body_arg(value):
+    """Resolve a --body value: inline JSON is returned as-is, `@PATH` reads a
+    file, and `-` reads stdin — so agents don't fight shell quoting on large
+    bodies. The result is still a JSON string, parsed downstream by _json_body."""
+    try:
+        if value == '-':
+            return sys.stdin.read()
+        if value.startswith('@'):
+            with open(value[1:], 'r') as f:
+                return f.read()
+    except OSError as e:
+        raise argparse.ArgumentTypeError("could not read --body %r: %s" % (value, e))
+    return value
+
+
+def _timestamp(value):
+    """A timestamp arg: epoch seconds (a number) or an ISO 8601 datetime
+    (e.g. 2026-01-02T03:04:05Z). Returns epoch seconds as a float."""
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    try:
+        return datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "expected epoch seconds or an ISO 8601 datetime, got %r" % value)
+
+
+_BODY = [(('--body',), {'type': _body_arg, 'metavar': 'JSON',
+                        'help': 'JSON request body; also @FILE to read a file or - for stdin'})]
+_BODY_REQ = [(('--body',), {'required': True, 'type': _body_arg, 'metavar': 'JSON',
+                            'help': 'JSON request body; also @FILE to read a file or - for stdin'})]
 
 
 # Resource ids are passed as --<resource>-id flags (e.g. --application-id,
@@ -2147,6 +2266,56 @@ def _resolve_positional_ids(parser, args):
                      % ", ".join(missing))
 
 
+def _command_catalog(parser, path=(), cmd_help=None):
+    """Walk the parser tree and return a flat catalog of every leaf command
+    (canonical names) with its args — name, positional?, required?, type,
+    choices, help. One `cogniac commands` call maps the whole surface so an
+    agent need not probe `--help` level by level. Global flags (--format,
+    --tenant) and hidden deprecated forms are omitted."""
+    out = []
+    if parser.get_default('func') is not None:
+        args_info = []
+        for a in parser._actions:
+            if isinstance(a, (argparse._HelpAction, argparse._SubParsersAction)):
+                continue
+            if a.help is argparse.SUPPRESS or a.dest in ('format', 'tenant'):
+                continue
+            positional = not a.option_strings
+            # a dual-form id flag isn't argparse-required (the positional mirror
+            # covers it), but it IS required — _resolve_positional_ids enforces it
+            # via the _reqid_<dest> marker. Reflect that so the catalog is honest.
+            required = (bool(getattr(a, 'required', False))
+                        or (positional and a.nargs not in ('?', '*'))
+                        or bool(parser.get_default('_reqid_' + a.dest)))
+            args_info.append({
+                'name': a.option_strings[0] if a.option_strings else (a.metavar or a.dest),
+                'positional': positional,
+                'required': required,
+                'type': getattr(a.type, '__name__', None) if a.type else None,
+                'choices': list(a.choices) if a.choices else None,
+                'help': a.help,
+            })
+        out.append({'command': ' '.join(path), 'help': cmd_help, 'args': args_info})
+    for spa in [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]:
+        help_by_name = {ca.dest: ca.help for ca in getattr(spa, '_choices_actions', [])}
+        canon = {}
+        for name, sub in spa.choices.items():
+            canon.setdefault(id(sub), name)
+        done = set()
+        for name, sub in spa.choices.items():
+            if id(sub) in done:
+                continue
+            done.add(id(sub))
+            cname = canon[id(sub)]
+            out.extend(_command_catalog(sub, path + (cname,), cmd_help=help_by_name.get(cname)))
+    return out
+
+
+def cmd_commands(args):
+    """Emit the full command catalog as JSON (one call maps the whole CLI)."""
+    print(json.dumps(_command_catalog(build_parser()), indent=2, default=str))
+
+
 class _CogniacParser(argparse.ArgumentParser):
     """ArgumentParser that turns an invalid-subcommand error into a concise
     message with a close-match suggestion, instead of dumping the full
@@ -2173,8 +2342,8 @@ def build_parser():
         prog='cogniac',
         description='Cogniac CLI - query and manage the Cogniac API (JSON or table output)',
     )
-    parser.add_argument('--format', choices=['json', 'table'], default='json',
-                        help='Output format (default: json)')
+    parser.add_argument('--format', choices=['json', 'table', 'jsonl'], default='json',
+                        help='Output format: json (default), table, or jsonl (one JSON object per line)')
     parser.add_argument('--tenant', '--tenant_id', default=None,
                         help='Tenant ID to use for this invocation (overrides COG_TENANT). '
                              '`--tenant_id` is an alias for ergonomics.')
@@ -2197,6 +2366,16 @@ def build_parser():
                                     'help': 'Do not auto-open a browser; just print the login URL'})],
               help='Log in via the browser and store a per-user API key')
     _add_verb(auth_sub, 'logout', cmd_auth_logout, help='Remove the stored login credential')
+
+    # ======================================================================
+    #  commands  (machine-readable catalog of the whole CLI surface)
+    # ======================================================================
+    commands_parser = subparsers.add_parser(
+        'commands', aliases=resource_aliases('commands'),
+        help='Print the full command catalog as JSON (noun -> verbs -> args)')
+    commands_parser.add_argument('--json', action='store_true',
+                                 help='Emit JSON (the default and only format for this command)')
+    commands_parser.set_defaults(func=cmd_commands)
 
     # ======================================================================
     #  tenant
@@ -2296,8 +2475,8 @@ def build_parser():
     ]
     _EVENTS_ARGS = [
         _id('application_id', 'Application ID'),
-        (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
-        (('--end',), {'type': float, 'help': 'Filter timestamp < end'}),
+        (('--start',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp > start (epoch seconds or ISO 8601)'}),
+        (('--end',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp < end (epoch seconds or ISO 8601)'}),
         (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
         (('--cursor',), {'help': 'Pagination cursor'}),
         (('--reverse',), {'action': 'store_true', 'help': 'Sort high to low'}),
@@ -2359,8 +2538,8 @@ def build_parser():
     # application performance (sibling verbs)
     _PERF_ARGS = [
         _id('application_id', 'Application ID'),
-        (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
-        (('--end',), {'type': float, 'help': 'Filter timestamp < end'}),
+        (('--start',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp > start (epoch seconds or ISO 8601)'}),
+        (('--end',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp < end (epoch seconds or ISO 8601)'}),
         (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
         (('--reverse',), {'action': 'store_true', 'help': 'Sort high to low'}),
         (('--duration',), {'type': int, 'help': 'Window duration shorthand (start = end - duration)'}),
@@ -2456,8 +2635,8 @@ def build_parser():
                   help="Export the app's model to an external target", hidden=hidden)
         _add_verb(sub, 'list', cmd_app_model_list,
                   [_id('application_id', 'Application ID'),
-                   (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
-                   (('--end',), {'type': float, 'help': 'Filter timestamp < end'}),
+                   (('--start',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp > start (epoch seconds or ISO 8601)'}),
+                   (('--end',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp < end (epoch seconds or ISO 8601)'}),
                    (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
                    (('--reverse',), {'action': 'store_true', 'help': 'Sort high to low'})],
                   help="Stream the app's models", hidden=hidden)
@@ -2497,8 +2676,8 @@ def build_parser():
 
     _CONSENSUS_HISTORY_ARGS = [
         _id('application_id', 'Application ID'),
-        (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
-        (('--end',), {'type': float, 'help': 'Filter timestamp < end'}),
+        (('--start',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp > start (epoch seconds or ISO 8601)'}),
+        (('--end',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp < end (epoch seconds or ISO 8601)'}),
         (('--limit',), {'type': int, 'default': None, 'help': 'Max history points'}),
         (('--subject-uid',), {'dest': 'subject_uid', 'help': 'Restrict to a single subject'}),
     ]
@@ -2677,7 +2856,10 @@ def build_parser():
                (('--probability-lower',), {'dest': 'probability_lower', 'type': float, 'help': 'Min probability'}),
                (('--probability-upper',), {'dest': 'probability_upper', 'type': float, 'help': 'Max probability'}),
                (('--reverse',), {'action': argparse.BooleanOptionalAction, 'default': True,
-                                 'help': 'Sort high to low (use --no-reverse for ascending)'})],
+                                 'help': 'Sort high to low (use --no-reverse for ascending)'}),
+               (('--full-media',), {'dest': 'full_media', 'action': 'store_true',
+                                    'help': 'Return full media records (domain_unit, sequence_ix, '
+                                            'media_timestamp, created_at, ...) instead of just media_id'})],
               help="Stream a subject's media associations")
     _add_verb(subjects_sub, 'associate', cmd_subjects_associate,
               [_id('subject_uid', 'Subject UID'),
@@ -2698,8 +2880,8 @@ def build_parser():
     subj_cons_sub = subj_cons_parser.add_subparsers(dest='subject_consensus_command')
     _add_verb(subj_cons_sub, 'history', cmd_subjects_consensus_history,
               [_id('subject_uid', 'Subject UID'),
-               (('--start',), {'type': float, 'help': 'Filter timestamp > start'}),
-               (('--end',), {'type': float, 'help': 'Filter timestamp < end'}),
+               (('--start',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp > start (epoch seconds or ISO 8601)'}),
+               (('--end',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp < end (epoch seconds or ISO 8601)'}),
                (('--limit',), {'type': int, 'default': None, 'help': 'Max history points'})],
               help='Consensus-change history for the subject')
 

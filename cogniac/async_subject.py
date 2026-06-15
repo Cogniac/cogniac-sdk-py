@@ -4,7 +4,7 @@ Async CogniacSubject Object Client
 Copyright (C) 2016 Cogniac Corporation
 """
 
-from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors, normalize_association
 
 
 class AsyncCogniacSubject(object):
@@ -366,7 +366,7 @@ class AsyncCogniacSubject(object):
         while url:
             resp = await get_next(url)
             for sma in resp['data']:
-                yield sma
+                yield normalize_association(sma)
                 count += 1
                 if limit and count == limit:
                     return
