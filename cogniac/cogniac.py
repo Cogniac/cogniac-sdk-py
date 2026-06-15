@@ -263,7 +263,8 @@ class CogniacConnection(object):
         if timeout is None:
             timeout = self.timeout
         try:
-            resp = self.session.head(url, timeout=timeout, **kwargs)
+            # use request() instead of head() to support a data/json/content body
+            resp = self.session.request('HEAD', url, timeout=timeout, **kwargs)
             raise_errors(resp)
         except CredentialError:
             self.__authenticate()
@@ -286,13 +287,8 @@ class CogniacConnection(object):
             timeout = self.timeout
         kwargs.pop('stream', None)  # httpx handles streaming differently
         try:
-            # httpx's .get() rejects a request body; route body-bearing GETs
-            # (e.g. the model-package fetch) through .request(), which is
-            # otherwise equivalent to .get() for bodyless calls.
-            if any(k in kwargs for k in ('json', 'data', 'content')):
-                resp = self.session.request("GET", url, timeout=timeout, **kwargs)
-            else:
-                resp = self.session.get(url, timeout=timeout, **kwargs)
+            # use request() instead of get() to support a data/json/content body
+            resp = self.session.request('GET', url, timeout=timeout, **kwargs)
             raise_errors(resp)
         except CredentialError:
             self.__authenticate()

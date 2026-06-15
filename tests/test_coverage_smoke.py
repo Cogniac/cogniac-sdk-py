@@ -200,11 +200,12 @@ def test_gateways_is_deprecated_alias_of_edgeflows():
     assert 'edgeflows' in src
 
 
-def test_get_routes_body_bearing_get_through_request():
-    # Regression: httpx's Client.get() rejects a request body, but the model
-    # package fetch (download_model -> GET /ccppkg) sends a json body. _get must
-    # route body-bearing GETs through .request("GET", ...) while keeping plain
-    # GETs on .get().
+def test_get_routes_through_request_to_support_a_body():
+    # Regression: httpx's Client.get() rejects a request body, so _get routes
+    # every GET through .request("GET", ...) (matching _delete). This keeps
+    # body-bearing GETs like the model-package fetch (download_model -> GET
+    # /ccppkg) working. The fake exposes only request(), so any regression back
+    # to .get() raises AttributeError loudly.
     from cogniac.cogniac import CogniacConnection
 
     class _Resp:
@@ -213,10 +214,6 @@ def test_get_routes_body_bearing_get_through_request():
     class _Session:
         def __init__(self):
             self.last = None
-
-        def get(self, url, **kw):
-            self.last = ('get', kw)
-            return _Resp()
 
         def request(self, method, url, **kw):
             self.last = ('request', method, kw)
@@ -228,10 +225,10 @@ def test_get_routes_body_bearing_get_through_request():
     conn.timeout = 60
 
     conn._get('/1/thing')
-    assert conn.session.last[0] == 'get'
+    assert conn.session.last[:2] == ('request', 'GET')
 
     conn._get('/1/thing', json={'ccp_filename': 'm.tgz'})
-    assert conn.session.last[0] == 'request' and conn.session.last[1] == 'GET'
+    assert conn.session.last[:2] == ('request', 'GET')
     assert conn.session.last[2].get('json') == {'ccp_filename': 'm.tgz'}
 
 
