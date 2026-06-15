@@ -1,49 +1,62 @@
 """
 Cogniac CLI - Agent-friendly command-line interface to the Cogniac API.
 
-Outputs JSON (default) or table format. Errors are JSON on stderr.
+Outputs JSON by default (--format table for human-readable). Errors are JSON on
+stderr; exit code 1 for runtime errors, 2 for usage errors.
 
-Read commands:
-    cogniac tenant
-    cogniac tenants
-    cogniac apps list
-    cogniac apps get <application_id>
-    cogniac apps leaderboard <application_id> [--set-assignment validation|training] [--snapshot-type regular|int8] [--eval-metrics primary|all] [--top N] [--full]
-    cogniac apps eval-metrics <application_id>
-    cogniac subjects list
-    cogniac subjects get <subject_uid>
-    cogniac subjects search [--prefix P] [--name N] [--similar S] [--ids ID ...] [--limit L]
-    cogniac subjects media <subject_uid> [--limit L] [--consensus C] [--probability-lower P] [--probability-upper P]
-    cogniac media get <media_id>
-    cogniac media download <media_id> [--output O]
+The command surface is nested, noun-first / verb-last:
+
+    cogniac <noun> [<sub-noun> ...] <verb> [--<resource>-id ID] [options]
+
+Resource ids are passed as --<resource>-id flags (--application-id, --subject-uid,
+--media-id, --edgeflow-id, ...). For backward compatibility each id may also be
+given as a positional argument (deprecated; the flag is the canonical form).
+Plural and synonym spellings of every token are accepted (app/apps/application,
+edgeflow/gateway, cert/certificate, ...).
+
+Representative read commands (run `cogniac <noun> --help` to discover the rest):
+    cogniac tenant get                         # current tenant (bare `cogniac tenant` works too)
+    cogniac tenant list                        # tenants you are authorized for
+    cogniac application list
+    cogniac application get --application-id ID
+    cogniac application leaderboard --application-id ID [--set-assignment ...] [--top N] [--full]
+    cogniac subject list
+    cogniac subject get --subject-uid UID
+    cogniac subject search [--prefix P] [--name N] [--similar S] [--ids ID ...] [--limit L]
+    cogniac subject media --subject-uid UID [--limit L] [--consensus C] [--probability-lower P] [--probability-upper P]
+    cogniac media get --media-id ID [--download [FILE]]
+    cogniac media download --media-id ID [-o OUTPUT]
     cogniac media search [--md5 M] [--filename F] [--external-media-id E] [--domain-unit D] [--limit L]
-    cogniac edgeflows list
-    cogniac edgeflows get <edgeflow_id>
-    cogniac edgeflows status <edgeflow_id> [--subsystem S] [--limit L]
-    cogniac cameras list
-    cogniac cameras get <network_camera_id>
-    cogniac deployments list
-    cogniac deployments get <deployment_group_id>
-    cogniac workflows get <workflow_id>
+    cogniac edgeflow list
+    cogniac edgeflow get --edgeflow-id ID
+    cogniac edgeflow status --edgeflow-id ID [--subsystem S] [--limit L]
+    cogniac camera list
+    cogniac camera get --network-camera-id ID
+    cogniac deployment list
+    cogniac deployment get --deployment-group-id ID
+    cogniac workflow get --workflow-id ID
 
 Auth commands:
-    cogniac auth                    # check credentials (env vars or stored login)
-    cogniac auth login [--no-browser]   # browser login; stores per-user API key at ~/.config/cogniac/credentials
-    cogniac auth logout             # remove the stored login credential
+    cogniac auth                               # check credentials (env vars or stored login)
+    cogniac auth login [--no-browser]          # browser login; stores a per-user API key
+    cogniac auth logout                        # remove the stored login credential
 
-Write commands:
-    cogniac subjects create <name> [--description D] [--external-id E]
-    cogniac subjects associate <subject_uid> <media_id> [--consensus C]
-    cogniac media upload <filename> [--subject-uid S] [--external-media-id E] [--domain-unit D] [--meta-tags T ...]
+Representative write commands:
+    cogniac subject create <name> [--description D] [--external-id E]
+    cogniac subject associate --subject-uid UID --media-id ID [--consensus C]
+    cogniac media upload <filename> [--subject-uid UID] [--external-media-id E] [--domain-unit D] [--meta-tags T ...]
 
 Global options:
-    --format json|table  (default: json)
+    --format json|table   (default: json)
+    --tenant TENANT_ID    (overrides COG_TENANT for this invocation)
 
 Copyright (C) 2016 Cogniac Corporation.
 """
 
 import argparse
+import difflib
 import json
+import re
 import sys
 import os
 from importlib.metadata import version as _pkg_version, PackageNotFoundError
@@ -2009,9 +2022,26 @@ def _add_resource(subparsers, canonical, extra_aliases=None, **kwargs):
 
 # An argument spec is a tuple: (args_tuple, kwargs_dict) passed straight to
 # add_argument(). Reused across the nested verb and its flat-alias twin.
+# Deprecated positional ids (mirrors of --<resource>-id flags) carry this dest
+# suffix; _resolve_positional_ids folds them into the canonical dest post-parse.
+_POSID_SUFFIX = '__posid'
+
+
 def _apply_args(parser, arg_specs):
     for names, opts in (arg_specs or []):
-        parser.add_argument(*names, **opts)
+        opts = dict(opts)
+        make_posid = opts.pop('_posid', False)
+        required = opts.pop('_required', False)
+        parser.add_argument(*names, **opts)            # the --<resource>-id flag
+        if make_posid:
+            dest = opts['dest']
+            # deprecated positional mirror (hidden from --help); folded into
+            # <dest> after parsing so existing `... get <id>` callers keep working.
+            parser.add_argument(dest + _POSID_SUFFIX, nargs='?', default=None,
+                                metavar=opts.get('metavar', dest.upper()),
+                                help=argparse.SUPPRESS)
+            if required:
+                parser.set_defaults(**{'_reqid_' + dest: True})
 
 
 def _add_verb(sub, name, handler, arg_specs=None, help='', aliases=None, hidden=False):
@@ -2064,22 +2094,82 @@ _BODY = [(('--body',), {'help': 'JSON request body'})]
 _BODY_REQ = [(('--body',), {'required': True, 'help': 'JSON request body'})]
 
 
-# Resource ids are passed as required --<resource>-id flags (e.g. --application-id,
+# Resource ids are passed as --<resource>-id flags (e.g. --application-id,
 # --subject-uid). _id() builds that arg-spec; the dest keeps the resource name so
 # handlers read args.application_id etc. unchanged. required=False for optional
 # filters (e.g. an optional id on a list command).
-def _id(dest, help, required=True):
+#
+# By default a deprecated optional positional mirror of the flag is also accepted
+# (so `application get <id>` keeps working alongside `application get --application-id <id>`);
+# _apply_args registers it and _resolve_positional_ids folds it into the same dest
+# after parsing, with the flag winning when both are given. pos=False drops the
+# mirror for the few verbs that already take another positional (e.g.
+# `classify <image-file>`, `workflow version get <version>`), where an optional
+# id-positional would be ambiguous — there the flag is required outright.
+def _id(dest, help, required=True, pos=True):
     flag = '--' + dest.replace('_', '-')
     opts = {'dest': dest, 'help': help, 'metavar': dest.upper()}
-    if required:
+    if pos:
+        opts['default'] = None
+        opts['_posid'] = True
+        opts['_required'] = bool(required)
+    elif required:
         opts['required'] = True
     else:
         opts['default'] = None
     return ((flag,), opts)
 
 
+def _resolve_positional_ids(parser, args):
+    """Fold deprecated positional id mirrors (``<dest>__posid``) into their
+    canonical ``--<resource>-id`` dest, then enforce required ids — either the
+    flag or the positional satisfies the requirement. Exits via parser.error
+    (usage error, code 2) listing the canonical flag when a required id is
+    absent in both forms. Removes the bookkeeping attributes so handlers see
+    only the canonical dest."""
+    ns = vars(args)
+    for attr in list(ns):
+        if attr.endswith(_POSID_SUFFIX):
+            canon = attr[:-len(_POSID_SUFFIX)]
+            if ns.get(canon) is None and ns[attr] is not None:
+                ns[canon] = ns[attr]
+            del ns[attr]
+    missing = []
+    for attr in list(ns):
+        if attr.startswith('_reqid_'):
+            canon = attr[len('_reqid_'):]
+            if ns.get(canon) is None:
+                missing.append('--' + canon.replace('_', '-'))
+            del ns[attr]
+    if missing:
+        parser.error("the following arguments are required: %s "
+                     "(each may instead be given as a positional argument)"
+                     % ", ".join(missing))
+
+
+class _CogniacParser(argparse.ArgumentParser):
+    """ArgumentParser that turns an invalid-subcommand error into a concise
+    message with a close-match suggestion, instead of dumping the full
+    (alias-inclusive) choice list. Usage strings stay short via the <command>
+    metavar set in build_parser()."""
+
+    def error(self, message):
+        m = re.match(r"argument [^:]*: invalid choice: '([^']*)'", message)
+        if m:
+            bad = m.group(1)
+            choices = next((list(a.choices) for a in self._actions
+                            if isinstance(a, argparse._SubParsersAction)), [])
+            close = difflib.get_close_matches(bad, choices, n=3, cutoff=0.5)
+            hint = (" - did you mean: %s?" % ", ".join(close)) if close else ""
+            sys.stderr.write(self.format_usage())
+            self.exit(2, "%s: error: invalid command '%s'%s "
+                         "(run '%s --help' for available commands)\n"
+                         % (self.prog, bad, hint, self.prog))
+        super().error(message)
+
+
 def build_parser():
-    parser = argparse.ArgumentParser(
+    parser = _CogniacParser(
         prog='cogniac',
         description='Cogniac CLI - query and manage the Cogniac API (JSON or table output)',
     )
@@ -2226,7 +2316,7 @@ def build_parser():
     _add_verb(apps_sub, 'leaderboard', cmd_apps_leaderboard, _LEADERBOARD_ARGS,
               help='Ranked candidate-model snapshot for the app')
     _add_verb(apps_sub, 'classify', cmd_app_classify,
-              [_id('application_id', 'Application ID'),
+              [_id('application_id', 'Application ID', pos=False),
                (('image_file',), {'help': 'Local image file path'})],
               help="Run the app's model on a local image")
     _add_verb(apps_sub, 'events', cmd_app_events, _EVENTS_ARGS, help="Stream the app's events")
@@ -2580,7 +2670,9 @@ def build_parser():
               help='Search subjects by prefix/similarity/name/ids')
     _add_verb(subjects_sub, 'media', cmd_subjects_media,
               [_id('subject_uid', 'Subject UID'),
-               (('--limit',), {'type': int, 'default': None, 'help': 'Max results'}),
+               (('--limit',), {'type': int, 'default': 100,
+                               'help': 'Max media associations (default: 100; pass a larger --limit '
+                                       'to widen). Bounds unbounded reads on large subjects.'}),
                (('--consensus',), {'choices': ['True', 'False', 'Sidelined'], 'help': 'Filter by consensus'}),
                (('--probability-lower',), {'dest': 'probability_lower', 'type': float, 'help': 'Min probability'}),
                (('--probability-upper',), {'dest': 'probability_upper', 'type': float, 'help': 'Max probability'}),
@@ -2690,7 +2782,9 @@ def build_parser():
     _add_verb(ef_sub, 'status', cmd_edgeflows_status,
               [_id('edgeflow_id', 'EdgeFlow ID (gateway_id)'),
                (('--subsystem',), {'help': 'Filter by subsystem'}),
-               (('--limit',), {'type': int, 'default': None, 'help': 'Max results'})],
+               (('--limit',), {'type': int, 'default': 10,
+                               'help': 'Max status events (default: 10; pass a larger --limit '
+                                       'to widen). Bounds the walk over device history.'})],
               help='EdgeFlow status events')
 
     # edgeflow certificate
@@ -2862,7 +2956,7 @@ def build_parser():
                   [_id('workflow_id', 'Base workflow ID')] + _BODY_REQ,
                   help='Create a new workflow version', hidden=hidden)
         _add_verb(sub, 'get', cmd_workflow_version_get,
-                  [_id('base_id', 'Base workflow ID'),
+                  [_id('base_id', 'Base workflow ID', pos=False),
                    (('version',), {'help': 'Version'})],
                   help='Show a specific workflow version', hidden=hidden)
     wf_version_parser = wf_sub.add_parser('version', aliases=resource_aliases('version'), help='Workflow versions')
@@ -2909,12 +3003,25 @@ def build_parser():
     # 'cogniac user' with no subcommand keeps the historical current-user behavior
     user_parser.set_defaults(func=cmd_user)
 
+    # Collapse the long, alias-inclusive subcommand list in usage strings to a
+    # single <command> placeholder (the full list stays in --help). Without this
+    # every usage error dumps ~140 alias spellings, twice.
+    def _short_metavar(p):
+        for a in p._actions:
+            if isinstance(a, argparse._SubParsersAction):
+                if a.metavar is None:
+                    a.metavar = '<command>'
+                for sub in set(a.choices.values()):
+                    _short_metavar(sub)
+    _short_metavar(parser)
+
     return parser
 
 
 def main():
     parser = build_parser()
     args = parser.parse_args()
+    _resolve_positional_ids(parser, args)
 
     if not hasattr(args, 'func'):
         parser.print_help()

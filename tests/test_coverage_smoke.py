@@ -19,7 +19,7 @@ import re
 import pytest
 
 import cogniac
-from cogniac.cli import build_parser, resource_aliases, _SYNONYM_GROUPS
+from cogniac.cli import build_parser, resource_aliases, _SYNONYM_GROUPS, _resolve_positional_ids
 
 
 # ---------------------------------------------------------------------------
@@ -470,7 +470,8 @@ def test_handlers_only_read_defined_dests():
 
 # ---------------------------------------------------------------------------
 # Aliases (flat, synonym, plural) route to the SAME handler as canonical.
-# Resource ids are required --<resource>-id flags (the canonical CLI surface).
+# Resource ids are --<resource>-id flags (canonical) with a deprecated positional
+# mirror; see the dual-form tests near the end of this file.
 # ---------------------------------------------------------------------------
 
 ALIAS_PAIRS = [
@@ -638,3 +639,100 @@ def test_async_network_camera_update_accepts_kwargs():
     sig = inspect.signature(cogniac.AsyncCogniacNetworkCamera.update)
     assert any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()), \
         "async update should accept **kwargs for back-compat"
+
+
+# ---------------------------------------------------------------------------
+# Dual-form resource ids: the canonical --<resource>-id flag and a deprecated
+# positional mirror both resolve to the same dest; a required id given in
+# neither form exits 2. Verbs that take another positional (classify, workflow
+# version get) stay flag-only. Keeps the published skill's positional spellings
+# working without re-introducing the positional/flag ambiguity.
+# ---------------------------------------------------------------------------
+
+def _parse(argv):
+    p = build_parser()
+    ns = p.parse_args(argv)
+    _resolve_positional_ids(p, ns)
+    return ns
+
+
+@pytest.mark.parametrize("argv", [
+    ['application', 'get', 'A1'],                       # deprecated positional
+    ['application', 'get', '--application-id', 'A1'],   # canonical flag
+])
+def test_id_positional_and_flag_resolve_to_same_dest(argv):
+    assert _parse(argv).application_id == 'A1'
+
+
+@pytest.mark.parametrize("argv", [
+    ['subject', 'media', 'S1'],
+    ['edgeflow', 'status', 'E1'],
+    ['media', 'download', 'M1'],
+    ['camera', 'get', 'C1'],
+    ['deployment', 'get', 'D1'],
+    ['workflow', 'get', 'W1'],
+])
+def test_deprecated_positional_id_still_parses(argv):
+    # the positional spelling the published skill documents must keep working
+    assert argv[-1] in vars(_parse(argv)).values()
+
+
+@pytest.mark.parametrize("argv", [
+    ['application', 'get'],
+    ['subject', 'get'],
+    ['media', 'get'],
+    ['edgeflow', 'get'],
+])
+def test_required_id_missing_in_both_forms_exits_2(argv):
+    with pytest.raises(SystemExit) as exc:
+        _parse(argv)
+    assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("argv", [
+    ['subject', 'associate', 'S1', 'M1'],
+    ['subject', 'associate', '--subject-uid', 'S1', '--media-id', 'M1'],
+])
+def test_two_id_verb_resolves_both_ids(argv):
+    ns = _parse(argv)
+    assert ns.subject_uid == 'S1' and ns.media_id == 'M1'
+
+
+def test_classify_id_is_flag_only_with_trailing_positional():
+    # classify takes <image-file>, so its id stays a required flag (no mirror)
+    assert _parse(['application', 'classify', '--application-id', 'A1', 'img.jpg']).application_id == 'A1'
+    with pytest.raises(SystemExit):     # lone positional is the image file -> --application-id still required
+        _parse(['application', 'classify', 'img.jpg'])
+
+
+# ---------------------------------------------------------------------------
+# List-cap defaults restored on the expensive reads (guards unbounded walks).
+# ---------------------------------------------------------------------------
+
+def test_subject_media_default_limit_is_100():
+    assert _parse(['subject', 'media', 'S1']).limit == 100
+
+
+def test_edgeflow_status_default_limit_is_10():
+    assert _parse(['edgeflow', 'status', 'E1']).limit == 10
+
+
+# ---------------------------------------------------------------------------
+# Usage/error ergonomics: no alias wall in usage; a typo'd command suggests a
+# close match instead of dumping every alias spelling.
+# ---------------------------------------------------------------------------
+
+def test_usage_string_has_no_alias_wall():
+    usage = build_parser().format_usage()
+    assert '<command>' in usage
+    assert 'applications' not in usage and 'gateways' not in usage
+    assert len(usage) < 300
+
+
+def test_invalid_command_suggests_close_match(capsys):
+    with pytest.raises(SystemExit) as exc:
+        build_parser().parse_args(['aplication', 'list'])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert 'did you mean' in err and 'application' in err
+    assert 'gateways' not in err          # concise: not the full alias list
