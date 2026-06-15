@@ -22,7 +22,7 @@ import pytest
 import cogniac
 from cogniac.cli import (build_parser, resource_aliases, _SYNONYM_GROUPS, _resolve_positional_ids,
                          error_exit, output, _command_catalog, _timestamp, _body_arg)
-from cogniac.common import server_error, normalize_association, maybe_json, ClientError, ServerError
+from cogniac.common import server_error, ClientError, ServerError
 
 
 # ---------------------------------------------------------------------------
@@ -748,18 +748,8 @@ def test_server_error_retries_429_not_other_4xx():
     assert server_error(ClientError('bad request', 400)) is False
 
 
-def test_normalize_association_parses_json_strings():
-    rec = {'app_data': '{"k": 1}', 'media': {'custom_data': '[1, 2]'}, 'subject': {'app_data': '{"s": 2}'}}
-    out = normalize_association(rec)
-    assert out['app_data'] == {'k': 1}
-    assert out['media']['custom_data'] == [1, 2]
-    assert out['subject']['app_data'] == {'s': 2}
-
-
-def test_maybe_json_leaves_non_json_untouched():
-    assert maybe_json('plain') == 'plain'
-    assert maybe_json('{not valid') == '{not valid'
-    assert maybe_json(42) == 42
+# app_data/custom_data JSON-string normalization (#157) is implemented by
+# common.parse_json_str and covered by tests/test_json_normalization.py.
 
 
 # ---------------------------------------------------------------------------

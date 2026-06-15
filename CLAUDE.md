@@ -108,7 +108,7 @@ For CLI usage, prefer `cogniac media download <media_id> -o out.jpg`.
 
 The `@retry` decorator from `tenacity` is used on connection and entity methods. It works transparently on both sync and async functions. Connection errors (`httpx.ConnectError`) are treated as retryable (same as server errors).
 
-`common.py` also exposes `maybe_json(value)` / `normalize_association(record)`: some API fields (`app_data`, `custom_data`) are occasionally returned as serialized JSON strings, so `media_associations()` normalizes them to dicts/lists before yielding (sync + async).
+`common.py` also exposes `parse_json_str(value)`: some API fields (`app_data`, `custom_data`) are occasionally returned as serialized JSON strings, so it is applied at every yield/return point that surfaces them — `media_associations()` (sync + async), `CogniacMedia.detections()`, and `CogniacMedia.subjects()` — so callers always see dicts/lists.
 
 ### API URL Versioning
 

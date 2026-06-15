@@ -4,7 +4,7 @@ Async CogniacSubject Object Client
 Copyright (C) 2016 Cogniac Corporation
 """
 
-from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors, normalize_association
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors, parse_json_str
 
 
 class AsyncCogniacSubject(object):
@@ -366,7 +366,11 @@ class AsyncCogniacSubject(object):
         while url:
             resp = await get_next(url)
             for sma in resp['data']:
-                yield normalize_association(sma)
+                if isinstance(sma.get('subject'), dict):
+                    sma['subject']['app_data'] = parse_json_str(sma['subject'].get('app_data'))
+                if isinstance(sma.get('media'), dict):
+                    sma['media']['custom_data'] = parse_json_str(sma['media'].get('custom_data'))
+                yield sma
                 count += 1
                 if limit and count == limit:
                     return

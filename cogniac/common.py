@@ -34,39 +34,6 @@ class ClientError(Exception):
         return self.message
 
 
-def maybe_json(value):
-    """If value is a JSON object/array serialized as a string, return the parsed
-    structure; otherwise return value unchanged. Some API fields (e.g. subject
-    app_data, media custom_data) are occasionally returned as JSON strings."""
-    if isinstance(value, str):
-        s = value.strip()
-        if s[:1] in ('{', '['):
-            try:
-                return json.loads(value)
-            except ValueError:
-                return value
-    return value
-
-
-def normalize_association(record):
-    """Normalize JSON-string fields the API sometimes returns serialized:
-    top-level ``app_data`` / ``custom_data`` and the same keys nested under a
-    ``media`` or ``subject`` stanza. Mutates and returns the record so callers
-    always see dicts/lists rather than strings. See issue #157."""
-    if not isinstance(record, dict):
-        return record
-    for key in ('app_data', 'custom_data'):
-        if isinstance(record.get(key), str):
-            record[key] = maybe_json(record[key])
-    for nested in ('media', 'subject'):
-        sub = record.get(nested)
-        if isinstance(sub, dict):
-            for key in ('app_data', 'custom_data'):
-                if isinstance(sub.get(key), str):
-                    sub[key] = maybe_json(sub[key])
-    return record
-
-
 def credential_error(exception):
     return isinstance(exception, CredentialError)
 
@@ -84,6 +51,22 @@ def server_error(exception):
     if isinstance(exception, (ServerError, ConnectError)):
         return True
     return isinstance(exception, ClientError) and getattr(exception, 'status_code', None) == 429
+
+
+def parse_json_str(val):
+    """Return val parsed as JSON if it's a string, otherwise return it unchanged.
+
+    The API occasionally serializes app_data and custom_data as JSON strings
+    instead of inline objects. Callers should not need to guard for this.
+    Non-string values (dict, list, None) are passed through untouched.
+    A string that is not valid JSON is also returned as-is.
+    """
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except (ValueError, TypeError):
+            pass
+    return val
 
 
 def raise_errors(response):
