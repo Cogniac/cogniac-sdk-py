@@ -340,6 +340,28 @@ class CogniacConnection(object):
             raise
         return resp
 
+    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
+    def _put(self, url, timeout=None, **kwargs):
+        """
+        wrap httpx client to re-authenticate on credential expiration
+        """
+        if not url.startswith("http"):
+            # Prepend /1/ version if no version is specified in the URL (backward compatibility).
+            m = re.search(r'^/\d+(/)?', url)
+            if m is None:
+                url = '/1' + url
+
+            url = self.url_prefix + url
+        if timeout is None:
+            timeout = self.timeout
+        try:
+            resp = self.session.request('PUT', url, timeout=timeout, **kwargs)
+            raise_errors(resp)
+        except CredentialError:
+            self.__authenticate()
+            raise
+        return resp
+
     def get_tenant(self):
         """
         return the currently authenticated CogniacTenant
@@ -556,6 +578,57 @@ class CogniacConnection(object):
         edgeflow_id (String):  The id of the Cogniac EdgeFlow to return
         """
         return CogniacEdgeFlow.get(self, edgeflow_id)
+
+    def edgeflows(self):
+        """
+        return CogniacEdgeFlow for all EdgeFlows belonging to the currently authenticated tenant.
+
+        This is the preferred name for get_all_edgeflows().
+        """
+        return CogniacEdgeFlow.get_all(self)
+
+    def gateways(self):
+        """
+        DEPRECATED: use edgeflows() instead.
+
+        return CogniacEdgeFlow for all EdgeFlows belonging to the currently authenticated tenant.
+        """
+        import warnings
+        warnings.warn("CogniacConnection.gateways() is deprecated; use edgeflows() instead.",
+                      DeprecationWarning, stacklevel=2)
+        return self.edgeflows()
+
+    def get_all_deployments(self):
+        """
+        return CogniacDeployment for all deployment groups belonging to the currently authenticated tenant
+        """
+        from .deployment import CogniacDeployment
+        return CogniacDeployment.get_all(self)
+
+    def get_deployment(self, deployment_group_id):
+        """
+        return an existing CogniacDeployment (deployment group)
+
+        deployment_group_id (String):  The id of the deployment group to return
+        """
+        from .deployment import CogniacDeployment
+        return CogniacDeployment.get(self, deployment_group_id)
+
+    def get_all_workflows(self):
+        """
+        return CogniacWorkflow for all workflows belonging to the currently authenticated tenant
+        """
+        from .workflow import CogniacWorkflow
+        return CogniacWorkflow.get_all(self)
+
+    def get_workflow(self, workflow_id):
+        """
+        return an existing CogniacWorkflow
+
+        workflow_id (String):  The id of the workflow to return
+        """
+        from .workflow import CogniacWorkflow
+        return CogniacWorkflow.get(self, workflow_id)
 
 
 if __name__ == "__main__":

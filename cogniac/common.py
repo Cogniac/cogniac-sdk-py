@@ -39,8 +39,18 @@ def credential_error(exception):
 
 
 def server_error(exception):
-    """Return True if we should retry (in this case when it's an ServerError, False otherwise"""
-    return isinstance(exception, ServerError) or isinstance(exception, ConnectError)
+    """Return True if the operation should be retried.
+
+    Retries on ServerError (5xx), connection errors, and HTTP 429 rate-limit
+    responses (a ClientError carrying status_code 429): 429 is transient, so a
+    bulk operation should back off and retry rather than die on the first
+    throttle. Retries use the caller's exponential backoff; the server's
+    Retry-After header (when present) is recorded on the exception as
+    ``retry_after`` for callers/waits that want to honor it.
+    """
+    if isinstance(exception, (ServerError, ConnectError)):
+        return True
+    return isinstance(exception, ClientError) and getattr(exception, 'status_code', None) == 429
 
 
 def parse_json_str(val):
@@ -70,6 +80,18 @@ def raise_errors(response):
     if response.status_code == 401:
         msg = "Invalid username password credentials (%d): %s" % (response.status_code, response.text)
         raise CredentialError(msg)
+
+    if response.status_code == 429:
+        # rate-limited: retryable (see server_error). Record Retry-After if present.
+        msg = "RateLimited (429): %s" % response.text
+        exc = ClientError(msg, 429)
+        retry_after = response.headers.get('Retry-After')
+        if retry_after:
+            try:
+                exc.retry_after = float(retry_after)
+            except (TypeError, ValueError):
+                pass
+        raise exc
 
     if response.status_code >= 400:
         msg = "ClientError (%d): %s" % (response.status_code, response.text)

@@ -162,137 +162,31 @@ class CogniacNetworkCamera(object):
         return [CogniacNetworkCamera(connection, netcam) for netcam in netcams]
 
     ##
-    #  post
+    #  update
     ##
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
-    def update(self,
-               url=None,
-               current_IP=None,
-               camera_name=None,
-               description=None,
-               active=None,
-               lat=None,
-               lon=None,
-               hae=None,
-               last_pose_change_timestamp=None,
-               resolution_h_px=None,
-               resolution_v_px=None,
-               pixel_h_um=None,
-               pixel_v_um=None,
-               focal_length_h_mm=None,
-               focal_length_v_mm=None,
-               skew=None,
-               ch_px=None,
-               cv_px=None,
-               radial_distortion_coefficients=None,
-               tangential_distortion_coefficients=None,
-               pitch=None,
-               yaw=None,
-               roll=None,
-               tx_m=None,
-               ty_m=None,
-               tz_m=None,
-               origin_x=None,
-               origin_y=None,
-               x_axis_x=None,
-               x_axis_y=None,
-               y_axis_x=None,
-               y_axis_y=None,
-               z_axis_x=None,
-               z_axis_y=None):
+    def update(self, body=None, **kwargs):
         """
-        (Deprecated)
-        update single network camera's camera model
-        connnection (CogniacConnection): Authenticated CogniacConnection object
-        network_camera_id (String): the netcam id of the Cogniac NetCam object
-        returns CogniacNetworkCamera object
+        Update this network camera's mutable fields and return the updated JSON.
+
+        body (dict):  fields to update
+
+        Deprecated: passing per-field keyword arguments (e.g. update(url=...)) is
+        still accepted for backward compatibility — they are merged into the body —
+        but emits a DeprecationWarning. Prefer passing a body dict.
+
+        See POST /1/networkCameras/{network_camera_id}.
         """
-        print("'update' function of CogniacNetworkCamera object is deprecated "
-              "and will be removed in the next version.\n"
-              "Please use __setattr__ instead.\n "
-              "For example:\n    netcam.current_IP = '192.164.10.1'")
-
-        data = {}
-
-        if url is not None:
-            data['url'] = url
-        if current_IP is not None:
-            data['current_IP'] = current_IP
-        if camera_name is not None:
-            data['camera_name'] = camera_name
-        if description is not None:
-            data['description'] = description
-        if active is not None:
-            data['active'] = active
-        if lat is not None:
-            data['lat'] = lat
-        if lon is not None:
-            data['lon'] = lon
-        if hae is not None:
-            data['hae'] = hae
-
-        # pose/model related
-        if last_pose_change_timestamp is not None:
-            data['last_pose_change_timestamp'] = last_pose_change_timestamp
-
-        if resolution_h_px is not None:
-            data['resolution_h_px'] = resolution_h_px
-        if resolution_v_px is not None:
-            data['resolution_v_px'] = resolution_v_px
-        if pixel_h_um is not None:
-            data['pixel_h_um'] = pixel_h_um
-        if pixel_v_um is not None:
-            data['pixel_v_um'] = pixel_v_um
-        if focal_length_h_mm is not None:
-            data['focal_length_h_mm'] = focal_length_h_mm
-        if focal_length_v_mm is not None:
-            data['focal_length_v_mm'] = focal_length_v_mm
-
-        if skew is not None:
-            data['skew'] = skew
-        if ch_px is not None:
-            data['ch_px'] = ch_px
-        if cv_px is not None:
-            data['cv_px'] = cv_px
-
-        if radial_distortion_coefficients is not None:
-            data['radial_distortion_coefficients'] = radial_distortion_coefficients
-        if tangential_distortion_coefficients is not None:
-            data['tangential_distortion_coefficients'] = tangential_distortion_coefficients
-        if pitch is not None:
-            data['pitch'] = pitch
-        if yaw is not None:
-            data['yaw'] = yaw
-        if roll is not None:
-            data['roll'] = roll
-
-        if tx_m is not None:
-            data['tx_m'] = tx_m
-        if ty_m is not None:
-            data['ty_m'] = ty_m
-        if tz_m is not None:
-            data['tz_m'] = tz_m
-
-        if origin_x is not None:
-            data['origin_x'] = origin_x
-        if origin_y is not None:
-            data['origin_y'] = origin_y
-
-        if x_axis_x is not None:
-            data['x_axis_x'] = x_axis_x
-        if x_axis_y is not None:
-            data['x_axis_y'] = x_axis_y
-        if y_axis_x is not None:
-            data['y_axis_x'] = y_axis_x
-        if y_axis_y is not None:
-            data['y_axis_y'] = y_axis_y
-        if z_axis_x is not None:
-            data['z_axis_x'] = z_axis_x
-        if z_axis_y is not None:
-            data['z_axis_y'] = z_axis_y
-
-        resp = self._cc._post("/1/networkCameras/%s" % self.network_camera_id, json=data)
-        return CogniacNetworkCamera(self._cc, resp.json())
+        if kwargs:
+            import warnings
+            warnings.warn("CogniacNetworkCamera.update(**kwargs) is deprecated; "
+                          "pass a body dict instead.", DeprecationWarning, stacklevel=2)
+            body = dict(body or {}, **kwargs)
+        resp = self._cc._post("/1/networkCameras/%s" % self.network_camera_id, json=body or {})
+        result = resp.json()
+        for k, v in result.items():
+            super(CogniacNetworkCamera, self).__setattr__(k, v)
+        return result
 
     ##
     #  delete
@@ -331,7 +225,6 @@ class CogniacNetworkCamera(object):
 
         if name in mutable_keys:
             data = {name: value}
-            print("\n====", data)
             resp = self._cc._post("/1/networkCameras/%s" % self.network_camera_id, json=data)
 
             for k, v in resp.json().items():
@@ -346,3 +239,33 @@ class CogniacNetworkCamera(object):
 
     def __repr__(self):
         return self.__str__()
+
+    ##
+    #  genicam
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def genicam(self):
+        """
+        Return the GenICam XML for this network camera.
+
+        See GET /1/networkCameras/{camera_id}/genicam.
+        """
+        resp = self._cc._get("/1/networkCameras/%s/genicam" % self.network_camera_id)
+        return resp.text
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def upload_genicam(self, filename):
+        """
+        Upload a GenICam XML file for this network camera.
+
+        filename (str):  path to a local GenICam XML file
+
+        See POST /1/networkCameras/{camera_id}/genicam.
+        """
+        with open(filename, 'rb') as f:
+            resp = self._cc._post("/1/networkCameras/%s/genicam" % self.network_camera_id,
+                                 files={'file': f})
+        try:
+            return resp.json()
+        except Exception:
+            return None

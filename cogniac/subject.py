@@ -198,6 +198,25 @@ class CogniacSubject(object):
         self._sub_keys = None
         self.connection = None
 
+    ##
+    #  update
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def update(self, body):
+        """
+        Update this subject's mutable fields with the given body dict and
+        return the updated subject JSON.
+
+        body (dict):  fields to update
+
+        See POST /1/subjects/{subject_uid}.
+        """
+        resp = self._cc._post("/1/subjects/%s" % self.subject_uid, json=body)
+        result = resp.json()
+        for k, v in result.items():
+            super(CogniacSubject, self).__setattr__(k, v)
+        return result
+
     def __setattr__(self, name, value):
         if name in ['subject_uid', 'created_at', 'created_by', 'modified_at', 'modified_by']:
             raise AttributeError("%s is immutable" % name)
@@ -502,3 +521,72 @@ class CogniacSubject(object):
                 if limit and count == limit:
                     return
             url = resp['paging'].get('next')
+
+    ##
+    #  detections
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def detections(self, media_id):
+        """
+        Return the detections (assertions) for this subject and a given media item.
+
+        media_id (String):   the media_id to return subject assertions for
+
+        See GET /1/subjects/{subject_uid}/detections (the media_id is required).
+        """
+        resp = self._cc._get("/1/subjects/%s/detections" % self.subject_uid,
+                             params={'media_id': media_id})
+        return resp.json()
+
+    ##
+    #  consensus_history
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def consensus_history(self, start=None, end=None, limit=None, reverse=False, user_id=None):
+        """
+        Return the consensus history for this subject.
+
+        start (float)   filter by timestamp > start (seconds since epoch)
+        end (float)     filter by timestamp < end   (seconds since epoch)
+        limit (int)     maximum number of history points to return
+        reverse (bool)  reverse the sorting order
+        user_id (str)   optionally restrict to a single user's assertions
+
+        See GET /1/subjects/{subject_uid}/consensusHistory.
+        """
+        params = {}
+        if start is not None:
+            params['start'] = start
+        if end is not None:
+            params['end'] = end
+        if limit is not None:
+            params['limit'] = limit
+        if reverse:
+            params['reverse'] = True
+        if user_id is not None:
+            params['user_id'] = user_id
+        resp = self._cc._get("/1/subjects/%s/consensusHistory" % self.subject_uid, params=params)
+        return resp.json()
+
+    ##
+    #  bulk_disassociate
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def bulk_disassociate(self, filters=None, selected_media_ids=None):
+        """
+        Bulk-disassociate media from this subject (asynchronous).
+
+        Provide either filters or selected_media_ids (an empty request is rejected).
+
+        filters (dict):              server-side selection filters
+        selected_media_ids (list):   explicit list of media_ids to disassociate
+
+        See POST /1/subjects/{subject_uid}/mediaDisassociate.
+        """
+        data = {}
+        if filters is not None:
+            data['filters'] = filters
+        if selected_media_ids is not None:
+            data['selected_media_ids'] = selected_media_ids
+        resp = self._cc._post("/1/subjects/%s/mediaDisassociate" % self.subject_uid, json=data)
+        return resp.json()
