@@ -38,6 +38,31 @@ def credential_error(exception):
     return isinstance(exception, CredentialError)
 
 
+def rate_limit_error(exception):
+    """True only for HTTP 429 responses — safe to retry on non-idempotent methods."""
+    return isinstance(exception, ClientError) and getattr(exception, 'status_code', None) == 429
+
+
+def rate_limit_or_credential_error(exception):
+    """True for 429 or expired credentials — for non-idempotent methods (_post, _delete, _put).
+
+    Intentionally excludes 5xx ServerError: retrying a POST/DELETE on a server
+    error risks duplicate submissions. 429 is always safe to retry; credential
+    expiry requires re-authentication.
+    """
+    return rate_limit_error(exception) or credential_error(exception)
+
+
+def server_or_credential_error(exception):
+    """True for any retryable error (5xx, 429, connect errors, or expired credentials).
+
+    Use on idempotent methods (_get, _head) where retrying on any server-side
+    error is safe. Non-idempotent methods (_post, _delete) should use
+    rate_limit_error + credential_error instead.
+    """
+    return server_error(exception) or credential_error(exception)
+
+
 def server_error(exception):
     """Return True if the operation should be retried.
 
