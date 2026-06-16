@@ -65,10 +65,14 @@ for detection in app.detections(limit=100):
 | `CogniacMedia` | Image and video files |
 | `CogniacTenant` | Tenant (organization) management |
 | `CogniacUser` | User accounts and API keys |
-| `CogniacEdgeFlow` | Edge computing devices |
+| `CogniacEdgeFlow` | Edge computing devices (alias: `CogniacGateway`) |
 | `CogniacNetworkCamera` | Network camera configuration |
 | `CogniacExternalResult` | External inspection results |
 | `CogniacOpsReview` | Operations review queue |
+| `CogniacDeployment` | Deployment groups (EdgeFlow/CloudFlow rollouts) |
+| `CogniacDeploymentCapacityClass` | Deployment capacity classes |
+| `CogniacWorkflow` | Deployment workflows and versions |
+| `CogniacBuild` | EdgeFlow/CloudFlow build definitions |
 
 ## Async API
 
@@ -117,20 +121,26 @@ Every sync entity class has an async counterpart prefixed with `Async` (e.g., `A
 
 ### `cogniac`
 
-Agent-friendly CLI with JSON output (default) or `--format table`.
+Agent-friendly CLI. JSON output by default; `--format table` for humans or `--format jsonl` for one JSON object per line. The command tree is **nested, noun-first / verb-last**; resource ids are `--<resource>-id` flags (the older positional form, e.g. `application get <id>`, still works). `--format` and `--tenant` may be given before or after the command.
 
 ```bash
-cogniac auth                            # check credentials (add --tenant <id> to verify a session)
-cogniac tenant                          # current tenant info
-cogniac apps list                       # list applications
-cogniac apps leaderboard <id>           # ranked candidate-model snapshot
-cogniac apps eval-metrics <id>          # active evaluation metrics
-cogniac subjects list                   # list subjects
-cogniac subjects search --prefix test   # search subjects
-cogniac media get <media_id>            # get media metadata
-cogniac media download <media_id> -o f  # download media to file
-cogniac edgeflows list                  # list edge devices
+cogniac auth                                       # check credentials (add --tenant <id> to verify a session)
+cogniac auth login                                 # browser login; store a per-user API key
+cogniac commands                                   # print the whole command tree as JSON (noun -> verbs -> args)
+
+cogniac tenant get                                 # current tenant info
+cogniac application list                           # list applications
+cogniac application get --application-id <id>      # one application
+cogniac subject list
+cogniac subject search --prefix test               # search subjects
+cogniac subject media --subject-uid <uid> --full-media   # full media records, not just media_id
+cogniac media get --media-id <id>                  # media metadata
+cogniac media download --media-id <id> -o out.jpg  # download media to file
+cogniac edgeflow list                              # list edge devices
+cogniac application create --body @app.json        # --body takes inline JSON, @FILE, or - (stdin)
 ```
+
+Run `cogniac <noun> --help` to explore the tree interactively, or `cogniac commands` for the full machine-readable catalog. An unknown command suggests the closest match.
 
 ### `icogniac`
 
