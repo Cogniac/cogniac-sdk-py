@@ -235,13 +235,17 @@ def _truncate(s, maxlen):
     return s if len(s) <= maxlen else s[:maxlen - 3] + '...'
 
 
-# legacy error-type label -> structured envelope "type"
+# error_exit's string label -> structured envelope "type"
 _ERROR_TYPES = {
     'CredentialError': 'auth',
+    'AuthError': 'auth',
+    'LoginError': 'auth',
+    'LoginCancelled': 'auth',
     'ClientError': 'client',
+    'BadRequest': 'client',
+    'UsageError': 'client',
     'ServerError': 'server',
     'ConnectionError': 'connection',
-    'BadRequest': 'client',
 }
 _ERROR_HINTS = {
     'auth': "check COG_API_KEY / COG_USER+COG_PASS, or run 'cogniac auth login'",

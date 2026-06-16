@@ -5,7 +5,7 @@ Copyright (C) 2016-2022 Cogniac Corporation
 """
 
 import asyncio
-from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors, parse_json_str
 from .media import file_creation_time
 from hashlib import md5
 from os import stat, fstat, path, SEEK_END
@@ -410,7 +410,11 @@ class AsyncCogniacMedia(object):
             url += "?wait_capture_id=%s" % wait_capture_id
 
         resp = await self._cc._get(url)
-        return resp.json()['detections']
+        detections = resp.json()['detections']
+        for d in detections:
+            if 'app_data' in d:
+                d['app_data'] = parse_json_str(d['app_data'])
+        return detections
 
     ##
     #  subjects
@@ -421,7 +425,13 @@ class AsyncCogniacMedia(object):
         Return a list of subject associations for this media.
         """
         resp = await self._cc._get("/1/media/%s/subjects" % (self.media_id))
-        return resp.json()['data']
+        data = resp.json()['data']
+        for item in data:
+            if isinstance(item.get('subject'), dict):
+                item['subject']['app_data'] = parse_json_str(item['subject'].get('app_data'))
+            if isinstance(item.get('media'), dict):
+                item['media']['custom_data'] = parse_json_str(item['media'].get('custom_data'))
+        return data
 
     ##
     #  share
