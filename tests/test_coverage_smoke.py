@@ -22,7 +22,7 @@ import pytest
 import cogniac
 from cogniac.cli import (build_parser, resource_aliases, _SYNONYM_GROUPS, _resolve_positional_ids,
                          error_exit, output, _command_catalog, _timestamp, _body_arg)
-from cogniac.common import server_error, ClientError, ServerError
+from cogniac.common import server_error, raise_errors, ClientError, ServerError
 
 
 # ---------------------------------------------------------------------------
@@ -748,8 +748,53 @@ def test_server_error_retries_429_not_other_4xx():
     assert server_error(ClientError('bad request', 400)) is False
 
 
+def test_raise_errors_429_raises_retryable_with_retry_after():
+    class _Resp:
+        status_code = 429
+        text = '{"message": "slow down"}'
+        headers = {'Retry-After': '7'}
+
+    with pytest.raises(ClientError) as exc:
+        raise_errors(_Resp())
+    assert exc.value.status_code == 429
+    assert getattr(exc.value, 'retry_after', None) == 7.0
+    assert server_error(exc.value) is True            # 429 is retryable
+
+
+def test_raise_errors_429_without_retry_after_header():
+    class _Resp:
+        status_code = 429
+        text = 'rate limited'
+        headers = {}
+
+    with pytest.raises(ClientError) as exc:
+        raise_errors(_Resp())
+    assert exc.value.status_code == 429
+    assert getattr(exc.value, 'retry_after', None) is None
+
+
 # app_data/custom_data JSON-string normalization (#157) is implemented by
-# common.parse_json_str and covered by tests/test_json_normalization.py.
+# common.parse_json_str; the sync paths are covered in tests/test_json_normalization.py.
+# This adds the async parity that that file lacks (async_media.subjects()).
+
+def test_async_media_subjects_normalizes_json_strings():
+    import asyncio
+
+    class _AResp:
+        def json(self):
+            return {'data': [{'subject': {'app_data': '{"k": 1}'},
+                              'media': {'custom_data': '[1, 2]'}}]}
+
+    class _AConn:
+        async def _get(self, url, **kw):
+            return _AResp()
+
+    m = object.__new__(cogniac.AsyncCogniacMedia)
+    object.__setattr__(m, '_cc', _AConn())
+    object.__setattr__(m, 'media_id', 'm1')
+    data = asyncio.run(m.subjects())
+    assert data[0]['subject']['app_data'] == {'k': 1}
+    assert data[0]['media']['custom_data'] == [1, 2]
 
 
 # ---------------------------------------------------------------------------
@@ -818,6 +863,12 @@ def test_body_arg_reads_file_and_passes_inline_through(tmp_path):
     f.write_text('{"x": 1}')
     assert _body_arg('@' + str(f)) == '{"x": 1}'
     assert _body_arg('{"y": 2}') == '{"y": 2}'
+
+
+def test_body_arg_reads_stdin(monkeypatch):
+    import io as _io
+    monkeypatch.setattr('sys.stdin', _io.StringIO('{"z": 9}'))
+    assert _body_arg('-') == '{"z": 9}'
 
 
 def test_timestamp_accepts_epoch_and_iso():
