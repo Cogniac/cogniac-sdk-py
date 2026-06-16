@@ -12,7 +12,7 @@ import re
 import httpx
 import sys
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception
-from .common import server_error, raise_errors, CredentialError, credential_error
+from .common import server_error, raise_errors, CredentialError, credential_error, server_or_credential_error, rate_limit_or_credential_error
 from .credentials import stored_api_key, stored_url_prefix
 
 from .app     import CogniacApplication
@@ -248,7 +248,7 @@ class CogniacConnection(object):
         transport = httpx.HTTPTransport(retries=5)
         self.session = httpx.Client(transport=transport, headers=headers, follow_redirects=True)
 
-    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_or_credential_error))
     def _head(self, url, timeout=None, **kwargs):
         """
         wrap requests session to re-authenticate on credential expiration
@@ -271,7 +271,7 @@ class CogniacConnection(object):
             raise
         return resp
 
-    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_or_credential_error))
     def _get(self, url, timeout=None, **kwargs):
         """
         wrap httpx client to re-authenticate on credential expiration
@@ -295,7 +295,7 @@ class CogniacConnection(object):
             raise
         return resp
 
-    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(rate_limit_or_credential_error))
     def _post(self, url, timeout=None, **kwargs):
         """
         wrap requests session to re-authenticate on credential expiration
@@ -317,7 +317,7 @@ class CogniacConnection(object):
             raise
         return resp
 
-    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(rate_limit_or_credential_error))
     def _delete(self, url, timeout=None, **kwargs):
         """
         wrap httpx client to re-authenticate on credential expiration
@@ -340,7 +340,7 @@ class CogniacConnection(object):
             raise
         return resp
 
-    @retry(stop=stop_after_attempt(3), retry=retry_if_exception(credential_error))
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(rate_limit_or_credential_error))
     def _put(self, url, timeout=None, **kwargs):
         """
         wrap httpx client to re-authenticate on credential expiration

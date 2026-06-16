@@ -232,6 +232,116 @@ def test_get_routes_through_request_to_support_a_body():
     assert conn.session.last[2].get('json') == {'ccp_filename': 'm.tgz'}
 
 
+def test_get_retries_on_429_and_succeeds():
+    """_get must retry on 429 and return the successful response.
+
+    Verifies the retry actually fires: the session sees the 429 first, then
+    returns 200 on the second call. Without the server_or_credential_error
+    predicate on _get's @retry decorator this test fails because tenacity
+    does not retry on ClientError(429).
+    """
+    from cogniac.cogniac import CogniacConnection
+
+    class _Resp:
+        def __init__(self, code):
+            self.status_code = code
+            self.text = ''
+            self.headers = {}
+
+    calls = []
+
+    class _Session:
+        def request(self, method, url, **kw):
+            resp = _Resp(429 if len(calls) == 0 else 200)
+            calls.append(resp.status_code)
+            return resp
+
+    conn = object.__new__(CogniacConnection)
+    conn.session = _Session()
+    conn.url_prefix = 'https://example.invalid'
+    conn.timeout = 60
+
+    resp = conn._get('/1/thing')
+    assert resp.status_code == 200
+    assert calls == [429, 200], "expected one 429 retry then 200, got %r" % calls
+
+
+def test_get_retries_on_5xx_and_succeeds():
+    """_get retries on server errors (5xx) in addition to 429."""
+    from cogniac.cogniac import CogniacConnection
+
+    class _Resp:
+        def __init__(self, code):
+            self.status_code = code
+            self.text = ''
+            self.headers = {}
+
+    calls = []
+
+    class _Session:
+        def request(self, method, url, **kw):
+            code = 500 if len(calls) == 0 else 200
+            calls.append(code)
+            return _Resp(code)
+
+    conn = object.__new__(CogniacConnection)
+    conn.session = _Session()
+    conn.url_prefix = 'https://example.invalid'
+    conn.timeout = 60
+
+    resp = conn._get('/1/thing')
+    assert resp.status_code == 200
+    assert calls == [500, 200]
+
+
+def test_post_retries_on_429_but_not_500():
+    """_post retries 429 (safe, idempotent enough) but NOT 5xx (avoids double-submit)."""
+    from cogniac.cogniac import CogniacConnection
+    from cogniac.common import ServerError
+    import pytest as _pytest
+
+    class _Resp:
+        def __init__(self, code):
+            self.status_code = code
+            self.text = 'err'
+            self.headers = {}
+
+    # 500 on first call → should propagate immediately, not retry
+    calls = []
+
+    class _Session500:
+        def post(self, url, **kw):
+            calls.append(500)
+            return _Resp(500)
+
+    conn = object.__new__(CogniacConnection)
+    conn.session = _Session500()
+    conn.url_prefix = 'https://example.invalid'
+    conn.timeout = 60
+
+    with _pytest.raises(ServerError):
+        conn._post('/1/thing')
+    assert calls == [500], "500 must NOT be retried on _post, got %r" % calls
+
+    # 429 on first call → should retry
+    calls.clear()
+
+    class _Session429:
+        def post(self, url, **kw):
+            code = 429 if len(calls) == 0 else 200
+            calls.append(code)
+            return _Resp(code)
+
+    conn2 = object.__new__(CogniacConnection)
+    conn2.session = _Session429()
+    conn2.url_prefix = 'https://example.invalid'
+    conn2.timeout = 60
+
+    resp = conn2._post('/1/thing')
+    assert resp.status_code == 200
+    assert calls == [429, 200]
+
+
 # ---------------------------------------------------------------------------
 # Pagination generators — the reads that drain paging must be generators.
 # ---------------------------------------------------------------------------
