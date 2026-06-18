@@ -13,6 +13,9 @@ TENANT_USER_ROLE = "tenant_user"
 TENANT_VIEWER_ROLE = "tenant_viewer"
 TENANT_BILLING_ROLE = "tenant_billing"
 
+# server-managed fields that may be set even when absent from the loaded record
+mutable_keys = ('accounting',)
+
 
 ##
 #   CogniacTenant
@@ -38,7 +41,7 @@ class CogniacTenant(object):
         return self.__str__()
 
     def __setattr__(self, name, value):
-        if name not in self._tenant_keys:
+        if name not in self._tenant_keys and name not in mutable_keys:
             super(CogniacTenant, self).__setattr__(name, value)
             return
         data = {name: value}
