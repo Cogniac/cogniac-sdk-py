@@ -314,6 +314,17 @@ def cmd_tenant(args):
     output(obj_to_dict(cc.tenant), args, 'tenant')
 
 
+def cmd_tenant_accounting_get(args):
+    cc = get_connection(args)
+    output({"accounting": getattr(cc.tenant, "accounting", None)}, args)
+
+
+def cmd_tenant_accounting_set(args):
+    cc = get_connection(args)
+    cc.tenant.accounting = args.value
+    output({"accounting": cc.tenant.accounting}, args)
+
+
 def cmd_tenants(args):
     url_prefix = os.environ.get('COG_URL_PREFIX') or stored_url_prefix() or DEFAULT_COG_URL_PREFIX
     try:
@@ -2390,6 +2401,12 @@ def build_parser():
     tenant_parser.set_defaults(func=cmd_tenant)
     _add_verb(tenant_sub, 'get', cmd_tenant, help='Show the current tenant')
     _add_verb(tenant_sub, 'list', cmd_tenants, help='List tenants you are authorized for')
+
+    ten_acct_parser = tenant_sub.add_parser('accounting')
+    ten_acct_sub = ten_acct_parser.add_subparsers(dest='tenant_accounting_command')
+    _add_verb(ten_acct_sub, 'get', cmd_tenant_accounting_get, hidden=True)
+    _add_verb(ten_acct_sub, 'set', cmd_tenant_accounting_set,
+              [(('value',), {'metavar': 'VALUE'})], hidden=True)
 
     # Historical plural: bare `cogniac tenants` lists all authorized tenants —
     # distinct from singular `cogniac tenant` (current tenant). Registered as its

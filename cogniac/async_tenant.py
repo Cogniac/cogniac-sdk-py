@@ -6,7 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
 
-mutable_keys = ['name', 'description']
+mutable_keys = ['name', 'description', 'accounting']
 immutable_keys = ['tenant_id', 'created_at', 'created_by', 'modified_at', 'modified_by']
 
 TENANT_ADMIN_ROLE = "tenant_admin"
@@ -68,7 +68,7 @@ class AsyncCogniacTenant(object):
         """
         Update mutable tenant attributes via a single POST call.
 
-        Accepted keys: name, description
+        Accepted keys: name, description, accounting
 
         Example:
             await tenant.set(name="new tenant name")
