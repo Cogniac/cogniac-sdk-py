@@ -137,6 +137,7 @@ cogniac subject media --subject-uid <uid> --full-media   # full media records, n
 cogniac media get --media-id <id>                  # media metadata
 cogniac media download --media-id <id> -o out.jpg  # download media to file
 cogniac edgeflow list                              # list edge devices
+cogniac edgeflow status --edgeflow-id <id> --list-subsystems   # discover which subsystems a device reports
 cogniac application create --body @app.json        # --body takes inline JSON, @FILE, or - (stdin)
 ```
 
