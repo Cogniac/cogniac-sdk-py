@@ -382,5 +382,8 @@ def test_cli_metrics_list_rejects_unpaired_start(monkeypatch, capsys):
                           ["edgeflow", "metrics", "list", "--metric-name", "cpu",
                            "--start", "100"],
                           conn)
-    err = capsys.readouterr().out + capsys.readouterr().err
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+    # the error envelope must explain the unpaired start/end usage error
+    assert "--start and --end must be supplied together" in combined
     assert conn.last_get is None  # never issued the request

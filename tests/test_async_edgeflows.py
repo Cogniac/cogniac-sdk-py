@@ -91,6 +91,74 @@ def _model_event(model_id, detections, media_pixels, gpu_pixels):
     }
 
 
+# ---------------------------------------------------------------------------
+# metrics / all_metrics: async parity for the #171 param-forwarding fix.
+# Mirrors the sync assertions in tests/test_edgeflows.py — async metrics()
+# must send ef_id (NOT gateway_id) + tenant_id; all_metrics() must inject
+# tenant_id. No creds; placeholder ids only.
+# ---------------------------------------------------------------------------
+
+
+class _AsyncCaptureResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _AsyncCaptureConn:
+    """Records the (url, params) of the last _get; awaitable _get returning a
+    Grafana-shaped payload. Stands in for an AsyncCogniacConnection."""
+
+    def __init__(self, tenant_id='tenant-placeholder'):
+        self.tenant_id = tenant_id
+        self.last_get = None
+
+    async def _get(self, url, params=None, **kwargs):
+        self.last_get = (url, params)
+        return _AsyncCaptureResp({'status': 200, 'data': []})
+
+
+def _async_ef_for_metrics(conn, gateway_id='gw-placeholder'):
+    """An AsyncCogniacEdgeFlow bound to a capture connection, bypassing __init__."""
+    ef = object.__new__(cogniac.AsyncCogniacEdgeFlow)
+    object.__setattr__(ef, '_edgeflow_keys', [])
+    object.__setattr__(ef, 'gateway_id', gateway_id)
+    object.__setattr__(ef, '_cc', conn)
+    return ef
+
+
+@pytest.mark.asyncio
+async def test_async_metrics_sends_ef_id_and_tenant_id_not_gateway_id():
+    conn = _AsyncCaptureConn(tenant_id='tenant-placeholder')
+    ef = _async_ef_for_metrics(conn, gateway_id='gw-placeholder')
+
+    await ef.metrics(metric_name='cpu')
+
+    url, params = conn.last_get
+    assert url == '/1/metrics/ef'
+    # the bug was sending gateway_id; the contract requires ef_id
+    assert 'gateway_id' not in params
+    assert params['ef_id'] == 'gw-placeholder'
+    assert params['tenant_id'] == 'tenant-placeholder'
+    assert params['metric_name'] == 'cpu'
+
+
+@pytest.mark.asyncio
+async def test_async_all_metrics_injects_tenant_id():
+    conn = _AsyncCaptureConn(tenant_id='tenant-placeholder')
+
+    await cogniac.AsyncCogniacEdgeFlow.all_metrics(conn, metric_name='cpu')
+
+    url, params = conn.last_get
+    assert url == '/1/metrics'
+    assert params['tenant_id'] == 'tenant-placeholder'
+    assert params['metric_name'] == 'cpu'
+    # tenant-wide query must not be scoped to an ef
+    assert 'ef_id' not in params
+
+
 @pytest.mark.asyncio
 async def test_async_aggregated_stats_sums_per_model_subsystems():
     events = [

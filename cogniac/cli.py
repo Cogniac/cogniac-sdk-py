@@ -1523,7 +1523,7 @@ def cmd_edgeflow_metrics_list(args):
     end = getattr(args, 'end', None)
     # The metrics API requires start and end together (or neither).
     if (start is None) != (end is None):
-        error_exit("UsageError", "--start and --end must be supplied together")
+        error_exit("ClientError", "--start and --end must be supplied together")
     if start is not None:
         params['start'] = int(start)
         params['end'] = int(end)
