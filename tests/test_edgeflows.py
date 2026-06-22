@@ -69,15 +69,17 @@ def _run_status(monkeypatch, argv, edgeflow):
 
 
 # Placeholder ids only — no customer identifiers.
+# Real status events key the timestamp as cc_timestamp (cloud-receipt), never
+# edgeflow_timestamp; the fixtures mirror that so last_seen is exercised.
 _SYNTHETIC_EVENTS = [
-    {"subsystem": "model_detections_aaaa", "edgeflow_timestamp": 100.0},
-    {"subsystem": "model_detections_aaaa", "edgeflow_timestamp": 130.0},
-    {"subsystem": "model_detections_bbbb", "edgeflow_timestamp": 131.0},
-    {"subsystem": "http-input-cccc", "edgeflow_timestamp": 90.0},
-    {"subsystem": "gpus", "edgeflow_timestamp": 50.0},
-    {"subsystem": "cpu", "edgeflow_timestamp": 51.0},
-    {"subsystem": "memory", "edgeflow_timestamp": 52.0},
-    {"subsystem": "model_detections_aaaa", "edgeflow_timestamp": 160.0},
+    {"subsystem": "model_detections_aaaa", "cc_timestamp": 100.0},
+    {"subsystem": "model_detections_aaaa", "cc_timestamp": 130.0},
+    {"subsystem": "model_detections_bbbb", "cc_timestamp": 131.0},
+    {"subsystem": "http-input-cccc", "cc_timestamp": 90.0},
+    {"subsystem": "gpus", "cc_timestamp": 50.0},
+    {"subsystem": "cpu", "cc_timestamp": 51.0},
+    {"subsystem": "memory", "cc_timestamp": 52.0},
+    {"subsystem": "model_detections_aaaa", "cc_timestamp": 160.0},
 ]
 
 
@@ -128,6 +130,16 @@ def test_status_without_flag_lists_events(monkeypatch, capsys):
     assert isinstance(out, list)
     assert len(out) == 2
     assert out[0]["subsystem"] == "model_detections_aaaa"
+
+
+def test_list_subsystems_last_seen_falls_back_to_gw_timestamp(monkeypatch, capsys):
+    # An event without cc_timestamp/timestamp must still populate last_seen
+    # from gw_timestamp, rather than reporting null.
+    events = [{"subsystem": "gpus", "gw_timestamp": 77.0}]
+    ef = _FakeEdgeFlow(events)
+    _run_status(monkeypatch, ["edgeflow", "status", "--edgeflow-id", "g1", "--list-subsystems"], ef)
+    out = json.loads(capsys.readouterr().out)
+    assert out == [{"subsystem": "gpus", "last_seen": 77.0, "count": 1}]
 
 
 # ---------------------------------------------------------------------------
