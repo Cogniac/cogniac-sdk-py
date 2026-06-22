@@ -20,6 +20,7 @@ import re
 import pytest
 
 import cogniac
+import cogniac.cli as cli
 from cogniac.cli import (build_parser, resource_aliases, _SYNONYM_GROUPS, _resolve_positional_ids,
                          error_exit, output, _command_catalog, _timestamp, _body_arg)
 from cogniac.common import server_error, raise_errors, ClientError, ServerError
@@ -825,6 +826,41 @@ def test_subject_media_default_limit_is_100():
 
 def test_edgeflow_status_default_limit_is_10():
     assert _parse(['edgeflow', 'status', 'E1']).limit == 10
+
+
+def test_edgeflow_status_accepts_start_end_time_range():
+    # --start/--end use the _timestamp type: epoch or ISO 8601 -> float epoch seconds
+    ns = _parse(['edgeflow', 'status', 'E1',
+                 '--start', '1700000000', '--end', '2026-01-02T03:04:05Z'])
+    assert ns.start == 1700000000.0
+    assert isinstance(ns.end, float)
+    # start/end default to None (omitted) when not passed
+    bare = _parse(['edgeflow', 'status', 'E1'])
+    assert bare.start is None and bare.end is None
+
+
+def test_edgeflow_status_handler_forwards_start_end(monkeypatch):
+    # the handler must pass start/end straight through to CogniacEdgeFlow.status()
+    captured = {}
+
+    class _FakeEdgeflow:
+        def status(self, **kwargs):
+            captured.update(kwargs)
+            return iter([])
+
+    class _FakeConn:
+        def get_edgeflow(self, _id):
+            return _FakeEdgeflow()
+
+    monkeypatch.setattr(cli, 'get_connection', lambda args: _FakeConn())
+    ns = _parse(['edgeflow', 'status', 'E1',
+                 '--start', '1700000000', '--end', '1700003600',
+                 '--subsystem', 'inference'])
+    ns.func(ns)
+    assert captured['start'] == 1700000000.0
+    assert captured['end'] == 1700003600.0
+    assert captured['subsystem_name'] == 'inference'
+    assert captured['limit'] == 10
 
 
 # ---------------------------------------------------------------------------
