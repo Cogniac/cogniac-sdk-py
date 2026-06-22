@@ -621,7 +621,13 @@ def _emit_subsystem_summary(edgeflow, args):
         subsystem = event.get('subsystem')
         if not subsystem:
             continue
-        ts = event.get('edgeflow_timestamp')
+        # Real status events carry cc_timestamp (cloud-receipt, canonical),
+        # gw_timestamp (device clock) and a `timestamp` alias -- but never an
+        # `edgeflow_timestamp`. Prefer cloud-receipt time, falling back to the
+        # device clock, so last_seen is populated regardless of payload shape.
+        ts = (event.get('cc_timestamp')
+              or event.get('timestamp')
+              or event.get('gw_timestamp'))
         entry = summary.get(subsystem)
         if entry is None:
             summary[subsystem] = {'subsystem': subsystem, 'last_seen': ts, 'count': 1}
