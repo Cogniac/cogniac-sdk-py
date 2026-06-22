@@ -176,6 +176,9 @@ cogniac edgeflows status <id>   # status events: --subsystem, --start, --end, --
                                 # --start/--end filter on the cloud-receipt timestamp (cc_timestamp),
                                 # not device time (clocks can diverge on a skewed/backfilling EdgeFlow);
                                 # --sort is not exposed (backend defaults to cloudcore_timestamp)
+cogniac edgeflows metrics names              # list available metric names
+cogniac edgeflows metrics list --metric-name <name>   # time-series for a metric; --edgeflow-id scopes to one device,
+                                #   --start/--end (epoch or ISO 8601, supplied together) bound the window
 cogniac cameras list            # list all cameras
 cogniac cameras get <id>        # get specific camera
 ```

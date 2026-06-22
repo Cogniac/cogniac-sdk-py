@@ -79,8 +79,14 @@ class AsyncCogniacEdgeFlow(object):
         """
         Return EdgeFlow metrics across the tenant.
 
+        The metrics service requires a `metric_name` and a `tenant_id`; the
+        tenant_id is injected from the connection when not supplied by the
+        caller. Optional `start`/`end` (paired Unix epoch seconds) bound the
+        time window. Extra keyword args are passed through as query parameters.
+
         See GET /1/metrics (ef-metrics-api).
         """
+        params.setdefault('tenant_id', connection.tenant_id)
         resp = await connection._get("/1/metrics", params=params)
         return resp.json()
 
@@ -461,10 +467,15 @@ class AsyncCogniacEdgeFlow(object):
         """
         Return runtime metrics for this EdgeFlow.
 
-        The EdgeFlow is identified via the gateway_id query parameter.
+        The metrics service requires a `metric_name`, a `tenant_id`, and an
+        `ef_id`; the ef_id is injected from this EdgeFlow's gateway_id and the
+        tenant_id from the connection when not supplied by the caller. Optional
+        `start`/`end` (paired Unix epoch seconds) bound the time window. Extra
+        keyword args are passed through as query parameters.
 
         See GET /1/metrics/ef (ef-metrics-api).
         """
-        params.setdefault('gateway_id', self.gateway_id)
+        params.setdefault('ef_id', self.gateway_id)
+        params.setdefault('tenant_id', self._cc.tenant_id)
         resp = await self._cc._get("/1/metrics/ef", params=params)
         return resp.json()

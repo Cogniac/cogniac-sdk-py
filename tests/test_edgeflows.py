@@ -251,6 +251,144 @@ def test_aggregated_stats_handles_model_id_with_underscores():
 
 
 # ---------------------------------------------------------------------------
+# metrics() / all_metrics() query-parameter wiring (#171)
+#
+# Per ef-metrics-api: GET /1/metrics requires metric_name + tenant_id;
+# GET /1/metrics/ef additionally requires ef_id (NOT gateway_id). These tests
+# assert the SDK injects the right params and forwards caller-supplied ones.
+# Placeholder ids only — no customer identifiers.
+# ---------------------------------------------------------------------------
+
+class _CaptureResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _CaptureConn:
+    """Records the (url, params) of the last _get; returns a Grafana-shaped
+    payload. Stands in for a CogniacConnection without authenticating."""
+
+    def __init__(self, tenant_id='tenant-placeholder'):
+        self.tenant_id = tenant_id
+        self.last_get = None
+
+    def _get(self, url, params=None, **kwargs):
+        self.last_get = (url, params)
+        return _CaptureResp({'status': 200, 'data': []})
+
+
+def _ef_for_metrics(conn, gateway_id='gw-placeholder'):
+    """A CogniacEdgeFlow bound to a capture connection, bypassing __init__."""
+    ef = object.__new__(cogniac.CogniacEdgeFlow)
+    object.__setattr__(ef, '_edgeflow_keys', [])
+    object.__setattr__(ef, 'gateway_id', gateway_id)
+    object.__setattr__(ef, '_cc', conn)
+    return ef
+
+
+def test_metrics_sends_ef_id_and_tenant_id_not_gateway_id():
+    conn = _CaptureConn(tenant_id='tenant-placeholder')
+    ef = _ef_for_metrics(conn, gateway_id='gw-placeholder')
+
+    ef.metrics(metric_name='cpu')
+
+    url, params = conn.last_get
+    assert url == '/1/metrics/ef'
+    # the bug was sending gateway_id; the contract requires ef_id
+    assert 'gateway_id' not in params
+    assert params['ef_id'] == 'gw-placeholder'
+    assert params['tenant_id'] == 'tenant-placeholder'
+    assert params['metric_name'] == 'cpu'
+
+
+def test_metrics_forwards_start_end_and_lets_caller_override():
+    conn = _CaptureConn(tenant_id='tenant-placeholder')
+    ef = _ef_for_metrics(conn, gateway_id='gw-placeholder')
+
+    # explicit ef_id/tenant_id win over the injected defaults (setdefault)
+    ef.metrics(metric_name='cpu', start=100, end=200,
+               ef_id='other-gw', tenant_id='other-tenant')
+
+    _, params = conn.last_get
+    assert params['ef_id'] == 'other-gw'
+    assert params['tenant_id'] == 'other-tenant'
+    assert params['start'] == 100
+    assert params['end'] == 200
+
+
+def test_all_metrics_injects_tenant_id():
+    conn = _CaptureConn(tenant_id='tenant-placeholder')
+
+    cogniac.CogniacEdgeFlow.all_metrics(conn, metric_name='cpu')
+
+    url, params = conn.last_get
+    assert url == '/1/metrics'
+    assert params['tenant_id'] == 'tenant-placeholder'
+    assert params['metric_name'] == 'cpu'
+    # tenant-wide query must not be scoped to an ef
+    assert 'ef_id' not in params
+
+
+# ---------------------------------------------------------------------------
+# CLI `edgeflows metrics list` forwarding (#171)
+# ---------------------------------------------------------------------------
+
+def _run_metrics_list(monkeypatch, argv, conn, edgeflow=None):
+    """Parse argv through the real CLI parser and run the bound handler with a
+    mocked connection (and optional get_edgeflow result)."""
+    from cogniac.cli import build_parser
+    import cogniac.cli as cli
+
+    monkeypatch.setattr(cli, "get_connection", lambda args=None: conn)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    args.func(args)
+
+
+def test_cli_metrics_list_forwards_metric_name_tenant_wide(monkeypatch, capsys):
+    conn = _CaptureConn(tenant_id='tenant-placeholder')
+    _run_metrics_list(monkeypatch,
+                      ["edgeflow", "metrics", "list", "--metric-name", "cpu"],
+                      conn)
+    _, params = conn.last_get
+    assert params['metric_name'] == 'cpu'
+    assert params['tenant_id'] == 'tenant-placeholder'
+
+
+def test_cli_metrics_list_forwards_paired_start_end_per_edgeflow(monkeypatch, capsys):
+    conn = _CaptureConn(tenant_id='tenant-placeholder')
+    ef = _ef_for_metrics(conn, gateway_id='gw-placeholder')
+    conn.get_edgeflow = lambda eid: ef
+
+    _run_metrics_list(monkeypatch,
+                      ["edgeflow", "metrics", "list", "--metric-name", "cpu",
+                       "--edgeflow-id", "gw-placeholder",
+                       "--start", "100", "--end", "200"],
+                      conn)
+    url, params = conn.last_get
+    assert url == '/1/metrics/ef'
+    assert params['metric_name'] == 'cpu'
+    assert params['ef_id'] == 'gw-placeholder'
+    assert params['start'] == 100 and params['end'] == 200
+
+
+def test_cli_metrics_list_rejects_unpaired_start(monkeypatch, capsys):
+    conn = _CaptureConn(tenant_id='tenant-placeholder')
+    with pytest.raises(SystemExit):
+        _run_metrics_list(monkeypatch,
+                          ["edgeflow", "metrics", "list", "--metric-name", "cpu",
+                           "--start", "100"],
+                          conn)
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+    # the error envelope must explain the unpaired start/end usage error
+    assert "--start and --end must be supplied together" in combined
+    assert conn.last_get is None  # never issued the request
+
+# ---------------------------------------------------------------------------
 # status() must guarantee a top-level 'timestamp' on every yielded record.
 # The backend omits 'timestamp' on a minority of records (they carry only
 # gw_timestamp/cc_timestamp); status() aliases timestamp <- gw_timestamp so
