@@ -586,6 +586,9 @@ def cmd_edgeflows_status(args):
     cc = get_connection(args)
     try:
         edgeflow = cc.get_edgeflow(args.edgeflow_id)
+        if getattr(args, 'list_subsystems', False):
+            _emit_subsystem_summary(edgeflow, args)
+            return
         events = edgeflow.status(
             subsystem_name=args.subsystem,
             start=args.start,
@@ -595,6 +598,52 @@ def cmd_edgeflows_status(args):
         output([e for e in events], args)
     except ClientError as e:
         error_exit("ClientError", str(e))
+
+
+def _emit_subsystem_summary(edgeflow, args):
+    """Discovery aid for `edgeflows status --list-subsystems`.
+
+    High-frequency subsystems (e.g. per-model detection counters) crowd the
+    most-recent-N events, so low-frequency subsystems (gpus/cpu/memory/upload/
+    http-input-* etc.) never surface at a small --limit. This scans a bounded
+    window of device history once and aggregates the distinct `subsystem`
+    values, with each one's latest timestamp and how many times it appeared in
+    the scanned window — independent of per-subsystem sample frequency.
+
+    stdout stays a clean JSON array; if the scan hits --scan-limit (so a rarer
+    subsystem may still be missed), a diagnostic notice goes to stderr, per the
+    CLI's stdout/stderr contract."""
+    scan_limit = getattr(args, 'scan_limit', None) or 8000
+    summary = {}
+    scanned = 0
+    for event in edgeflow.status(limit=scan_limit):
+        scanned += 1
+        subsystem = event.get('subsystem')
+        if not subsystem:
+            continue
+        ts = event.get('edgeflow_timestamp')
+        entry = summary.get(subsystem)
+        if entry is None:
+            summary[subsystem] = {'subsystem': subsystem, 'last_seen': ts, 'count': 1}
+        else:
+            entry['count'] += 1
+            if ts is not None and (entry['last_seen'] is None or ts > entry['last_seen']):
+                entry['last_seen'] = ts
+    result = sorted(summary.values(), key=lambda d: d['subsystem'])
+    if scanned >= scan_limit:
+        sys.stderr.write(json.dumps({
+            "scan_capped": True,
+            "scanned": scanned,
+            "hint": "subsystem scan hit --scan-limit %d. On a busy device the entire "
+                    "scanned window may be high-frequency detection events, so a "
+                    "low-frequency subsystem can still be missing even if it is not "
+                    "actually rare. Raise --scan-limit to widen the window." % scan_limit,
+        }) + "\n")
+    # The result is bounded by --scan-limit, not --limit; suppress output()'s
+    # --limit truncation notice (which would otherwise misfire on the distinct
+    # subsystem count) by clearing limit for this emit.
+    args.limit = None
+    output(result, args)
 
 
 def cmd_cameras_list(args):
@@ -2997,7 +3046,16 @@ def build_parser():
                                      'clock, not device time, which can differ on a skewed/backfilling EdgeFlow'}),
                (('--limit',), {'type': int, 'default': 10,
                                'help': 'Max status events (default: 10; pass a larger --limit '
-                                       'to widen). Bounds the walk over device history.'})],
+                                       'to widen). Bounds the walk over device history.'}),
+               (('--list-subsystems',), {'dest': 'list_subsystems', 'action': 'store_true',
+                                         'help': 'Discovery mode: instead of listing events, scan device '
+                                                 'history and emit the distinct subsystems reported, each '
+                                                 'with {subsystem, last_seen, count}. Surfaces low-frequency '
+                                                 'subsystems that the default --limit hides. Bound the scan '
+                                                 'with --scan-limit.'}),
+               (('--scan-limit',), {'dest': 'scan_limit', 'type': int, 'default': 8000,
+                                    'help': 'Max events scanned by --list-subsystems (default: 8000). '
+                                            'If the scan hits this cap a notice is written to stderr.'})],
               help='EdgeFlow status events')
 
     # edgeflow certificate

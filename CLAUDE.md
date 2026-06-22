@@ -172,7 +172,7 @@ cogniac media download <id>     # download media file to <id>.<ext>; use -o for 
 cogniac media search            # search: --md5, --filename, --external-media-id, --domain-unit, --limit
 cogniac edgeflows list          # list all edgeflows
 cogniac edgeflows get <id>      # get specific edgeflow
-cogniac edgeflows status <id>   # status events: --subsystem, --start, --end, --limit
+cogniac edgeflows status <id>   # status events: --subsystem, --start, --end, --limit; --list-subsystems (+ --scan-limit) for distinct-subsystem discovery
                                 # --start/--end filter on the cloud-receipt timestamp (cc_timestamp),
                                 # not device time (clocks can diverge on a skewed/backfilling EdgeFlow);
                                 # --sort is not exposed (backend defaults to cloudcore_timestamp)
