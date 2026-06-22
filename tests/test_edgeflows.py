@@ -387,3 +387,80 @@ def test_cli_metrics_list_rejects_unpaired_start(monkeypatch, capsys):
     # the error envelope must explain the unpaired start/end usage error
     assert "--start and --end must be supplied together" in combined
     assert conn.last_get is None  # never issued the request
+
+# ---------------------------------------------------------------------------
+# status() must guarantee a top-level 'timestamp' on every yielded record.
+# The backend omits 'timestamp' on a minority of records (they carry only
+# gw_timestamp/cc_timestamp); status() aliases timestamp <- gw_timestamp so
+# callers can sort/diff on record['timestamp'] uniformly, never clobbering an
+# existing timestamp.  (no creds; mocked connection)
+# ---------------------------------------------------------------------------
+
+
+class _FakeResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _FakeConn:
+    """A connection whose _get returns a single-page status envelope."""
+
+    def __init__(self, records):
+        self._records = records
+
+    def _get(self, url, *args, **kwargs):
+        return _FakeResp({'data': self._records, 'paging': {'next': None}})
+
+
+def _edgeflow_with_conn(records):
+    ef = object.__new__(cogniac.CogniacEdgeFlow)
+    object.__setattr__(ef, '_edgeflow_keys', [])
+    object.__setattr__(ef, 'gateway_id', 'gw-placeholder')
+    object.__setattr__(ef, '_cc', _FakeConn(records))
+    return ef
+
+
+def _mixed_status_records():
+    # Mirror the real non-uniformity: some records carry a top-level
+    # 'timestamp', some carry only gw_timestamp/cc_timestamp.
+    return [
+        {'subsystem': 'http-input-a0001', 'status': {'n': 1},
+         'cc_timestamp': 100.5, 'gw_timestamp': 100.0, 'timestamp': 100.0},
+        {'subsystem': 'http-input-a0001', 'status': {'n': 2},
+         'cc_timestamp': 101.5, 'gw_timestamp': 101.0},  # no 'timestamp'
+        {'subsystem': 'http-input-a0001', 'status': {'n': 3},
+         'cc_timestamp': 102.5, 'gw_timestamp': 102.0, 'timestamp': 102.0},
+    ]
+
+
+def test_status_guarantees_timestamp_on_every_record():
+    ef = _edgeflow_with_conn(_mixed_status_records())
+    records = list(ef.status())
+    assert len(records) == 3
+    # every yielded record now has a top-level timestamp -> safe to sort
+    assert all('timestamp' in r for r in records)
+    records.sort(key=lambda r: r['timestamp'])  # must not raise KeyError
+
+
+def test_status_does_not_clobber_existing_timestamp():
+    # A record that already has a distinct 'timestamp' keeps its own value and
+    # is NOT overwritten by gw_timestamp.
+    rec = {'subsystem': 's', 'status': {}, 'cc_timestamp': 9.0,
+           'gw_timestamp': 7.0, 'timestamp': 5.0}
+    ef = _edgeflow_with_conn([rec])
+    out = list(ef.status())
+    assert out[0]['timestamp'] == 5.0  # original preserved, not 7.0
+
+
+def test_status_aliases_missing_timestamp_to_gw_timestamp():
+    rec = {'subsystem': 's', 'status': {}, 'cc_timestamp': 9.0,
+           'gw_timestamp': 7.0}  # no 'timestamp'
+    ef = _edgeflow_with_conn([rec])
+    out = list(ef.status())
+    assert out[0]['timestamp'] == 7.0  # aliased to gw_timestamp
+    # the source clocks are left intact
+    assert out[0]['gw_timestamp'] == 7.0
+    assert out[0]['cc_timestamp'] == 9.0

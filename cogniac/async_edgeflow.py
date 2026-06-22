@@ -176,6 +176,16 @@ class AsyncCogniacEdgeFlow(object):
         reverse (bool)         reverse the sorting order: sort high to low
         limit (int)            yield maximum of limit results
         sort (str)             optional sort field
+
+        Record timestamp schema (each yielded record):
+          gw_timestamp  gateway-side sample clock; always present. This is the
+                        canonical clock for time-series math / differencing
+                        cumulative counters, and is recommended for rate math.
+          cc_timestamp  CloudCore receive clock; always present.
+          timestamp     now guaranteed on every yielded record. The backend
+                        omits it on a minority of records; in that case it is
+                        aliased to gw_timestamp here. An existing timestamp is
+                        never overwritten.
         """
         args = []
         if start is not None:
@@ -207,6 +217,13 @@ class AsyncCogniacEdgeFlow(object):
         while url:
             resp = await get_next(url)
             for data in resp['data']:
+                # Guarantee a top-level 'timestamp' on every record. The
+                # backend omits it on a minority of records (they carry only
+                # gw_timestamp/cc_timestamp); alias to gw_timestamp so callers
+                # can sort/diff on data['timestamp'] uniformly. Never clobber
+                # an existing timestamp.
+                if 'timestamp' not in data and 'gw_timestamp' in data:
+                    data['timestamp'] = data['gw_timestamp']
                 yield data
                 count += 1
                 if limit and count == limit:
