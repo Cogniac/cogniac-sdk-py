@@ -410,8 +410,15 @@ class CogniacEdgeFlow(object):
             start = end - 300
         start = start - (start % REPORTING_PERIOD_SECONDS)
         end = end - (end % REPORTING_PERIOD_SECONDS)
-        events = self.status(subsystem_name='model_detections*',
-                             start=start,
+
+        # Detection telemetry is reported as one subsystem per deployed
+        # model, named ``model_detections_<model_instance_id>`` (this is how
+        # all CloudFlows report). The ``status`` subsystem filter is exact
+        # match only -- it does not support wildcards/prefixes -- so we pull
+        # all subsystems for the window and aggregate over every event whose
+        # subsystem name begins with ``model_detections_``.
+        MODEL_DETECTIONS_PREFIX = 'model_detections_'
+        events = self.status(start=start,
                              end=end,
                              sort='edgeflow_timestamp')
 
@@ -420,8 +427,13 @@ class CogniacEdgeFlow(object):
         total_aggregated_media_pixels = 0
         total_aggregated_gpu_pixels = 0
         for event in events:
-            app_id = event['subsystem'].split('_')[2]
+            subsystem = event.get('subsystem', '')
+            if not subsystem.startswith(MODEL_DETECTIONS_PREFIX):
+                continue
+            app_id = subsystem[len(MODEL_DETECTIONS_PREFIX):]
             event_status = event['status'].get(app_id)
+            if not event_status:
+                continue
             model_detections = event_status.get('model_detections', 0)
             media_pixels = event_status.get('aggregated_media_pixels', 0)
             gpu_pixels = event_status.get('aggregated_gpu_pixels', 0)
