@@ -588,6 +588,8 @@ def cmd_edgeflows_status(args):
         edgeflow = cc.get_edgeflow(args.edgeflow_id)
         events = edgeflow.status(
             subsystem_name=args.subsystem,
+            start=args.start,
+            end=args.end,
             limit=args.limit,
         )
         output([e for e in events], args)
@@ -2985,6 +2987,10 @@ def build_parser():
     _add_verb(ef_sub, 'status', cmd_edgeflows_status,
               [_id('edgeflow_id', 'EdgeFlow ID (gateway_id)'),
                (('--subsystem',), {'help': 'Filter by subsystem'}),
+               (('--start',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601',
+                               'help': 'Filter status timestamp > start (epoch seconds or ISO 8601)'}),
+               (('--end',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601',
+                             'help': 'Filter status timestamp < end (epoch seconds or ISO 8601)'}),
                (('--limit',), {'type': int, 'default': 10,
                                'help': 'Max status events (default: 10; pass a larger --limit '
                                        'to widen). Bounds the walk over device history.'})],

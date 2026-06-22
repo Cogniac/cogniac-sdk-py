@@ -172,7 +172,7 @@ cogniac media download <id>     # download media file to <id>.<ext>; use -o for 
 cogniac media search            # search: --md5, --filename, --external-media-id, --domain-unit, --limit
 cogniac edgeflows list          # list all edgeflows
 cogniac edgeflows get <id>      # get specific edgeflow
-cogniac edgeflows status <id>   # status events: --subsystem, --limit
+cogniac edgeflows status <id>   # status events: --subsystem, --start, --end, --limit
 cogniac cameras list            # list all cameras
 cogniac cameras get <id>        # get specific camera
 ```
