@@ -1518,12 +1518,21 @@ def cmd_edgeflow_cert_delete(args):
 def cmd_edgeflow_metrics_list(args):
     cc = get_connection(args)
     from .edgeflow import CogniacEdgeFlow
+    params = {'metric_name': args.metric_name}
+    start = getattr(args, 'start', None)
+    end = getattr(args, 'end', None)
+    # The metrics API requires start and end together (or neither).
+    if (start is None) != (end is None):
+        error_exit("UsageError", "--start and --end must be supplied together")
+    if start is not None:
+        params['start'] = int(start)
+        params['end'] = int(end)
     try:
         if getattr(args, 'edgeflow_id', None):
             ef = cc.get_edgeflow(args.edgeflow_id)
-            output(ef.metrics(), args)
+            output(ef.metrics(**params), args)
         else:
-            output(CogniacEdgeFlow.all_metrics(cc), args)
+            output(CogniacEdgeFlow.all_metrics(cc, **params), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -3125,8 +3134,15 @@ def build_parser():
     # edgeflow metrics list/names
     def _reg_ef_metrics(sub, hidden=False):
         _add_verb(sub, 'list', cmd_edgeflow_metrics_list,
-                  [_id('edgeflow_id', 'Optional EdgeFlow ID to filter to', required=False)],
-                  help='List metrics (all, or for one EdgeFlow)', hidden=hidden)
+                  [_id('edgeflow_id', 'Optional EdgeFlow ID to filter to', required=False),
+                   (('--metric-name',), {'dest': 'metric_name', 'required': True,
+                                         'help': 'Metric name to query (see `metrics names`)'}),
+                   (('--start',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601',
+                                   'help': 'Window start (epoch seconds or ISO 8601); requires --end'}),
+                   (('--end',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601',
+                                 'help': 'Window end (epoch seconds or ISO 8601); requires --start'})],
+                  help='List metric time-series (all EdgeFlows, or one) for a named metric',
+                  hidden=hidden)
         _add_verb(sub, 'names', cmd_edgeflow_metric_names, help='List metric names', hidden=hidden)
     ef_metrics_parser = ef_sub.add_parser('metrics', aliases=resource_aliases('metrics'), help='EdgeFlow metrics')
     ef_metrics_sub = ef_metrics_parser.add_subparsers(dest='edgeflow_metrics_command')
