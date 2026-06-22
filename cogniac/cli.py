@@ -611,7 +611,7 @@ def _emit_subsystem_summary(edgeflow, args):
     stdout stays a clean JSON array; if the scan hits --scan-limit (so a rarer
     subsystem may still be missed), a diagnostic notice goes to stderr, per the
     CLI's stdout/stderr contract."""
-    scan_limit = getattr(args, 'scan_limit', None) or 2000
+    scan_limit = getattr(args, 'scan_limit', None) or 8000
     summary = {}
     scanned = 0
     for event in edgeflow.status(limit=scan_limit):
@@ -632,8 +632,10 @@ def _emit_subsystem_summary(edgeflow, args):
         sys.stderr.write(json.dumps({
             "scan_capped": True,
             "scanned": scanned,
-            "hint": "subsystem scan hit --scan-limit %d; a rarely-reported subsystem "
-                    "may be missing. Raise --scan-limit to widen the scan." % scan_limit,
+            "hint": "subsystem scan hit --scan-limit %d. On a busy device the entire "
+                    "scanned window may be high-frequency detection events, so a "
+                    "low-frequency subsystem can still be missing even if it is not "
+                    "actually rare. Raise --scan-limit to widen the window." % scan_limit,
         }) + "\n")
     # The result is bounded by --scan-limit, not --limit; suppress output()'s
     # --limit truncation notice (which would otherwise misfire on the distinct
@@ -3041,8 +3043,8 @@ def build_parser():
                                                  'with {subsystem, last_seen, count}. Surfaces low-frequency '
                                                  'subsystems that the default --limit hides. Bound the scan '
                                                  'with --scan-limit.'}),
-               (('--scan-limit',), {'dest': 'scan_limit', 'type': int, 'default': 2000,
-                                    'help': 'Max events scanned by --list-subsystems (default: 2000). '
+               (('--scan-limit',), {'dest': 'scan_limit', 'type': int, 'default': 8000,
+                                    'help': 'Max events scanned by --list-subsystems (default: 8000). '
                                             'If the scan hits this cap a notice is written to stderr.'})],
               help='EdgeFlow status events')
 
