@@ -2988,9 +2988,13 @@ def build_parser():
               [_id('edgeflow_id', 'EdgeFlow ID (gateway_id)'),
                (('--subsystem',), {'help': 'Filter by subsystem'}),
                (('--start',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601',
-                               'help': 'Filter status timestamp > start (epoch seconds or ISO 8601)'}),
+                               'help': 'Filter by cloudcore-receipt time (cc_timestamp) > start '
+                                       '(epoch seconds or ISO 8601). NOTE: this is the cloud-receipt '
+                                       'clock, not device time, which can differ on a skewed/backfilling EdgeFlow'}),
                (('--end',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601',
-                             'help': 'Filter status timestamp < end (epoch seconds or ISO 8601)'}),
+                             'help': 'Filter by cloudcore-receipt time (cc_timestamp) < end '
+                                     '(epoch seconds or ISO 8601). NOTE: this is the cloud-receipt '
+                                     'clock, not device time, which can differ on a skewed/backfilling EdgeFlow'}),
                (('--limit',), {'type': int, 'default': 10,
                                'help': 'Max status events (default: 10; pass a larger --limit '
                                        'to widen). Bounds the walk over device history.'})],
