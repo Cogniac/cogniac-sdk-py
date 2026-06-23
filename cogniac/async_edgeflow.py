@@ -177,6 +177,13 @@ class AsyncCogniacEdgeFlow(object):
         limit (int)            yield maximum of limit results
         sort (str)             optional sort field
 
+        WARNING: this is an async generator over the appliance's full status
+        history, not a live stream. Called without limit= or end= on a
+        long-lived EdgeFlow, draining it (e.g. async-for over ef.status())
+        pages through the entire history and may not terminate in practice.
+        Pass limit= or end= to bound the walk. (The cogniac CLI defaults
+        to --limit 10 for this reason.)
+
         Record timestamp schema (each yielded record):
           gw_timestamp  gateway-side sample clock; always present. This is the
                         canonical clock for time-series math / differencing
