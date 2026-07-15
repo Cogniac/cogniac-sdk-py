@@ -282,6 +282,20 @@ class TestWorkflowReadCoverage:
         fetched = cogniac.CogniacWorkflow.get(cc, wid)
         assert fetched.workflow_id == wid
 
+    def test_workflow_versions_list(self, cc):
+        # get_all_versions() is a generator that drains the last_key cursor
+        workflows = cc.get_all_workflows()
+        if not workflows:
+            pytest.skip("no workflows on tenant")
+        base_id = getattr(workflows[0], 'base_id', None) or getattr(workflows[0], 'workflow_id', None)
+        if not base_id:
+            pytest.skip("workflow has no base id")
+        versions = list(cogniac.CogniacWorkflow.get_all_versions(cc, base_id, limit=5))
+        assert isinstance(versions, list)
+        for v in versions:
+            assert isinstance(v, cogniac.CogniacWorkflow)
+            assert hasattr(v, 'version')
+
 
 @requires_live
 class TestUserReadCoverage:

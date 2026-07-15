@@ -77,6 +77,47 @@ class AsyncCogniacWorkflow(object):
         return AsyncCogniacWorkflow(connection, resp.json())
 
     @classmethod
+    async def get_all_versions(cls, connection, base_id, reverse=True, limit=None, last_key=None):
+        """
+        Async generator yielding every version of a workflow base as
+        AsyncCogniacWorkflow objects, following the DynamoDB last_key cursor
+        until the versions are drained.
+
+        base_id (str)    the workflow base id; a full workflow_id of the form
+                         <base_id>:<version> is also accepted (the version
+                         suffix is ignored)
+        reverse (bool)   newest first when True (default)
+        limit (int)      yield a maximum of limit versions
+        last_key (str)   resume from a previous last_key cursor
+
+        See GET /1/workflows/{base_id}/versions.
+        """
+        base_id = base_id.split(':', 1)[0]  # tolerate a full <base_id>:<version>
+
+        @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+        async def get_next(last_key):
+            params = {'reverse': reverse}
+            if limit is not None:
+                params['limit'] = limit
+            if last_key is not None:
+                params['last_key'] = last_key
+            resp = await connection._get("/1/workflows/%s/versions" % base_id, params=params)
+            return resp.json()
+
+        count = 0
+        while True:
+            resp = await get_next(last_key)
+            data = resp['data'] if isinstance(resp, dict) and 'data' in resp else resp
+            for record in data or []:
+                yield AsyncCogniacWorkflow(connection, record)
+                count += 1
+                if limit and count == limit:
+                    return
+            last_key = resp.get('last_key') if isinstance(resp, dict) else None
+            if not last_key:
+                return
+
+    @classmethod
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     async def get_version(cls, connection, base_id, version):
         """
