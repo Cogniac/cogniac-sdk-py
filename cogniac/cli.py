@@ -39,6 +39,8 @@ Representative read commands (run `cogniac <noun> --help` to discover the rest):
     cogniac workflow get --workflow-id ID
     cogniac workflow list [--base-id BASE] [--limit L]
     cogniac workflow version list --base-id BASE [--limit L]
+    cogniac workflow summary --workflow-id ID  # per-app-spec model composition (id, image, thresholds)
+    cogniac workflow diff WORKFLOW_A WORKFLOW_B  # apps added/removed, per-app field changes
 
 Auth commands:
     cogniac auth                               # check credentials (env vars or stored login)
@@ -725,6 +727,27 @@ def cmd_workflows_get(args):
     try:
         wf = CogniacWorkflow.get(cc, args.workflow_id)
         output(obj_to_dict(wf), args, 'workflow')
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_workflows_summary(args):
+    cc = get_connection(args)
+    from .workflow import CogniacWorkflow, workflow_summary
+    try:
+        wf = CogniacWorkflow.get(cc, args.workflow_id)
+        output(workflow_summary(wf), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_workflows_diff(args):
+    cc = get_connection(args)
+    from .workflow import CogniacWorkflow, workflow_diff
+    try:
+        wf_a = CogniacWorkflow.get(cc, args.workflow_a)
+        wf_b = CogniacWorkflow.get(cc, args.workflow_b)
+        output(workflow_diff(wf_a, wf_b), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -3360,6 +3383,13 @@ def build_parser():
                    'version records are summaries without app_specs — use "workflow get" for the full record)')
     _add_verb(wf_sub, 'get', cmd_workflows_get,
               [_id('workflow_id', 'Workflow ID')], help='Show one workflow')
+    _add_verb(wf_sub, 'summary', cmd_workflows_summary,
+              [_id('workflow_id', 'Workflow ID')],
+              help='Model-composition summary: one row per app spec (application_id, model image, thresholds)')
+    _add_verb(wf_sub, 'diff', cmd_workflows_diff,
+              [(('workflow_a',), {'help': 'First (old) workflow ID'}),
+               (('workflow_b',), {'help': 'Second (new) workflow ID'})],
+              help='Diff two workflows: apps added/removed, per-app field changes (model image, thresholds)')
     _add_verb(wf_sub, 'create', cmd_workflows_create, _BODY, help='Create a workflow')
     _add_verb(wf_sub, 'delete', cmd_workflows_delete,
               [_id('workflow_id', 'Workflow ID')], help='Delete a workflow')

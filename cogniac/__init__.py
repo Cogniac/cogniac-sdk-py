@@ -35,7 +35,7 @@ from .external_results import CogniacExternalResult
 from .ops_review import CogniacOpsReview
 from .network_camera import CogniacNetworkCamera
 from .deployment import CogniacDeployment, CogniacDeploymentCapacityClass
-from .workflow import CogniacWorkflow
+from .workflow import CogniacWorkflow, workflow_diff, workflow_summary
 from .build import CogniacBuild
 
 # Async API

@@ -170,7 +170,8 @@ def test_deployment_capacity_methods_exist(method):
 
 
 _WORKFLOW_METHODS = ['get_all', 'get', 'create', 'delete', 'edgeflow_targets',
-                     'new_version', 'get_version', 'get_all_versions']
+                     'new_version', 'get_version', 'get_all_versions',
+                     'diff', 'summary']
 
 
 @pytest.mark.parametrize("method", _WORKFLOW_METHODS)
