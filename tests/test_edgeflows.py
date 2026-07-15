@@ -477,13 +477,25 @@ def test_status_aliases_missing_timestamp_to_gw_timestamp():
 # ---------------------------------------------------------------------------
 
 
+class _FakeTenant:
+    tenant_id = 'tenant-placeholder'
+
+
 class _HealthConn:
     """Fake connection serving the tenant gateway list and one status
     envelope per gateway (latest record only, as the API returns for
-    reverse=True&limit=1)."""
+    reverse=True&limit=1). A per-gateway value that is an Exception is raised
+    from that device's status GET.
+
+    Exposes the tenant id only via the `tenant` property path
+    (connection.tenant.tenant_id), like the real CogniacConnection whose
+    `tenant` property raises the helpful "must specify tenant" error on a
+    tenant-less connection — get_all_health must use that path, matching
+    get_all, not the raw connection.tenant_id attribute."""
+
+    tenant = _FakeTenant()
 
     def __init__(self, gateways, status_by_gateway):
-        self.tenant_id = 'tenant-placeholder'
         self._gateways = gateways
         self._status = status_by_gateway
         self.status_urls = []
@@ -495,6 +507,8 @@ class _HealthConn:
         assert m, "unexpected url %s" % url
         self.status_urls.append(url)
         records = self._status.get(m.group(1), [])
+        if isinstance(records, Exception):
+            raise records
         return _FakeResp({'data': records[:1], 'paging': {'next': None}})
 
 
@@ -560,6 +574,43 @@ def test_get_all_health_stale_seconds_widens_online_window():
 def test_get_all_health_empty_tenant():
     conn = _HealthConn([], {})
     assert cogniac.CogniacEdgeFlow.get_all_health(conn) == []
+
+
+def test_get_all_health_one_bad_device_degrades_not_aborts():
+    # A gateway deleted between the tenant list call and its status GET (404
+    # ClientError) must degrade only its own record — online None (tri-state
+    # "could not determine", not False "determined offline") with the failure
+    # in an `error` key — while every other device still reports normally.
+    from cogniac.common import ClientError
+
+    now = time()
+    gateways = [
+        _gw('gw-ok', current_workflow_id='wf-0001'),
+        _gw('gw-gone', deployment_group_id='dg-0002'),
+        _gw('gw-quiet'),
+    ]
+    status = {
+        'gw-ok': [{'subsystem': 'cpu', 'cc_timestamp': now - 30.0}],
+        'gw-gone': ClientError('gateway not found (404)', status_code=404),
+        'gw-quiet': [],
+    }
+    conn = _HealthConn(gateways, status)
+    out = cogniac.CogniacEdgeFlow.get_all_health(conn, stale_seconds=900)
+
+    # the sweep completed for every device, in order
+    assert [r['gateway_id'] for r in out] == ['gw-ok', 'gw-gone', 'gw-quiet']
+
+    degraded = out[1]
+    assert degraded['online'] is None
+    assert degraded['last_seen'] is None
+    assert '404' in degraded['error']
+    # gateway-record fields still populated on the degraded record
+    assert degraded['name'] == 'ef-gw-gone'
+    assert degraded['deployment_group_id'] == 'dg-0002'
+
+    # healthy devices are unaffected and carry no error key
+    assert out[0]['online'] is True and 'error' not in out[0]
+    assert out[2]['online'] is False and 'error' not in out[2]
 
 
 def test_get_all_health_falls_back_to_gw_timestamp():

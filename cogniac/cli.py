@@ -91,7 +91,7 @@ _TABLE_COLUMNS = {
     'media':     ['media_id', 'filename', 'media_format', 'image_width', 'image_height', 'status'],
     'edgeflow':  ['gateway_id', 'name', 'model', 'description'],
     'edgeflow_health': ['gateway_id', 'name', 'online', 'last_seen',
-                        'deployment_group_id', 'current_workflow_id'],
+                        'deployment_group_id', 'current_workflow_id', 'error'],
     'camera':    ['network_camera_id', 'camera_name', 'url', 'active'],
     'media_assoc': ['media_id', 'subject_uid', 'probability', 'consensus', 'updated_at'],
     'deployment': ['deployment_group_id', 'name', 'target_workflow_id', 'current_workflow_id'],
@@ -611,7 +611,12 @@ def cmd_edgeflows_health(args):
     most recent status record is fetched and its cloud-receipt timestamp
     (cc_timestamp) becomes the effective last_seen; a device with no status
     record within --stale-minutes counts offline. NOT a true device heartbeat
-    — a device uploading backlogged status can briefly look online."""
+    — a device uploading backlogged status can briefly look online.
+
+    online is tri-state: true (recent status), false (determined offline/
+    stale), or null (could not determine — that device's status fetch failed;
+    the failure is surfaced in an `error` key on its record instead of
+    aborting the whole sweep)."""
     cc = get_connection(args)
     try:
         from .edgeflow import CogniacEdgeFlow
@@ -3101,7 +3106,9 @@ def build_parser():
                                                'client-side derivation, not a true device heartbeat; a device '
                                                'uploading backlogged status can briefly look online.'})],
               help='Client-derived fleet health: per device {gateway_id, name, deployment_group_id, '
-                   'last_seen, online, current_workflow_id}')
+                   'last_seen, online, current_workflow_id}. online is tri-state: true, false, or '
+                   'null when that device\'s status fetch failed (its record then carries an error '
+                   'key instead of aborting the sweep)')
 
     # edgeflow certificate
     def _reg_ef_cert(sub, hidden=False):

@@ -8,7 +8,7 @@ import asyncio
 import os
 from time import time
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
-from .edgeflow import DEFAULT_HEALTH_STALE_SECONDS, _health_record
+from .edgeflow import DEFAULT_HEALTH_STALE_SECONDS, _health_error_record, _health_record
 
 
 @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
@@ -119,6 +119,12 @@ class AsyncCogniacEdgeFlow(object):
         ``stale_seconds`` of now. Per-device status fetches run concurrently,
         capped at ``max_workers`` in flight.
 
+        ``online`` is tri-state: True (recent status), False (determined
+        offline/stale), or None (could not determine — the device's status
+        fetch failed; the failure message is surfaced in an ``error`` key on
+        that record). A failing device degrades its own record rather than
+        aborting the whole fleet sweep.
+
         connection (AsyncCogniacConnection):  Authenticated AsyncCogniacConnection object
         stale_seconds (float):                staleness threshold for online (default 900)
         max_workers (int):                    concurrent status fetches (default 8)
@@ -137,8 +143,11 @@ class AsyncCogniacEdgeFlow(object):
         semaphore = asyncio.Semaphore(max_workers)
 
         async def one(gateway):
-            async with semaphore:
-                record = await _latest_status_record(connection, gateway.get('gateway_id'))
+            try:
+                async with semaphore:
+                    record = await _latest_status_record(connection, gateway.get('gateway_id'))
+            except Exception as e:
+                return _health_error_record(gateway, e)
             return _health_record(gateway, record, stale_seconds)
 
         return list(await asyncio.gather(*[one(gateway) for gateway in gateways]))

@@ -182,7 +182,9 @@ cogniac edgeflows health        # client-derived fleet health summary: per devic
                                 # recent status record; --stale-minutes (default 15) sets the online
                                 # threshold. Not a true heartbeat: the backend does not populate
                                 # connectivity on the gateway record, and a device uploading backlogged
-                                # status can briefly look online.
+                                # status can briefly look online. online is tri-state: true/false, or
+                                # null when that device's status fetch failed (its record then carries
+                                # an `error` key; one bad device never aborts the sweep).
 cogniac edgeflows metrics names              # list available metric names
 cogniac edgeflows metrics list --metric-name <name>   # time-series for a metric; --edgeflow-id scopes to one device,
                                 #   --start/--end (epoch or ISO 8601, supplied together) bound the window

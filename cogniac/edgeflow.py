@@ -57,6 +57,22 @@ def _health_record(gateway_fields, latest_record, stale_seconds, now=None):
     }
 
 
+def _health_error_record(gateway_fields, exc):
+    """
+    Degraded health record for a device whose status fetch failed.
+
+    ``online`` is None — tri-state "could not determine", as opposed to False
+    "determined offline" — ``last_seen`` is None, and the failure is surfaced
+    in ``error``, so one bad device (e.g. a gateway deleted between the tenant
+    list call and its status GET, or a device whose status GET exhausts its
+    retries) degrades its own record instead of aborting the fleet sweep.
+    """
+    record = _health_record(gateway_fields, None, 0)
+    record['online'] = None
+    record['error'] = str(exc)
+    return record
+
+
 @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
 def _latest_status_record(connection, gateway_id):
     """
@@ -176,6 +192,12 @@ class CogniacEdgeFlow(object):
         ``stale_seconds`` of now. Per-device status fetches run concurrently
         on up to ``max_workers`` threads.
 
+        ``online`` is tri-state: True (recent status), False (determined
+        offline/stale), or None (could not determine — the device's status
+        fetch failed; the failure message is surfaced in an ``error`` key on
+        that record). A failing device degrades its own record rather than
+        aborting the whole fleet sweep.
+
         connection (CogniacConnection):  Authenticated CogniacConnection object
         stale_seconds (float):           staleness threshold for online (default 900)
         max_workers (int):               concurrent status fetches (default 8)
@@ -186,13 +208,16 @@ class CogniacEdgeFlow(object):
         uploading a backlog of status records can briefly look "online"; a
         device with no status records has last_seen None and online False.
         """
-        resp = connection._get('/1/tenants/%s/gateways' % connection.tenant_id)
+        resp = connection._get('/1/tenants/%s/gateways' % connection.tenant.tenant_id)
         gateways = resp.json()['data']
         if not gateways:
             return []
 
         def one(gateway):
-            record = _latest_status_record(connection, gateway.get('gateway_id'))
+            try:
+                record = _latest_status_record(connection, gateway.get('gateway_id'))
+            except Exception as e:
+                return _health_error_record(gateway, e)
             return _health_record(gateway, record, stale_seconds)
 
         with ThreadPoolExecutor(max_workers=min(max_workers, len(gateways))) as pool:

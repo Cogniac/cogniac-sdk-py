@@ -265,7 +265,11 @@ from time import time
 
 class _AsyncHealthConn:
     """Fake async connection serving the tenant gateway list and one status
-    envelope per gateway (latest record only)."""
+    envelope per gateway (latest record only). A per-gateway value that is an
+    Exception is raised from that device's status GET.
+
+    Exposes tenant_id directly: AsyncCogniacConnection has no `tenant`
+    property, and the async get_all/get_all_health use connection.tenant_id."""
 
     def __init__(self, gateways, status_by_gateway):
         self.tenant_id = 'tenant-placeholder'
@@ -280,6 +284,8 @@ class _AsyncHealthConn:
         assert m, "unexpected url %s" % url
         self.status_urls.append(url)
         records = self._status.get(m.group(1), [])
+        if isinstance(records, Exception):
+            raise records
         return _FakeResp({'data': records[:1], 'paging': {'next': None}})
 
 
@@ -326,6 +332,40 @@ async def test_async_get_all_health_online_stale_and_no_records():
 async def test_async_get_all_health_empty_tenant():
     conn = _AsyncHealthConn([], {})
     assert await cogniac.AsyncCogniacEdgeFlow.get_all_health(conn) == []
+
+
+@pytest.mark.asyncio
+async def test_async_get_all_health_one_bad_device_degrades_not_aborts():
+    # Mirrors the sync regression: a 404 ClientError from one device's status
+    # GET (e.g. gateway deleted mid-sweep) degrades only that record — online
+    # None (tri-state "could not determine") with the failure in `error` —
+    # while every other device still reports normally.
+    from cogniac.common import ClientError
+
+    now = time()
+    gateways = [
+        _gw('gw-ok'),
+        _gw('gw-gone', deployment_group_id='dg-0002'),
+        _gw('gw-quiet'),
+    ]
+    status = {
+        'gw-ok': [{'subsystem': 'cpu', 'cc_timestamp': now - 30.0}],
+        'gw-gone': ClientError('gateway not found (404)', status_code=404),
+        'gw-quiet': [],
+    }
+    conn = _AsyncHealthConn(gateways, status)
+    out = await cogniac.AsyncCogniacEdgeFlow.get_all_health(conn, stale_seconds=900)
+
+    assert [r['gateway_id'] for r in out] == ['gw-ok', 'gw-gone', 'gw-quiet']
+
+    degraded = out[1]
+    assert degraded['online'] is None
+    assert degraded['last_seen'] is None
+    assert '404' in degraded['error']
+    assert degraded['deployment_group_id'] == 'dg-0002'
+
+    assert out[0]['online'] is True and 'error' not in out[0]
+    assert out[2]['online'] is False and 'error' not in out[2]
 
 
 @pytest.mark.asyncio
