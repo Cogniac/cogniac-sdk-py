@@ -156,13 +156,20 @@ class AsyncCogniacDeployment(object):
                                    json={'target_workflow_id': workflow_id})
         return resp.json()
 
-    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     async def deploy(self, workflow_id, now=False, timeout=None):
         """
         DISPATCH a workflow rollout to every EdgeFlow in this deployment group.
 
         Unlike set_target_workflow(), which only records the target_workflow_id
         without deploying anything, this call actually triggers the rollout.
+
+        This call is intentionally NOT retried automatically on server errors:
+        the dispatch is not idempotent, and a 5xx raised after the server began
+        processing could double-dispatch the rollout to the fleet. (The
+        transport still retries 429 rate-limits and credential refresh, which
+        are rejected before processing.) After ANY failure — server error or
+        read timeout — check deploy_status() to determine whether the dispatch
+        completed server-side before retrying.
 
         workflow_id (str)  the workflow to deploy
         now (bool)         False (default): set next_workflow_id — dispatched

@@ -25,6 +25,7 @@ import httpx
 import pytest
 
 import cogniac
+from cogniac.common import ServerError
 from cogniac.deployment import DEPLOY_DEFAULT_TIMEOUT
 
 
@@ -94,6 +95,38 @@ def test_deploy_timeout_is_configurable():
     assert timeout == 42
 
 
+class _FailingPostConn(_Conn):
+    """_post always fails with the given exception (after recording the attempt)."""
+    def __init__(self, exc):
+        super().__init__([])
+        self._exc = exc
+
+    def _post(self, url, **kwargs):
+        self.posted.append((url, kwargs.get('json'), kwargs.get('timeout')))
+        raise self._exc
+
+
+def test_deploy_does_not_retry_on_server_error():
+    # the dispatch is NOT idempotent: a 5xx after the server began processing
+    # could double-dispatch the rollout, so deploy() must not carry the
+    # blanket server_error retry — a single POST attempt, then propagate
+    conn = _FailingPostConn(ServerError("ServerError (500): transient"))
+    dg = cogniac.CogniacDeployment(conn, {'deployment_group_id': 'dg-test-1'})
+    with pytest.raises(ServerError):
+        dg.deploy('wf-test-1')
+    assert len(conn.posted) == 1
+
+
+def test_deploy_read_timeout_propagates_without_retry():
+    # a client read timeout likewise propagates after one attempt (the caller
+    # resolves the ambiguity via deploy_status())
+    conn = _FailingPostConn(httpx.ReadTimeout("The read operation timed out"))
+    dg = cogniac.CogniacDeployment(conn, {'deployment_group_id': 'dg-test-1'})
+    with pytest.raises(httpx.ReadTimeout):
+        dg.deploy('wf-test-1')
+    assert len(conn.posted) == 1
+
+
 # ---------------------------------------------------------------------------
 # CogniacDeployment.deploy_status — convergence logic
 # ---------------------------------------------------------------------------
@@ -144,6 +177,32 @@ def test_deploy_status_is_a_get():
     dg.deploy_status()
     assert dg._cc.urls == ["/1/deploymentGroups/dg-test-1"]
     assert dg._cc.posted == []
+
+
+class _FlakyGetConn(_Conn):
+    """_get fails `failures` times with a 5xx, then serves the queued payloads."""
+    def __init__(self, failures, payloads):
+        super().__init__(payloads)
+        self._failures = failures
+        self.get_attempts = 0
+
+    def _get(self, url, **kwargs):
+        self.get_attempts += 1
+        if self.get_attempts <= self._failures:
+            raise ServerError("ServerError (500): transient")
+        return super()._get(url, **kwargs)
+
+
+def test_deploy_status_retries_on_server_error():
+    # deploy_status is an idempotent GET, so it keeps the repo-standard
+    # server_error retry (unlike the non-idempotent deploy())
+    conn = _FlakyGetConn(1, [{'target_workflow_id': 'wf-test-1',
+                              'current_workflow_id': 'wf-test-1',
+                              'next_workflow_id': None}])
+    dg = cogniac.CogniacDeployment(conn, {'deployment_group_id': 'dg-test-1'})
+    status = dg.deploy_status()
+    assert conn.get_attempts == 2
+    assert status['converged'] is True
 
 
 # ---------------------------------------------------------------------------
