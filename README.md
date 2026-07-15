@@ -139,6 +139,13 @@ cogniac media download --media-id <id> -o out.jpg  # download media to file
 cogniac edgeflow list                              # list edge devices
 cogniac edgeflow status --edgeflow-id <id> --list-subsystems   # discover which subsystems a device reports
 cogniac application create --body @app.json        # --body takes inline JSON, @FILE, or - (stdin)
+
+cogniac deployment deploy --deployment-group-id <id> --workflow-id <wf>   # DISPATCH a workflow rollout
+                                                   # (--now bypasses the group schedule; --timeout raises the
+                                                   #  client read timeout — the server blocks until every
+                                                   #  EdgeFlow accepts, default 300s)
+cogniac deployment deploy-status --deployment-group-id <id>               # rollout convergence status
+cogniac deployment target workflow set ...         # records target_workflow_id only — does NOT deploy
 ```
 
 Run `cogniac <noun> --help` to explore the tree interactively, or `cogniac commands` for the full machine-readable catalog. An unknown command suggests the closest match.

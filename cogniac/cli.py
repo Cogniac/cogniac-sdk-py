@@ -34,6 +34,7 @@ Representative read commands (run `cogniac <noun> --help` to discover the rest):
     cogniac camera get --network-camera-id ID
     cogniac deployment list
     cogniac deployment get --deployment-group-id ID
+    cogniac deployment deploy-status --deployment-group-id ID
     cogniac workflow get --workflow-id ID
 
 Auth commands:
@@ -45,6 +46,7 @@ Representative write commands:
     cogniac subject create <name> [--description D] [--external-id E]
     cogniac subject associate --subject-uid UID --media-id ID [--consensus C]
     cogniac media upload <filename> [--subject-uid UID] [--external-media-id E] [--domain-unit D] [--meta-tags T ...]
+    cogniac deployment deploy --deployment-group-id ID --workflow-id WF [--now] [--timeout SECONDS]
 
 Global options:
     --format json|table   (default: json)
@@ -62,6 +64,7 @@ import os
 from datetime import datetime
 from importlib.metadata import version as _pkg_version, PackageNotFoundError
 
+import httpx
 from tabulate import tabulate
 
 from .cogniac import CogniacConnection, DEFAULT_COG_URL_PREFIX
@@ -1624,6 +1627,47 @@ def cmd_deployments_target_workflow(args):
     try:
         dg = CogniacDeployment.get(cc, args.deployment_group_id)
         output(dg.set_target_workflow(args.workflow_id), args)
+        # foot-gun guard: this verb only records intent (stdout stays pure JSON)
+        sys.stderr.write(json.dumps({
+            "warning": "target_workflow_id set but NOT deployed; run "
+                       "`cogniac deployment deploy --deployment-group-id %s --workflow-id %s` "
+                       "to dispatch the rollout"
+                       % (args.deployment_group_id, args.workflow_id),
+        }) + "\n")
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_deployments_deploy(args):
+    cc = get_connection(args)
+    from .deployment import CogniacDeployment, DEPLOY_DEFAULT_TIMEOUT
+    timeout = args.timeout if args.timeout is not None else DEPLOY_DEFAULT_TIMEOUT
+    try:
+        dg = CogniacDeployment.get(cc, args.deployment_group_id)
+        output(dg.deploy(args.workflow_id, now=args.now, timeout=timeout), args, 'deployment')
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+    except httpx.TimeoutException:
+        # The dispatch blocks server-side until every EdgeFlow in the group
+        # accepts; on large groups the client read times out even though the
+        # server usually completes the rollout.
+        sys.stderr.write(json.dumps({"error": {
+            "type": "timeout",
+            "message": "deploy dispatch timed out client-side after %gs; the server may "
+                       "still complete the rollout" % timeout,
+            "hint": "check convergence with `cogniac deployment deploy-status "
+                    "--deployment-group-id %s`; if not converged, re-run deploy "
+                    "with a larger --timeout" % args.deployment_group_id,
+        }}) + "\n")
+        sys.exit(1)
+
+
+def cmd_deployments_deploy_status(args):
+    cc = get_connection(args)
+    from .deployment import CogniacDeployment
+    try:
+        dg = CogniacDeployment.get(cc, args.deployment_group_id)
+        output(dg.deploy_status(), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -3209,7 +3253,20 @@ def build_parser():
     _add_verb(dep_target_wf_sub, 'set', cmd_deployments_target_workflow,
               [_id('deployment_group_id', 'Deployment group ID'),
                (('--workflow-id',), {'dest': 'workflow_id', 'required': True, 'help': 'Workflow ID'})],
-              help="Set the group's target workflow")
+              help="Record the group's target workflow WITHOUT deploying it (use `deployment deploy` to dispatch)")
+    # deployment deploy / deploy-status
+    _add_verb(dep_sub, 'deploy', cmd_deployments_deploy,
+              [_id('deployment_group_id', 'Deployment group ID'),
+               (('--workflow-id',), {'dest': 'workflow_id', 'required': True, 'help': 'Workflow ID to deploy'}),
+               (('--now',), {'action': 'store_true',
+                             'help': 'Immediate one-off dispatch (deploy_now_workflow_id), bypassing the group schedule'}),
+               (('--timeout',), {'type': float, 'default': None, 'metavar': 'SECONDS',
+                                 'help': 'Client read timeout for the dispatch; the server blocks until '
+                                         'every EdgeFlow accepts, so large groups need more (default 300)'})],
+              help='DISPATCH a workflow rollout to the group (unlike `target workflow set`, which only records intent)')
+    _add_verb(dep_sub, 'deploy-status', cmd_deployments_deploy_status,
+              [_id('deployment_group_id', 'Deployment group ID')],
+              help='Rollout convergence status: target vs current vs pending next workflow')
     # deployment capacity list/get
     def _reg_dep_capacity(sub, hidden=False):
         _add_verb(sub, 'list', cmd_deployment_capacity_list, help='List deployment capacity classes', hidden=hidden)
