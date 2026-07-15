@@ -57,6 +57,25 @@ def make_workflow_a():
                 "model_runtime_image": "registry.example.com/runtime/ocr:7.8.9",
                 "input_subject_uids": ["subj_alpha"],
             },
+            {
+                # third spec shape seen in production: top-level name/type null,
+                # NO spec-level app_type_config, and everything meaningful
+                # (name, type, thresholds, mirrored image) embedded in the
+                # app_config application-record snapshot
+                "application_id": "appgauge000001",
+                "name": None,
+                "type": None,
+                "input_subject_uids": ["subj_alpha"],
+                "app_config": {
+                    "application_id": "appgauge000001",
+                    "name": "gauge-reader",
+                    "type": "detection",
+                    "model_runtime_image": "registry.example.com/runtime/gauge:2.0.0",
+                    "detection_thresholds": {"subj_gauge": 0.4},
+                    "input_threshold": 0.3,
+                    "modified_at": 1690000000.0,
+                },
+            },
         ],
     }
 
@@ -212,14 +231,73 @@ class TestWorkflowDiff:
         assert cogniac.workflow_diff is workflow_diff
         assert cogniac.workflow_summary is workflow_summary
 
-    def test_missing_app_specs_tolerated(self):
+    def test_missing_app_specs_tolerated_and_flagged(self):
         a = make_workflow_a()
         del a["app_specs"]
         b = make_workflow_a()
         d = workflow_diff(a, b)
         assert [row["application_id"] for row in d["apps_added"]] == \
-            ["appclassify001", "appdetect00001", "appocr00000001"]
+            ["appclassify001", "appdetect00001", "appgauge000001", "appocr00000001"]
         assert d["apps_removed"] == []
+        # the absent side is explicitly flagged, the populated side is not
+        assert d["workflow_a"]["app_specs_missing"] is True
+        assert "app_specs_missing" not in d["workflow_b"]
+
+    def test_empty_app_specs_not_flagged_as_missing(self):
+        """An explicit empty pipeline is not the same as an absent app_specs
+        key (versions-list summary records omit app_specs entirely)."""
+        a = make_workflow_a()
+        a["app_specs"] = []
+        d = workflow_diff(a, make_workflow_a())
+        assert "app_specs_missing" not in d["workflow_a"]
+        assert len(d["apps_added"]) == 4
+
+    # ---- app_config fallback (third spec shape seen in production) ----
+
+    def test_app_config_only_image_retag_surfaced_prominently(self):
+        """A retag visible only via the app_config record still fires the
+        prominent model_runtime_image field (no top-level or app_type_config
+        copy exists on this spec shape)."""
+        a = make_workflow_a()
+        b = copy.deepcopy(a)
+        b["app_specs"][3]["app_config"]["model_runtime_image"] = \
+            "registry.example.com/runtime/gauge:2.1.0"
+        d = workflow_diff(a, b)
+        entry = d["apps_changed"]["appgauge000001"]
+        assert entry["model_runtime_image"] == {
+            "old": "registry.example.com/runtime/gauge:2.0.0",
+            "new": "registry.example.com/runtime/gauge:2.1.0",
+        }
+
+    def test_app_config_threshold_change_surfaced_prominently(self):
+        a = make_workflow_a()
+        b = copy.deepcopy(a)
+        b["app_specs"][3]["app_config"]["input_threshold"] = 0.5
+        d = workflow_diff(a, b)
+        entry = d["apps_changed"]["appgauge000001"]
+        assert entry["thresholds"]["old"]["app_config.input_threshold"] == 0.3
+        assert entry["thresholds"]["new"]["app_config.input_threshold"] == 0.5
+
+    def test_app_config_mirror_does_not_override_top_level(self):
+        """Fallback, not merge: the app_config image mirror churns independently
+        of the authoritative top-level field, so when the top level carries the
+        image, mirror-only churn must not fire the prominent field (it still
+        shows up in the generic deep diff)."""
+        a = make_workflow_a()
+        a["app_specs"][0]["app_config"] = {
+            "name": "detector",
+            "model_runtime_image": "registry.example.com/runtime/detector:1.2.2",  # stale mirror
+        }
+        b = copy.deepcopy(a)
+        b["app_specs"][0]["app_config"]["model_runtime_image"] = \
+            "registry.example.com/runtime/detector:1.2.3"
+        d = workflow_diff(a, b)
+        entry = d["apps_changed"]["appdetect00001"]
+        assert "model_runtime_image" not in entry
+        assert entry["changed"]["app_config.model_runtime_image"] == {
+            "old": "registry.example.com/runtime/detector:1.2.2",
+            "new": "registry.example.com/runtime/detector:1.2.3",
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -234,8 +312,9 @@ class TestWorkflowSummary:
         assert s["base_id"] == "wfbase0001"
         assert s["version"] == 3
         assert s["edgeflow_model"] == "example-gpu-model"
-        assert s["app_count"] == 3
-        assert len(s["apps"]) == 3
+        assert s["app_count"] == 4
+        assert len(s["apps"]) == 4
+        assert "app_specs_missing" not in s
 
     def test_summary_rows(self):
         s = workflow_summary(make_workflow_a())
@@ -251,6 +330,25 @@ class TestWorkflowSummary:
         # null name/type are omitted rather than emitted as nulls
         assert "name" not in detect
 
+    def test_summary_resolves_fields_from_app_config(self):
+        """Third spec shape: no API join needed — name/type, the image, and
+        thresholds all resolve from the embedded app_config record."""
+        s = workflow_summary(make_workflow_a())
+        row = {r["application_id"]: r for r in s["apps"]}["appgauge000001"]
+        assert row["name"] == "gauge-reader"
+        assert row["type"] == "detection"
+        assert row["model_runtime_image"] == "registry.example.com/runtime/gauge:2.0.0"
+        assert row["thresholds"] == {
+            "app_config.detection_thresholds": {"subj_gauge": 0.4},
+            "app_config.input_threshold": 0.3,
+        }
+
+    def test_summary_top_level_name_wins_over_app_config(self):
+        wf = make_workflow_a()
+        wf["app_specs"][3]["name"] = "authoritative-name"
+        row = workflow_summary(wf)["apps"][3]
+        assert row["name"] == "authoritative-name"
+
     def test_summary_includes_name_when_present(self):
         wf = make_workflow_a()
         wf["app_specs"][0]["name"] = "detector"
@@ -264,12 +362,24 @@ class TestWorkflowSummary:
         wf = CogniacWorkflow(cc, make_workflow_a())
         assert wf.summary() == workflow_summary(make_workflow_a())
 
-    def test_summary_without_app_specs(self):
+    def test_summary_flags_absent_app_specs(self):
+        """Summary records from the versions list endpoint omit app_specs
+        entirely; report that explicitly instead of claiming zero apps."""
+        for strip in (lambda wf: wf.pop("app_specs"),
+                      lambda wf: wf.update(app_specs=None)):
+            wf = make_workflow_a()
+            strip(wf)
+            s = workflow_summary(wf)
+            assert s["app_count"] == 0
+            assert s["apps"] == []
+            assert s["app_specs_missing"] is True
+
+    def test_summary_empty_app_specs_not_flagged(self):
         wf = make_workflow_a()
-        wf["app_specs"] = None
+        wf["app_specs"] = []
         s = workflow_summary(wf)
         assert s["app_count"] == 0
-        assert s["apps"] == []
+        assert "app_specs_missing" not in s
 
 
 # ---------------------------------------------------------------------------

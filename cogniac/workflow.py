@@ -33,38 +33,55 @@ def _as_workflow_dict(workflow):
     return {k: v for k, v in workflow.__dict__.items() if not k.startswith('_')}
 
 
+def _spec_containers(spec):
+    """Return the (prefix, dict) locations of an app spec that can carry the
+    well-known fields, in precedence order: the spec top level, then the
+    spec-level `app_type_config`, then the embedded `app_config` application
+    record. Later containers are FALLBACKS only — `app_config` is a snapshot
+    of the application record that mirrors fields like `model_runtime_image`
+    and churns independently of the authoritative top-level copy, so it must
+    never override (or be merged with) a higher-precedence value."""
+    containers = [('', spec)]
+    for key in ('app_type_config', 'app_config'):
+        nested = spec.get(key)
+        if isinstance(nested, dict):
+            containers.append((key + '.', nested))
+    return containers
+
+
 def _spec_model_runtime_image(spec):
     """Return the model runtime image of an app spec.
 
     The image is usually at the top level of the spec (`model_runtime_image`)
-    but on some workflows lives nested under `app_type_config`; handle both."""
+    but on some workflows lives nested under `app_type_config` or only inside
+    the embedded `app_config` application record; fall back in that order."""
     if not isinstance(spec, dict):
         return None
-    image = spec.get('model_runtime_image')
-    if image is None:
-        app_type_config = spec.get('app_type_config')
-        if isinstance(app_type_config, dict):
-            image = app_type_config.get('model_runtime_image')
-    return image
+    for _, container in _spec_containers(spec):
+        image = container.get('model_runtime_image')
+        if image is not None:
+            return image
+    return None
 
 
 def _spec_thresholds(spec):
-    """Return every threshold-like field of an app spec as a flat dict.
+    """Return the threshold fields of an app spec as a flat dict.
 
-    Threshold fields vary by app type (e.g. `threshold`, `detection_thresholds`)
-    and may live at the top level of the spec or nested under `app_type_config`,
-    so match any key containing 'threshold' in either location."""
+    Threshold fields vary by app type (e.g. `threshold`, `detection_thresholds`,
+    `input_threshold`) and may live at the top level of the spec, nested under
+    `app_type_config`, or only inside the embedded `app_config` record — so
+    match any key containing 'threshold' in those locations. Fallback, not
+    merge: a threshold key found in a higher-precedence container shadows the
+    same key in a lower one (see _spec_containers)."""
     thresholds = {}
     if not isinstance(spec, dict):
         return thresholds
-    containers = [('', spec)]
-    app_type_config = spec.get('app_type_config')
-    if isinstance(app_type_config, dict):
-        containers.append(('app_type_config.', app_type_config))
-    for prefix, container in containers:
+    seen = set()
+    for prefix, container in _spec_containers(spec):
         for key, value in container.items():
-            if 'threshold' in key.lower():
+            if 'threshold' in key.lower() and key not in seen:
                 thresholds[prefix + key] = value
+                seen.add(key)
     return thresholds
 
 
@@ -105,16 +122,23 @@ def _value_changes(a, b):
 def summarize_app_spec(spec):
     """Return a compact one-row summary of a single app spec: application_id,
     model_runtime_image, and any threshold fields (plus name/type when the
-    workflow actually carries them — they are often null in app_specs)."""
+    workflow actually carries them — they are often null at the spec top
+    level, in which case the embedded `app_config` record is consulted)."""
     if not isinstance(spec, dict):
         return {'application_id': None, 'model_runtime_image': None}
     row = {
         'application_id': spec.get('application_id'),
         'model_runtime_image': _spec_model_runtime_image(spec),
     }
+    app_config = spec.get('app_config')
+    if not isinstance(app_config, dict):
+        app_config = {}
     for key in ('name', 'type', 'app_type'):
-        if spec.get(key) is not None:
-            row[key] = spec[key]
+        value = spec.get(key)
+        if value is None:
+            value = app_config.get(key)
+        if value is not None:
+            row[key] = value
     thresholds = _spec_thresholds(spec)
     if thresholds:
         row['thresholds'] = thresholds
@@ -128,10 +152,16 @@ def workflow_summary(workflow):
               workflow dict (as returned by GET /1/workflows/{workflow_id}).
 
     Returns a dict with workflow identity fields plus one summary row per
-    app spec (see summarize_app_spec)."""
+    app spec (see summarize_app_spec).
+
+    When the workflow record does not carry `app_specs` at all (e.g. a summary
+    record from the versions list endpoint, which omits them), the result
+    carries `app_specs_missing: True` rather than silently reporting zero
+    apps — fetch the full version via GET /1/workflows/{workflow_id}."""
     wf = _as_workflow_dict(workflow)
+    missing = _app_specs_missing(wf)
     app_specs = wf.get('app_specs') or []
-    return {
+    summary = {
         'workflow_id': wf.get('workflow_id'),
         'base_id': wf.get('base_id'),
         'version': wf.get('version'),
@@ -140,12 +170,25 @@ def workflow_summary(workflow):
         'app_count': len(app_specs),
         'apps': [summarize_app_spec(s) for s in app_specs],
     }
+    if missing:
+        summary['app_specs_missing'] = True
+    return summary
+
+
+def _app_specs_missing(wf):
+    """True when the workflow record does not carry app_specs at all (key
+    absent or null) — as opposed to an explicit empty list. The versions list
+    endpoint returns summary records that omit app_specs entirely."""
+    return wf.get('app_specs') is None
 
 
 def _workflow_identity(wf):
-    return {'workflow_id': wf.get('workflow_id'),
-            'name': wf.get('name'),
-            'version': wf.get('version')}
+    identity = {'workflow_id': wf.get('workflow_id'),
+                'name': wf.get('name'),
+                'version': wf.get('version')}
+    if _app_specs_missing(wf):
+        identity['app_specs_missing'] = True
+    return identity
 
 
 def _group_specs_by_app(app_specs):
@@ -181,6 +224,17 @@ def workflow_diff(workflow_a, workflow_b):
                                and 'changed' is the full generic deep diff of
                                the app spec keyed by dotted path.
       identical:               True when nothing above differs.
+
+    The generic 'changed' dict is intentionally exhaustive: on multi-version
+    jumps it also picks up app-record snapshot bookkeeping embedded in each
+    spec (e.g. app_config.modified_at, build/model ids), not just authored
+    changes — nothing is silently excluded at the spec level.
+
+    When a side's record does not carry `app_specs` at all (e.g. a summary
+    record from the versions list endpoint, which omits them), its identity
+    header carries `app_specs_missing: True` and the app-level portion of the
+    diff is computed against an empty pipeline — interpret apps_added/removed
+    accordingly rather than as authored changes.
     """
     a = _as_workflow_dict(workflow_a)
     b = _as_workflow_dict(workflow_b)
