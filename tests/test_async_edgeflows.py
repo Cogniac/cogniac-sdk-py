@@ -251,3 +251,97 @@ async def test_async_status_aliases_missing_timestamp_to_gw_timestamp():
     assert out[0]['timestamp'] == 7.0  # aliased to gw_timestamp
     assert out[0]['gw_timestamp'] == 7.0
     assert out[0]['cc_timestamp'] == 9.0
+
+
+# ---------------------------------------------------------------------------
+# health / get_all_health — async parity for the client-derived fleet health
+# summary (#184). Mirrors the sync tests in tests/test_edgeflows.py.
+# (no creds; mocked connection). Placeholder ids only.
+# ---------------------------------------------------------------------------
+
+import re
+from time import time
+
+
+class _AsyncHealthConn:
+    """Fake async connection serving the tenant gateway list and one status
+    envelope per gateway (latest record only)."""
+
+    def __init__(self, gateways, status_by_gateway):
+        self.tenant_id = 'tenant-placeholder'
+        self._gateways = gateways
+        self._status = status_by_gateway
+        self.status_urls = []
+
+    async def _get(self, url, *args, **kwargs):
+        if url == '/1/tenants/tenant-placeholder/gateways':
+            return _FakeResp({'data': self._gateways})
+        m = re.match(r'^/1/gateways/([^/?]+)/status\?(.*)$', url)
+        assert m, "unexpected url %s" % url
+        self.status_urls.append(url)
+        records = self._status.get(m.group(1), [])
+        return _FakeResp({'data': records[:1], 'paging': {'next': None}})
+
+
+def _gw(gateway_id, **extra):
+    d = {'gateway_id': gateway_id, 'name': 'ef-%s' % gateway_id}
+    d.update(extra)
+    return d
+
+
+@pytest.mark.asyncio
+async def test_async_get_all_health_online_stale_and_no_records():
+    now = time()
+    gateways = [
+        _gw('gw-online', deployment_group_id='dg-0001', current_workflow_id='wf-0001'),
+        _gw('gw-stale'),
+        _gw('gw-silent'),
+    ]
+    status = {
+        'gw-online': [{'subsystem': 'cpu', 'cc_timestamp': now - 60.0,
+                       'gw_timestamp': now - 65.0}],
+        'gw-stale': [{'subsystem': 'cpu', 'cc_timestamp': now - 7200.0}],
+        'gw-silent': [],
+    }
+    conn = _AsyncHealthConn(gateways, status)
+    out = await cogniac.AsyncCogniacEdgeFlow.get_all_health(conn, stale_seconds=900)
+
+    assert [r['gateway_id'] for r in out] == ['gw-online', 'gw-stale', 'gw-silent']
+    by_id = {r['gateway_id']: r for r in out}
+    assert by_id['gw-online']['online'] is True
+    # last_seen is the cloud-receipt clock (cc_timestamp), not gw_timestamp
+    assert by_id['gw-online']['last_seen'] == pytest.approx(now - 60.0)
+    assert by_id['gw-online']['deployment_group_id'] == 'dg-0001'
+    assert by_id['gw-online']['current_workflow_id'] == 'wf-0001'
+    assert by_id['gw-stale']['online'] is False
+    assert by_id['gw-stale']['deployment_group_id'] is None
+    assert by_id['gw-silent']['last_seen'] is None
+    assert by_id['gw-silent']['online'] is False
+    # one bounded status GET per device
+    assert len(conn.status_urls) == 3
+    assert all('limit=1' in u and 'reverse=True' in u for u in conn.status_urls)
+
+
+@pytest.mark.asyncio
+async def test_async_get_all_health_empty_tenant():
+    conn = _AsyncHealthConn([], {})
+    assert await cogniac.AsyncCogniacEdgeFlow.get_all_health(conn) == []
+
+
+@pytest.mark.asyncio
+async def test_async_instance_health():
+    now = time()
+    conn = _AsyncHealthConn([], {'gw-placeholder': [{'cc_timestamp': now - 5.0}]})
+    ef = object.__new__(cogniac.AsyncCogniacEdgeFlow)
+    object.__setattr__(ef, '_edgeflow_keys', [])
+    object.__setattr__(ef, 'gateway_id', 'gw-placeholder')
+    object.__setattr__(ef, 'name', 'ef-placeholder')
+    object.__setattr__(ef, '_cc', conn)
+
+    h = await ef.health()
+    assert h['gateway_id'] == 'gw-placeholder'
+    assert h['online'] is True
+    assert h['last_seen'] == pytest.approx(now - 5.0)
+    # fields absent on the gateway record surface as null, not AttributeError
+    assert h['deployment_group_id'] is None
+    assert h['current_workflow_id'] is None

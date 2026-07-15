@@ -176,6 +176,13 @@ cogniac edgeflows status <id>   # status events: --subsystem, --start, --end, --
                                 # --start/--end filter on the cloud-receipt timestamp (cc_timestamp),
                                 # not device time (clocks can diverge on a skewed/backfilling EdgeFlow);
                                 # --sort is not exposed (backend defaults to cloudcore_timestamp)
+cogniac edgeflows health        # client-derived fleet health summary: per device {gateway_id, name,
+                                # deployment_group_id, last_seen, online, current_workflow_id}.
+                                # last_seen = cc_timestamp (cloud-receipt clock) of the device's most
+                                # recent status record; --stale-minutes (default 15) sets the online
+                                # threshold. Not a true heartbeat: the backend does not populate
+                                # connectivity on the gateway record, and a device uploading backlogged
+                                # status can briefly look online.
 cogniac edgeflows metrics names              # list available metric names
 cogniac edgeflows metrics list --metric-name <name>   # time-series for a metric; --edgeflow-id scopes to one device,
                                 #   --start/--end (epoch or ISO 8601, supplied together) bound the window

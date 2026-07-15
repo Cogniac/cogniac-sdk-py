@@ -3,6 +3,8 @@ Baseline tests for CogniacEdgeFlow.
 """
 
 import json
+import re
+from time import time
 
 import pytest
 from tests.conftest import requires_live
@@ -464,3 +466,171 @@ def test_status_aliases_missing_timestamp_to_gw_timestamp():
     # the source clocks are left intact
     assert out[0]['gw_timestamp'] == 7.0
     assert out[0]['cc_timestamp'] == 9.0
+
+
+# ---------------------------------------------------------------------------
+# health / get_all_health — client-derived fleet health summary (#184).
+# The backend does not populate last_seen/connection_status on the gateway
+# record, so health is derived client-side from each device's most recent
+# status record (cc_timestamp, cloud-receipt clock). (no creds; mocked
+# connection). Placeholder ids only — no customer identifiers.
+# ---------------------------------------------------------------------------
+
+
+class _HealthConn:
+    """Fake connection serving the tenant gateway list and one status
+    envelope per gateway (latest record only, as the API returns for
+    reverse=True&limit=1)."""
+
+    def __init__(self, gateways, status_by_gateway):
+        self.tenant_id = 'tenant-placeholder'
+        self._gateways = gateways
+        self._status = status_by_gateway
+        self.status_urls = []
+
+    def _get(self, url, *args, **kwargs):
+        if url == '/1/tenants/tenant-placeholder/gateways':
+            return _FakeResp({'data': self._gateways})
+        m = re.match(r'^/1/gateways/([^/?]+)/status\?(.*)$', url)
+        assert m, "unexpected url %s" % url
+        self.status_urls.append(url)
+        records = self._status.get(m.group(1), [])
+        return _FakeResp({'data': records[:1], 'paging': {'next': None}})
+
+
+def _gw(gateway_id, **extra):
+    d = {'gateway_id': gateway_id, 'name': 'ef-%s' % gateway_id}
+    d.update(extra)
+    return d
+
+
+def test_get_all_health_online_stale_and_no_records():
+    now = time()
+    gateways = [
+        _gw('gw-online', deployment_group_id='dg-0001', current_workflow_id='wf-0001'),
+        _gw('gw-stale'),
+        _gw('gw-silent'),  # zero status records ever
+    ]
+    status = {
+        'gw-online': [{'subsystem': 'cpu', 'cc_timestamp': now - 60.0,
+                       'gw_timestamp': now - 65.0}],
+        'gw-stale': [{'subsystem': 'cpu', 'cc_timestamp': now - 7200.0}],
+        'gw-silent': [],
+    }
+    conn = _HealthConn(gateways, status)
+    out = cogniac.CogniacEdgeFlow.get_all_health(conn, stale_seconds=900)
+
+    # one record per gateway, in the tenant list's order
+    assert [r['gateway_id'] for r in out] == ['gw-online', 'gw-stale', 'gw-silent']
+    by_id = {r['gateway_id']: r for r in out}
+
+    online = by_id['gw-online']
+    assert online['online'] is True
+    # last_seen is the cloud-receipt clock (cc_timestamp), not gw_timestamp
+    assert online['last_seen'] == pytest.approx(now - 60.0)
+    assert online['name'] == 'ef-gw-online'
+    assert online['deployment_group_id'] == 'dg-0001'
+    assert online['current_workflow_id'] == 'wf-0001'
+
+    stale = by_id['gw-stale']
+    assert stale['online'] is False
+    assert stale['last_seen'] == pytest.approx(now - 7200.0)
+    # fields absent on the gateway record surface as null, not KeyError
+    assert stale['deployment_group_id'] is None
+    assert stale['current_workflow_id'] is None
+
+    # a device with zero status records is handled gracefully
+    silent = by_id['gw-silent']
+    assert silent['last_seen'] is None
+    assert silent['online'] is False
+
+    # each device cost exactly one bounded status GET (latest record only)
+    assert len(conn.status_urls) == 3
+    assert all('limit=1' in url and 'reverse=True' in url for url in conn.status_urls)
+
+
+def test_get_all_health_stale_seconds_widens_online_window():
+    now = time()
+    conn = _HealthConn([_gw('gw-a')],
+                       {'gw-a': [{'cc_timestamp': now - 7200.0}]})
+    out = cogniac.CogniacEdgeFlow.get_all_health(conn, stale_seconds=3 * 3600)
+    assert out[0]['online'] is True
+
+
+def test_get_all_health_empty_tenant():
+    conn = _HealthConn([], {})
+    assert cogniac.CogniacEdgeFlow.get_all_health(conn) == []
+
+
+def test_get_all_health_falls_back_to_gw_timestamp():
+    # A record lacking cc_timestamp (and the timestamp alias) must still yield
+    # a last_seen from the device clock rather than null.
+    now = time()
+    conn = _HealthConn([_gw('gw-a')],
+                       {'gw-a': [{'subsystem': 'gpus', 'gw_timestamp': now - 10.0}]})
+    out = cogniac.CogniacEdgeFlow.get_all_health(conn)
+    assert out[0]['last_seen'] == pytest.approx(now - 10.0)
+    assert out[0]['online'] is True
+
+
+def test_instance_health_reads_fields_from_gateway_object():
+    now = time()
+    conn = _HealthConn([], {'gw-placeholder': [{'cc_timestamp': now - 5.0}]})
+    ef = object.__new__(cogniac.CogniacEdgeFlow)
+    object.__setattr__(ef, '_edgeflow_keys', [])
+    object.__setattr__(ef, 'gateway_id', 'gw-placeholder')
+    object.__setattr__(ef, 'name', 'ef-placeholder')
+    object.__setattr__(ef, 'deployment_group_id', 'dg-0001')
+    object.__setattr__(ef, '_cc', conn)
+
+    h = ef.health()
+    assert h == {
+        'gateway_id': 'gw-placeholder',
+        'name': 'ef-placeholder',
+        'deployment_group_id': 'dg-0001',
+        'last_seen': h['last_seen'],
+        'online': True,
+        'current_workflow_id': None,  # not on this gateway record -> null
+    }
+    assert h['last_seen'] == pytest.approx(now - 5.0)
+
+
+# ---------------------------------------------------------------------------
+# CLI `edgeflows health` (#184)
+# ---------------------------------------------------------------------------
+
+
+def _run_health(monkeypatch, argv, conn):
+    from cogniac.cli import build_parser
+    import cogniac.cli as cli
+
+    monkeypatch.setattr(cli, "get_connection", lambda args=None: conn)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    args.func(args)
+
+
+def test_cli_edgeflow_health_emits_summary_array(monkeypatch, capsys):
+    now = time()
+    conn = _HealthConn(
+        [_gw('gw-a', deployment_group_id='dg-0001'), _gw('gw-b')],
+        {'gw-a': [{'cc_timestamp': now - 30.0}], 'gw-b': []},
+    )
+    _run_health(monkeypatch, ["edgeflow", "health"], conn)
+    out = json.loads(capsys.readouterr().out)
+    assert [r['gateway_id'] for r in out] == ['gw-a', 'gw-b']
+    a, b = out
+    assert a['online'] is True and a['deployment_group_id'] == 'dg-0001'
+    assert b['online'] is False and b['last_seen'] is None
+
+
+def test_cli_edgeflow_health_stale_minutes_flag(monkeypatch, capsys):
+    # 2h-old status: offline at the default 15 minutes, online at 240 minutes
+    now = time()
+    conn = _HealthConn([_gw('gw-a')], {'gw-a': [{'cc_timestamp': now - 7200.0}]})
+    _run_health(monkeypatch, ["edgeflow", "health"], conn)
+    assert json.loads(capsys.readouterr().out)[0]['online'] is False
+
+    conn = _HealthConn([_gw('gw-a')], {'gw-a': [{'cc_timestamp': now - 7200.0}]})
+    _run_health(monkeypatch, ["edgeflow", "health", "--stale-minutes", "240"], conn)
+    assert json.loads(capsys.readouterr().out)[0]['online'] is True
