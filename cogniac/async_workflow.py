@@ -83,6 +83,11 @@ class AsyncCogniacWorkflow(object):
         AsyncCogniacWorkflow objects, following the DynamoDB last_key cursor
         until the versions are drained.
 
+        The versions endpoint yields summary records (workflow_id, version,
+        name, created_at, created_by, description, edgeflow_model, base_id,
+        tenant_id) WITHOUT app_specs; fetch the full workflow via get()
+        before diffing or summarizing.
+
         base_id (str)    the workflow base id; a full workflow_id of the form
                          <base_id>:<version> is also accepted (the version
                          suffix is ignored)

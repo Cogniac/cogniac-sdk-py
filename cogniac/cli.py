@@ -3262,7 +3262,8 @@ def build_parser():
                (('--limit',), {'type': int, 'default': None, 'help': 'Max records'}),
                (('--reverse',), {'action': argparse.BooleanOptionalAction, 'default': True,
                                  'help': 'With --base-id: newest version first (use --no-reverse for oldest first)'})],
-              help='List the tenant workflows (or, with --base-id, the versions of one workflow base)')
+              help='List the tenant workflows (or, with --base-id, the versions of one workflow base; '
+                   'version records are summaries without app_specs — use "workflow get" for the full record)')
     _add_verb(wf_sub, 'get', cmd_workflows_get,
               [_id('workflow_id', 'Workflow ID')], help='Show one workflow')
     _add_verb(wf_sub, 'create', cmd_workflows_create, _BODY, help='Create a workflow')
@@ -3286,7 +3287,8 @@ def build_parser():
                    (('--limit',), {'type': int, 'default': None, 'help': 'Max records'}),
                    (('--reverse',), {'action': argparse.BooleanOptionalAction, 'default': True,
                                      'help': 'Newest version first (use --no-reverse for oldest first)'})],
-                  help='List all versions of a workflow base', hidden=hidden)
+                  help='List all versions of a workflow base (summary records without app_specs; '
+                       'use "workflow get" for the full record)', hidden=hidden)
         _add_verb(sub, 'new', cmd_workflow_version_new,
                   [_id('workflow_id', 'Base workflow ID')] + _BODY_REQ,
                   help='Create a new workflow version', hidden=hidden)
