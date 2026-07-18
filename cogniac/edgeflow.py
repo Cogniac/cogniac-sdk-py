@@ -358,6 +358,13 @@ class CogniacEdgeFlow(object):
         reverse (bool)         reverse the sorting order: sort high to low
         limit (int)            yield maximum of limit results
 
+        WARNING: this is a generator over the appliance's full status
+        history, not a live stream. Called without limit= or end= on a
+        long-lived EdgeFlow, draining it (e.g. list(ef.status())) pages
+        through the entire history and may not terminate in practice.
+        Pass limit= or end= to bound the walk. (The cogniac CLI defaults
+        to --limit 10 for this reason.)
+
         Record timestamp schema (each yielded record):
           gw_timestamp  gateway-side sample clock; always present. This is the
                         canonical clock for time-series math / differencing
