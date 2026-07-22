@@ -168,7 +168,7 @@ def test_deployment_capacity_methods_exist(method):
 
 
 _WORKFLOW_METHODS = ['get_all', 'get', 'create', 'delete', 'edgeflow_targets',
-                     'new_version', 'get_version']
+                     'new_version', 'get_version', 'get_all_versions']
 
 
 @pytest.mark.parametrize("method", _WORKFLOW_METHODS)
@@ -379,6 +379,12 @@ def test_deployment_history_is_generator(cls):
 @pytest.mark.parametrize("cls", [cogniac.CogniacSubject, cogniac.AsyncCogniacSubject])
 def test_subject_media_associations_is_generator(cls):
     assert _is_gen(cls.media_associations)
+
+
+@pytest.mark.parametrize("cls", [cogniac.CogniacWorkflow, cogniac.AsyncCogniacWorkflow])
+def test_workflow_get_all_versions_is_generator(cls):
+    assert _is_gen(cls.get_all_versions), \
+        "%s.get_all_versions should drain last_key as a generator" % cls.__name__
 
 
 # ---------------------------------------------------------------------------
@@ -715,6 +721,45 @@ def test_feedback_follows_paging_envelope():
         {'data': [3], 'paging': {}},
     ])
     assert list(app.feedback()) == [1, 2, 3]
+
+
+# ---------------------------------------------------------------------------
+# CogniacWorkflow.get_all_versions (issue #181): drains the last_key cursor,
+# yields CogniacWorkflow objects, honors the client-side limit, and tolerates
+# a full <base_id>:<version> workflow id.
+# ---------------------------------------------------------------------------
+
+def test_workflow_versions_empty_does_not_crash():
+    conn = _Conn([{'data': [], 'last_key': None}])
+    assert list(cogniac.CogniacWorkflow.get_all_versions(conn, 'B1')) == []
+    assert conn.urls == ['/1/workflows/B1/versions']
+
+
+def test_workflow_versions_drains_last_key():
+    conn = _Conn([
+        {'data': [{'workflow_id': 'B1:1', 'version': 1}], 'last_key': 'k1'},
+        {'data': [{'workflow_id': 'B1:0', 'version': 0}], 'last_key': None},
+    ])
+    got = list(cogniac.CogniacWorkflow.get_all_versions(conn, 'B1'))
+    assert [w.workflow_id for w in got] == ['B1:1', 'B1:0']
+    assert all(isinstance(w, cogniac.CogniacWorkflow) for w in got)
+    assert conn.urls == ['/1/workflows/B1/versions'] * 2
+
+
+def test_workflow_versions_limit_stops_before_cursor():
+    conn = _Conn([{'data': [{'workflow_id': 'B1:%d' % i, 'version': i} for i in range(5)],
+                   'last_key': 'k1'}])
+    got = list(cogniac.CogniacWorkflow.get_all_versions(conn, 'B1', limit=3))
+    assert [w.version for w in got] == [0, 1, 2]
+    # the limit is reached mid-page; the cursor must not be followed
+    assert conn.urls == ['/1/workflows/B1/versions']
+
+
+def test_workflow_versions_accepts_full_workflow_id():
+    # a full BASE:version id is truncated to its base before the request
+    conn = _Conn([{'data': [], 'last_key': None}])
+    assert list(cogniac.CogniacWorkflow.get_all_versions(conn, 'B1:7')) == []
+    assert conn.urls == ['/1/workflows/B1/versions']
 
 
 # ---------------------------------------------------------------------------

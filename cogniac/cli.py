@@ -35,6 +35,8 @@ Representative read commands (run `cogniac <noun> --help` to discover the rest):
     cogniac deployment list
     cogniac deployment get --deployment-group-id ID
     cogniac workflow get --workflow-id ID
+    cogniac workflow list [--base-id BASE] [--limit L]
+    cogniac workflow version list --base-id BASE [--limit L]
 
 Auth commands:
     cogniac auth                               # check credentials (env vars or stored login)
@@ -93,6 +95,7 @@ _TABLE_COLUMNS = {
     'media_assoc': ['media_id', 'subject_uid', 'probability', 'consensus', 'updated_at'],
     'deployment': ['deployment_group_id', 'name', 'target_workflow_id', 'current_workflow_id'],
     'workflow':   ['workflow_id', 'name', 'tenant_id', 'created_at', 'created_by'],
+    'workflow_version': ['workflow_id', 'version', 'name', 'created_at', 'created_by'],
     'leaderboard': ['rank', 'model_id', 'F1', 'precision', 'recall', 'TP', 'FP', 'FN', 'model_image_id'],
     'eval_metric': ['evaluation_metric_hash', 'name', 'primary', 'active', 'weighted', 'user_tag'],
 }
@@ -1651,8 +1654,21 @@ def cmd_deployment_capacity_get(args):
 def cmd_workflows_list(args):
     cc = get_connection(args)
     from .workflow import CogniacWorkflow
-    workflows = CogniacWorkflow.get_all(cc)
-    output([obj_to_dict(w) for w in workflows], args, 'workflow')
+    base_id = getattr(args, 'base_id', None)
+    limit = getattr(args, 'limit', None)
+    try:
+        if base_id:
+            versions = CogniacWorkflow.get_all_versions(cc, base_id,
+                                                        reverse=getattr(args, 'reverse', True),
+                                                        limit=limit)
+            output([obj_to_dict(v) for v in versions], args, 'workflow_version')
+        else:
+            workflows = CogniacWorkflow.get_all(cc)
+            if limit:
+                workflows = workflows[:limit]
+            output([obj_to_dict(w) for w in workflows], args, 'workflow')
+    except ClientError as e:
+        error_exit("ClientError", str(e))
 
 
 def cmd_workflows_create(args):
@@ -1690,6 +1706,18 @@ def cmd_workflow_version_new(args):
     try:
         wf = CogniacWorkflow.new_version(cc, args.workflow_id, _json_body(args) or {})
         output(obj_to_dict(wf), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_workflow_version_list(args):
+    cc = get_connection(args)
+    from .workflow import CogniacWorkflow
+    try:
+        versions = CogniacWorkflow.get_all_versions(cc, args.base_id,
+                                                    reverse=getattr(args, 'reverse', True),
+                                                    limit=getattr(args, 'limit', None))
+        output([obj_to_dict(v) for v in versions], args, 'workflow_version')
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -3227,7 +3255,15 @@ def build_parser():
     # ======================================================================
     wf_parser = _add_resource(subparsers, 'workflow', help='Workflows')
     wf_sub = wf_parser.add_subparsers(dest='workflows_command')
-    _add_verb(wf_sub, 'list', cmd_workflows_list, help='List the tenant workflows')
+    _add_verb(wf_sub, 'list', cmd_workflows_list,
+              [(('--base-id',), {'dest': 'base_id', 'default': None,
+                                 'help': 'List the versions of this workflow base instead of the tenant workflows '
+                                         '(a full BASE:version workflow id is accepted; the version suffix is ignored)'}),
+               (('--limit',), {'type': int, 'default': None, 'help': 'Max records'}),
+               (('--reverse',), {'action': argparse.BooleanOptionalAction, 'default': True,
+                                 'help': 'With --base-id: newest version first (use --no-reverse for oldest first)'})],
+              help='List the tenant workflows (or, with --base-id, the versions of one workflow base; '
+                   'version records are summaries without app_specs — use "workflow get" for the full record)')
     _add_verb(wf_sub, 'get', cmd_workflows_get,
               [_id('workflow_id', 'Workflow ID')], help='Show one workflow')
     _add_verb(wf_sub, 'create', cmd_workflows_create, _BODY, help='Create a workflow')
@@ -3245,6 +3281,14 @@ def build_parser():
               help='List valid EdgeFlow deployment targets')
     # workflow version new/get
     def _reg_wf_version(sub, hidden=False):
+        _add_verb(sub, 'list', cmd_workflow_version_list,
+                  [_id('base_id', 'Base workflow ID (a full BASE:version id is accepted; '
+                                  'the version suffix is ignored)'),
+                   (('--limit',), {'type': int, 'default': None, 'help': 'Max records'}),
+                   (('--reverse',), {'action': argparse.BooleanOptionalAction, 'default': True,
+                                     'help': 'Newest version first (use --no-reverse for oldest first)'})],
+                  help='List all versions of a workflow base (summary records without app_specs; '
+                       'use "workflow get" for the full record)', hidden=hidden)
         _add_verb(sub, 'new', cmd_workflow_version_new,
                   [_id('workflow_id', 'Base workflow ID')] + _BODY_REQ,
                   help='Create a new workflow version', hidden=hidden)
