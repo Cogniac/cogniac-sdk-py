@@ -6,6 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from time import time
 import httpx
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception
@@ -17,6 +18,71 @@ IP_REGEX = re.compile('^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}(
 
 
 CLOUDFLOW_PREFIX = "cloudflow.cogniac.io"
+
+# default staleness threshold for the client-derived health summary (seconds);
+# a device whose most recent status record is older than this counts offline
+DEFAULT_HEALTH_STALE_SECONDS = 15 * 60
+
+
+def _health_record(gateway_fields, latest_record, stale_seconds, now=None):
+    """
+    Derive a client-side health dict for one gateway from its most recent
+    status record.
+
+    ``last_seen`` is the cloud-receipt timestamp (``cc_timestamp``) of the
+    device's most recent status record, falling back to ``timestamp`` /
+    ``gw_timestamp`` on records that lack it; ``online`` means last_seen is
+    within ``stale_seconds`` of ``now``.
+
+    NOTE: this is a client-side derivation from status records (cloud-receipt
+    clock), NOT a true device heartbeat. A device uploading a backlog of
+    status records can briefly look "online" while the backlog drains. A
+    device with no status records at all has last_seen None and online False.
+    """
+    if now is None:
+        now = time()
+    last_seen = None
+    if latest_record:
+        last_seen = (latest_record.get('cc_timestamp')
+                     or latest_record.get('timestamp')
+                     or latest_record.get('gw_timestamp'))
+    online = last_seen is not None and (now - last_seen) <= stale_seconds
+    return {
+        'gateway_id': gateway_fields.get('gateway_id'),
+        'name': gateway_fields.get('name'),
+        'deployment_group_id': gateway_fields.get('deployment_group_id'),
+        'last_seen': last_seen,
+        'online': online,
+        'current_workflow_id': gateway_fields.get('current_workflow_id'),
+    }
+
+
+def _health_error_record(gateway_fields, exc):
+    """
+    Degraded health record for a device whose status fetch failed.
+
+    ``online`` is None — tri-state "could not determine", as opposed to False
+    "determined offline" — ``last_seen`` is None, and the failure is surfaced
+    in ``error``, so one bad device (e.g. a gateway deleted between the tenant
+    list call and its status GET, or a device whose status GET exhausts its
+    retries) degrades its own record instead of aborting the fleet sweep.
+    """
+    record = _health_record(gateway_fields, None, 0)
+    record['online'] = None
+    record['error'] = str(exc)
+    return record
+
+
+@retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+def _latest_status_record(connection, gateway_id):
+    """
+    Return the most recent status record for a gateway, or None if the device
+    has never reported status. One bounded GET (reverse-sorted, limit 1)
+    against GET /1/gateways/{gateway_id}/status — no pagination walk.
+    """
+    resp = connection._get("/1/gateways/%s/status?reverse=True&limit=1" % gateway_id)
+    data = resp.json().get('data') or []
+    return data[0] if data else None
 
 
 class CogniacEdgeFlow(object):
@@ -110,6 +176,52 @@ class CogniacEdgeFlow(object):
         params.setdefault('tenant_id', connection.tenant_id)
         resp = connection._get("/1/metrics", params=params)
         return resp.json()
+
+    @classmethod
+    def get_all_health(cls, connection, stale_seconds=DEFAULT_HEALTH_STALE_SECONDS, max_workers=8):
+        """
+        Return a client-derived health summary for every EdgeFlow in the
+        currently authenticated tenant: a list of dicts
+
+            {gateway_id, name, deployment_group_id, last_seen, online,
+             current_workflow_id}
+
+        For each device the most recent status record is fetched (limit 1)
+        and its cloud-receipt timestamp (cc_timestamp) becomes the effective
+        ``last_seen``; ``online`` is True when last_seen is within
+        ``stale_seconds`` of now. Per-device status fetches run concurrently
+        on up to ``max_workers`` threads.
+
+        ``online`` is tri-state: True (recent status), False (determined
+        offline/stale), or None (could not determine — the device's status
+        fetch failed; the failure message is surfaced in an ``error`` key on
+        that record). A failing device degrades its own record rather than
+        aborting the whole fleet sweep.
+
+        connection (CogniacConnection):  Authenticated CogniacConnection object
+        stale_seconds (float):           staleness threshold for online (default 900)
+        max_workers (int):               concurrent status fetches (default 8)
+
+        NOTE: the backend does not populate connectivity on the gateway
+        record itself, so this is a client-side derivation from status
+        records (cloud-receipt clock), NOT a true device heartbeat. A device
+        uploading a backlog of status records can briefly look "online"; a
+        device with no status records has last_seen None and online False.
+        """
+        resp = connection._get('/1/tenants/%s/gateways' % connection.tenant.tenant_id)
+        gateways = resp.json()['data']
+        if not gateways:
+            return []
+
+        def one(gateway):
+            try:
+                record = _latest_status_record(connection, gateway.get('gateway_id'))
+            except Exception as e:
+                return _health_error_record(gateway, e)
+            return _health_record(gateway, record, stale_seconds)
+
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(gateways))) as pool:
+            return list(pool.map(one, gateways))
 
     def __init__(self, connection, edgeflow_dict, timeout=60):
         """
@@ -485,6 +597,32 @@ class CogniacEdgeFlow(object):
         aggregated_stats['start_timestamp'] = start
         aggregated_stats['end_timestamp'] = end
         return aggregated_stats
+
+    ##
+    #  health
+    ##
+    def health(self, stale_seconds=DEFAULT_HEALTH_STALE_SECONDS):
+        """
+        Return this EdgeFlow's client-derived health dict:
+
+            {gateway_id, name, deployment_group_id, last_seen, online,
+             current_workflow_id}
+
+        The device's most recent status record is fetched (limit 1) and its
+        cloud-receipt timestamp (cc_timestamp) becomes the effective
+        ``last_seen``; ``online`` is True when last_seen is within
+        ``stale_seconds`` of now (default 900).
+
+        NOTE: this is a client-side derivation from status records
+        (cloud-receipt clock), NOT a true device heartbeat. A device
+        uploading a backlog of status records can briefly look "online"; a
+        device with no status records has last_seen None and online False.
+        """
+        record = _latest_status_record(self._cc, self.gateway_id)
+        fields = {k: getattr(self, k, None)
+                  for k in ('gateway_id', 'name', 'deployment_group_id',
+                            'current_workflow_id')}
+        return _health_record(fields, record, stale_seconds)
 
     ##
     #  delete

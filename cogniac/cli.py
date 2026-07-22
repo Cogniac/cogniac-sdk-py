@@ -30,6 +30,7 @@ Representative read commands (run `cogniac <noun> --help` to discover the rest):
     cogniac edgeflow list
     cogniac edgeflow get --edgeflow-id ID
     cogniac edgeflow status --edgeflow-id ID [--subsystem S] [--limit L]
+    cogniac edgeflow health [--stale-minutes N]
     cogniac camera list
     cogniac camera get --network-camera-id ID
     cogniac deployment list
@@ -94,6 +95,8 @@ _TABLE_COLUMNS = {
     'subject':   ['subject_uid', 'name', 'description'],
     'media':     ['media_id', 'filename', 'media_format', 'image_width', 'image_height', 'status'],
     'edgeflow':  ['gateway_id', 'name', 'model', 'description'],
+    'edgeflow_health': ['gateway_id', 'name', 'online', 'last_seen',
+                        'deployment_group_id', 'current_workflow_id', 'error'],
     'camera':    ['network_camera_id', 'camera_name', 'url', 'active'],
     'media_assoc': ['media_id', 'subject_uid', 'probability', 'consensus', 'updated_at'],
     'deployment': ['deployment_group_id', 'name', 'target_workflow_id', 'current_workflow_id'],
@@ -602,6 +605,29 @@ def cmd_edgeflows_status(args):
             limit=args.limit,
         )
         output([e for e in events], args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_edgeflows_health(args):
+    """Client-derived fleet health: one record per EdgeFlow in the tenant.
+
+    The backend does not populate last_seen/connection_status on the gateway
+    record (see issue #184), so health is derived client-side: each device's
+    most recent status record is fetched and its cloud-receipt timestamp
+    (cc_timestamp) becomes the effective last_seen; a device with no status
+    record within --stale-minutes counts offline. NOT a true device heartbeat
+    — a device uploading backlogged status can briefly look online.
+
+    online is tri-state: true (recent status), false (determined offline/
+    stale), or null (could not determine — that device's status fetch failed;
+    the failure is surfaced in an `error` key on its record instead of
+    aborting the whole sweep)."""
+    cc = get_connection(args)
+    try:
+        from .edgeflow import CogniacEdgeFlow
+        result = CogniacEdgeFlow.get_all_health(cc, stale_seconds=args.stale_minutes * 60.0)
+        output(result, args, 'edgeflow_health')
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -3144,6 +3170,17 @@ def build_parser():
                                     'help': 'Max events scanned by --list-subsystems (default: 8000). '
                                             'If the scan hits this cap a notice is written to stderr.'})],
               help='EdgeFlow status events')
+    _add_verb(ef_sub, 'health', cmd_edgeflows_health,
+              [(('--stale-minutes',), {'dest': 'stale_minutes', 'type': float, 'default': 15.0,
+                                       'help': 'Minutes since the most recent status record before a device '
+                                               'counts offline (default: 15). last_seen is the cloud-receipt '
+                                               'timestamp (cc_timestamp) of the latest status record — a '
+                                               'client-side derivation, not a true device heartbeat; a device '
+                                               'uploading backlogged status can briefly look online.'})],
+              help='Client-derived fleet health: per device {gateway_id, name, deployment_group_id, '
+                   'last_seen, online, current_workflow_id}. online is tri-state: true, false, or '
+                   'null when that device\'s status fetch failed (its record then carries an error '
+                   'key instead of aborting the sweep)')
 
     # edgeflow certificate
     def _reg_ef_cert(sub, hidden=False):

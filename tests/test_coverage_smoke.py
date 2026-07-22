@@ -70,11 +70,13 @@ _MEDIA_METHODS = ['update', 'delete', 'share', 'create_detection', 'detections',
                   'embeddings', 'download']
 _EDGEFLOW_METHODS = ['update', 'delete', 'get_certificate', 'set_certificate',
                      'replace_certificate', 'delete_certificate', 'metrics', 'status',
+                     'health',
                      # device-control events
                      'reboot', 'ping', 'upgrade', 'set_boot_software_version',
                      'factory_reset', 'flush_upload_queue', 'time_bound_media_upload',
                      'trigger_camera_capture']
-_EDGEFLOW_CLASSMETHODS = ['create', 'get', 'get_all', 'metric_names', 'all_metrics']
+_EDGEFLOW_CLASSMETHODS = ['create', 'get', 'get_all', 'metric_names', 'all_metrics',
+                          'get_all_health']
 _TENANT_METHODS = ['get_edgeflow_certificate', 'set_edgeflow_certificate',
                    'delete_edgeflow_certificate', 'delete_meraki_api_key',
                    'invites', 'create_invite', 'delete_invite', 'users']
