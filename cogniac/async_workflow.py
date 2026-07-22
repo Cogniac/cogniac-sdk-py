@@ -5,6 +5,7 @@ Copyright (C) 2024 Cogniac Corporation
 """
 
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
+from .workflow import workflow_diff, workflow_summary
 
 
 class AsyncCogniacWorkflow(object):
@@ -144,6 +145,26 @@ class AsyncCogniacWorkflow(object):
 
     def __repr__(self):
         return self.__str__()
+
+    def summary(self):
+        """
+        Return a compact model-composition summary of this workflow:
+        one row per app spec with application_id, model_runtime_image, and
+        threshold fields. Pure local computation (no API call, not a coroutine).
+        """
+        return workflow_summary(self)
+
+    def diff(self, other):
+        """
+        Return a compact diff between this workflow ('old' side) and another
+        workflow ('new' side): top-level field changes, apps added/removed,
+        and per-app-spec field changes keyed by application_id.
+
+        other: an AsyncCogniacWorkflow instance or a plain workflow dict.
+
+        Pure local computation (no API call, not a coroutine); see workflow_diff().
+        """
+        return workflow_diff(self, other)
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     async def delete(self):
