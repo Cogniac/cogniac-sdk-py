@@ -6,6 +6,11 @@ Copyright (C) 2024 Cogniac Corporation
 
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
 
+# Default read timeout (seconds) for deploy(). The dispatch blocks server-side
+# until every EdgeFlow in the group accepts the deployment event, so large
+# groups need far longer than the connection's default 60s timeout.
+DEPLOY_DEFAULT_TIMEOUT = 300
+
 
 ##
 #  CogniacDeployment
@@ -181,11 +186,90 @@ class CogniacDeployment(object):
         """
         Set the target_workflow_id on this deployment group.
 
+        This only RECORDS the target — it does NOT dispatch a rollout and
+        leaves current_workflow_id unchanged. Call deploy() to actually
+        deploy the workflow to the group's EdgeFlows.
+
         See POST /1/deploymentGroups/{deployment_group_id}/targetWorkflow.
         """
         resp = self._cc._post("/1/deploymentGroups/%s/targetWorkflow" % self.deployment_group_id,
                              json={'target_workflow_id': workflow_id})
         return resp.json()
+
+    ##
+    #  deploy
+    ##
+    def deploy(self, workflow_id, now=False, timeout=None):
+        """
+        DISPATCH a workflow rollout to every EdgeFlow in this deployment group.
+
+        Unlike set_target_workflow(), which only records the target_workflow_id
+        without deploying anything, this call actually triggers the rollout.
+
+        This call is intentionally NOT retried automatically on server errors:
+        the dispatch is not idempotent, and a 5xx raised after the server began
+        processing could double-dispatch the rollout to the fleet. (The
+        transport still retries 429 rate-limits and credential refresh, which
+        are rejected before processing.) After ANY failure — server error or
+        read timeout — check deploy_status() to determine whether the dispatch
+        completed server-side before retrying.
+
+        workflow_id (str)  the workflow to deploy
+        now (bool)         False (default): set next_workflow_id — dispatched
+                           immediately when the group has no scheduled_time,
+                           otherwise picked up by the deployment scheduler.
+                           True: set deploy_now_workflow_id — immediate one-off
+                           dispatch that bypasses the group's schedule.
+        timeout (float)    read timeout in seconds (default DEPLOY_DEFAULT_TIMEOUT,
+                           300). The server blocks until every EdgeFlow in the
+                           group accepts the deployment event, so large groups
+                           need a generous timeout. If the call raises a read
+                           timeout the dispatch may still complete server-side —
+                           check deploy_status() before retrying.
+
+        Returns the updated deployment group JSON (next_workflow_id set on a
+        successful dispatch; the group later converges so current_workflow_id
+        == target_workflow_id and next_workflow_id returns to null).
+
+        See POST /1/deploymentGroups/{deployment_group_id}.
+        """
+        if timeout is None:
+            timeout = DEPLOY_DEFAULT_TIMEOUT
+        key = 'deploy_now_workflow_id' if now else 'next_workflow_id'
+        resp = self._cc._post("/1/deploymentGroups/%s" % self.deployment_group_id,
+                             json={key: workflow_id}, timeout=timeout)
+        return resp.json()
+
+    ##
+    #  deploy_status
+    ##
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def deploy_status(self):
+        """
+        Return this deployment group's rollout convergence status.
+
+        Idempotent status check: re-GETs the group and returns a dict with
+        target_workflow_id / current_workflow_id / next_workflow_id /
+        deploy_now_workflow_id plus a boolean 'converged' (True when
+        current_workflow_id == target_workflow_id and no next_workflow_id is
+        pending). Use after deploy() — especially after a client read
+        timeout — to determine whether the dispatch completed server-side.
+
+        See GET /1/deploymentGroups/{deployment_group_id}.
+        """
+        resp = self._cc._get("/1/deploymentGroups/%s" % self.deployment_group_id)
+        group = resp.json()
+        target = group.get('target_workflow_id')
+        current = group.get('current_workflow_id')
+        next_wf = group.get('next_workflow_id')
+        return {
+            'deployment_group_id': group.get('deployment_group_id', self.deployment_group_id),
+            'target_workflow_id': target,
+            'current_workflow_id': current,
+            'next_workflow_id': next_wf,
+            'deploy_now_workflow_id': group.get('deploy_now_workflow_id'),
+            'converged': current is not None and current == target and next_wf is None,
+        }
 
 
 ##

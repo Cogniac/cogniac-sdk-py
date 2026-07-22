@@ -152,7 +152,7 @@ def test_user_instance_methods_exist(method):
 
 _DEPLOYMENT_METHODS = ['get_all', 'get', 'create', 'delete', 'edgeflows',
                        'history', 'prepull_status', 'prepull_start',
-                       'set_target_workflow']
+                       'set_target_workflow', 'deploy', 'deploy_status']
 
 
 @pytest.mark.parametrize("method", _DEPLOYMENT_METHODS)
