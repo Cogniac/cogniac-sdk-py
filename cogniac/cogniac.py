@@ -144,7 +144,7 @@ class CogniacConnection(object):
         self.url_prefix = self.__strip_url_version_num__(self.url_prefix)
         self.timeout = timeout
 
-        logger.info("Connecting to Cogniac system at %s" % url_prefix)
+        logger.info("Connecting to Cogniac system at %s" % self.url_prefix)
 
         if tenant_id is None:
             try:
