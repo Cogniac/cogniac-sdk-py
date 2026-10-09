@@ -53,6 +53,14 @@ with open("out.jpg", "wb") as f:          # or write to file
 # Paginated results via generators
 for detection in app.detections(limit=100):
     print(detection)
+
+# Score your own predictions (e.g. from a VLM or another model) the way CloudCore
+# scores the app's models: against a consensus release, with an evaluation metric
+result = app.evaluate([{"media_id": media_id, "subject_uid": subject_uid, "probability": 0.9}],
+                      consensus_release_id=None,     # default: the app's latest release
+                      evaluation_metric_hash=None,   # default: the app's primary metric
+                      allow_unscorable=False)        # True: score what can be scored instead of a 400
+print(result["coverage"], result["summary"])
 ```
 
 ### Entity Classes
@@ -140,6 +148,10 @@ cogniac edgeflow list                              # list edge devices
 cogniac edgeflow status --edgeflow-id <id> --list-subsystems   # discover which subsystems a device reports
 cogniac edgeflow health                            # fleet health derived from each device's latest status record
 cogniac application create --body @app.json        # --body takes inline JSON, @FILE, or - (stdin)
+cogniac application evaluate --application-id <id> --predictions preds.jsonl   # score predictions
+                                                   # (JSON array or JSON Lines) against the latest consensus
+                                                   # release with the primary metric; --consensus-release-id,
+                                                   # --evaluation-metric-hash, --allow-unscorable, --label
 
 cogniac deployment deploy --deployment-group-id <id> --workflow-id <wf>   # DISPATCH a workflow rollout
                                                    # (--now bypasses the group schedule; --timeout raises the
