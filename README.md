@@ -59,7 +59,8 @@ for detection in app.detections(limit=100):
 result = app.evaluate([{"media_id": media_id, "subject_uid": subject_uid, "probability": 0.9}],
                       consensus_release_id=None,     # default: the app's latest release
                       evaluation_metric_hash=None,   # default: the app's primary metric
-                      allow_unscorable=False)        # True: score what can be scored instead of a 400
+                      allow_unscorable=False,        # True: score what can be scored instead of a 400
+                      timeout=None)                  # default 3600 s: scoring time grows with the release
 print(result["coverage"], result["summary"])
 ```
 

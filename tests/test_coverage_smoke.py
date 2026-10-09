@@ -1147,6 +1147,29 @@ def test_async_evaluate_matches_sync():
                               'evaluation_metric_hash': 'H1'}
 
 
+
+def test_evaluate_defaults_to_long_timeout():
+    # scoring time grows with the release; the connection's 60 s default would cut it off
+    conn = _EvalConn(_EVALUATION)
+    _eval_app(cogniac.CogniacApplication, conn).evaluate(_PREDICTIONS)
+    assert conn.calls[0][1]['timeout'] == 3600
+
+
+@pytest.mark.parametrize('status, attempts', [(502, 3), (504, 1)])
+def test_evaluate_retries_5xx_but_not_504(monkeypatch, status, attempts):
+    from cogniac.common import raise_errors
+
+    class _Failing(_EvalConn):
+        def _post(self, url, **kwargs):
+            self.calls.append((url, kwargs))
+            raise_errors(type('R', (), {'status_code': status, 'text': 'gateway', 'headers': {}})())
+
+    monkeypatch.setattr('time.sleep', lambda s: None)
+    conn = _Failing(_EVALUATION)
+    with pytest.raises(Exception):
+        _eval_app(cogniac.CogniacApplication, conn).evaluate(_PREDICTIONS)
+    assert len(conn.calls) == attempts
+
 def _run_evaluate_cli(monkeypatch, argv, conn):
     class _CC:
         def get_application(self, application_id):

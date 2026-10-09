@@ -5,6 +5,7 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
+from .common import EVALUATE_TIMEOUT, server_error_not_gateway_timeout
 
 
 class AsyncCogniacApplication(object):
@@ -959,9 +960,12 @@ class AsyncCogniacApplication(object):
     ##
     #  evaluations (versioned /22/)
     ##
-    # Scoring is a pure computation, so a 5xx is safe to retry; a few attempts only,
-    # since a large request that timed out is likely to time out again.
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    # Scoring is a pure computation, so a 5xx is safe to retry; a few attempts only, and not
+    # a 504, since a large request that timed out is likely to time out again. The request
+    # timeout defaults to EVALUATE_TIMEOUT: scoring time grows with the release, which has
+    # no size limit, so the connection's default would cut long evaluations off.
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5),
+           retry=retry_if_exception(server_error_not_gateway_timeout))
     async def evaluate(self, predictions, consensus_release_id=None, evaluation_metric_hash=None, label=None,
                        allow_unscorable=False, timeout=None):
         """
@@ -977,7 +981,8 @@ class AsyncCogniacApplication(object):
         label (str):                   free text, echoed in the response
         allow_unscorable (bool):       score the scorable predictions instead of rejecting the request
                                        (400, with the reasons) when some can't be scored
-        timeout (float):               request timeout in seconds; default: the connection's
+        timeout (float):               request timeout in seconds; default EVALUATE_TIMEOUT (3600,
+                                       the public evaluations route's gateway timeout)
 
         Returns the scorer identity, coverage, per-set and combined summaries, and per-unit results.
 
@@ -988,7 +993,8 @@ class AsyncCogniacApplication(object):
                            ('evaluation_metric_hash', evaluation_metric_hash), ('label', label)):
             if value is not None:
                 body[key] = value
-        resp = await self._cc._post("/22/applications/%s/evaluations" % self.application_id, json=body, timeout=timeout)
+        resp = await self._cc._post("/22/applications/%s/evaluations" % self.application_id, json=body,
+                                    timeout=EVALUATE_TIMEOUT if timeout is None else timeout)
         return resp.json()
 
     ##
