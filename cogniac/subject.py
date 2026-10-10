@@ -106,7 +106,7 @@ class CogniacSubject(object):
         if public_write:
             args.append("public_read_write=True")
 
-        url = "/1/tenants/%s/subjects?" % connection.tenant.tenant_id
+        url = "/1/tenants/%s/subjects?" % connection._require_tenant_id()
         url += "&".join(args)
 
         resp = connection._get(url)
@@ -160,7 +160,7 @@ class CogniacSubject(object):
         elif name:
             args.append('name=%s' % name)
 
-        url = "/1/tenants/%s/subjects?" % connection.tenant.tenant_id
+        url = "/1/tenants/%s/subjects?" % connection._require_tenant_id()
         url += "&".join(args)
 
         resp = connection._get(url)
