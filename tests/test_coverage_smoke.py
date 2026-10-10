@@ -61,7 +61,7 @@ _APP_METHODS = [
     'labeling_image_encoder', 'labeling_mask_decoder', 'download_model',
 ]
 
-_APP_CLASSMETHODS = ['create', 'get', 'get_all', 'get_all_types', 'get_type']
+_APP_CLASSMETHODS = ['create', 'get', 'get_all', 'get_all_types', 'get_type', 'evaluation_metric_schemas']
 
 _SUBJECT_METHODS = ['update', 'delete', 'detections', 'consensus_history',
                     'bulk_disassociate', 'associate_media', 'disassociate_media',

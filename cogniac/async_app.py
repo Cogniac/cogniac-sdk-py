@@ -147,6 +147,20 @@ class AsyncCogniacApplication(object):
         resp = await connection._get("/1/applications/all/types/%s" % application_type)
         return resp.json()
 
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def evaluation_metric_schemas(cls, connection, name=None):
+        """
+        Return {metric name: JSON Schema} for every evaluation metric, or only `name`. Each schema
+        gives the metric's parameters with their defaults and ranges; its `description`, and each
+        parameter's, say what the metric scores and what the parameter means. `x-scorer` is null
+        for a name that is accepted but not scored.
+
+        See GET /22/schemas/evaluation_metrics.
+        """
+        resp = await connection._get("/22/schemas/evaluation_metrics", params={'name': name} if name else None)
+        return resp.json()
+
     ##
     #  __init__
     ##

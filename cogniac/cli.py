@@ -1362,6 +1362,15 @@ def cmd_app_eval_metrics_register_default(args):
         error_exit("ClientError", str(e))
 
 
+def cmd_app_eval_metrics_schema(args):
+    cc = get_connection(args)
+    from .app import CogniacApplication
+    try:
+        output(CogniacApplication.evaluation_metric_schemas(cc, name=args.name), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
 def cmd_app_eval_metrics_set_primary(args):
     cc = get_connection(args)
     try:
@@ -3093,6 +3102,9 @@ def build_parser():
                   help='Register the default evaluation metric', hidden=hidden)
         _hash = [(('--evaluation-metric-hash',), {'dest': 'evaluation_metric_hash', 'required': True,
                                                   'help': 'Evaluation metric hash (from get)'})]
+        _add_verb(sub, 'schema', cmd_app_eval_metrics_schema,
+                  [(('--name',), {'dest': 'name', 'help': 'One metric name (default: all)'})],
+                  help='What each metric scores, and its parameters with defaults', hidden=hidden)
         _add_verb(sub, 'set-primary', cmd_app_eval_metrics_set_primary,
                   [_id('application_id', 'Application ID')] + _hash,
                   help='Make an active evaluation metric primary', hidden=hidden)
