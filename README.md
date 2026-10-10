@@ -64,6 +64,13 @@ result = app.evaluate([{"media_id": media_id, "subject_uid": subject_uid, "proba
 print(result["coverage"], result["summary"])
 ```
 
+Each prediction is one (media, focus, subject):
+
+- `media_id`, `subject_uid`, and `focus` for apps that label a focus box (copy it from the release label; omit it for whole-image labels);
+- plus, by app type: `probability` (detection, classification), `boxes` (`[{x0, y0, x1, y1, probability?}]`, image pixels), `points` (`[{x, y, probability?}]`, image pixels) or `text` (OCR; the app must have exactly one output subject).
+
+For classification, send one prediction per unit, naming the chosen subject; for the other types, a subject with no prediction counts as a negative. The CLI's `--predictions FILE` takes a JSON array or JSON Lines of these.
+
 ### Entity Classes
 
 | Class | Description |
