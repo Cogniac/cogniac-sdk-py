@@ -159,28 +159,50 @@ class CogniacConnection(object):
 
         self.tenant_id = tenant_id
 
+        # one client for the token call and everything after it: one TLS handshake, not two
+        self.session = httpx.Client(transport=httpx.HTTPTransport(retries=5), follow_redirects=True)
+
         # get and store auth headers
         self.__authenticate()
 
-        # get tenant and user objects associated with this connection
-        if self.tenant_id is not None:
+        # The tenant and user are read on first use, so a command pays only for the requests it
+        # needs. The exception: with no explicit url_prefix the tenant's region may redirect this
+        # connection, which must happen before the first request, so the tenant is read now.
+        self._tenant = None
+        self._user = None
+        if self.tenant_id is not None and url_prefix is None and 'COG_URL_PREFIX' not in os.environ:
             self._tenant = CogniacTenant.get(self)
-            if self._tenant.region is not None and url_prefix is None and 'COG_URL_PREFIX' not in os.environ:
+            if self._tenant.region is not None:
                 # use tenant object's specified region preference unless explicitly overridden
                 self.url_prefix = 'https://' + self._tenant.region
-        else:
-            self._tenant = None
-        self.user = CogniacUser.get(self)
 
     @property
     def tenant(self):
         if self._tenant is None:
-            self._require_tenant()
+            if self.tenant_id is None:
+                self._require_tenant()
+            self._tenant = CogniacTenant.get(self)
         return self._tenant
 
     @tenant.setter
     def tenant(self, value):
         self._tenant = value
+
+    @property
+    def user(self):
+        if self._user is None:
+            self._user = CogniacUser.get(self)
+        return self._user
+
+    @user.setter
+    def user(self, value):
+        self._user = value
+
+    def _require_tenant_id(self):
+        """The tenant id for tenant-scoped URLs, without reading the tenant object."""
+        if self.tenant_id is None:
+            self._require_tenant()
+        return self.tenant_id
 
     def _require_tenant(self):
         """Raise a helpful error listing available tenants when none is configured."""
@@ -215,17 +237,17 @@ class CogniacConnection(object):
         tenant_data = {"tenant_id": self.tenant_id}
         if self.api_key:
             # trade API KEY for user+tenant token
-            resp = httpx.get(self.url_prefix + "/1/token",
-                             params=tenant_data,
-                             headers={"Authorization": "Key %s" % self.api_key},
-                             timeout=self.timeout)
+            resp = self.session.get(self.url_prefix + "/1/token",
+                                    params=tenant_data,
+                                    headers={"Authorization": "Key %s" % self.api_key},
+                                    timeout=self.timeout, follow_redirects=False)
         else:
             # trade username/password for user+tenant token
 
             # https://staging.cogniac.io/21/users/mfa/status
-            resp = httpx.get(self.url_prefix + "/21/users/mfa/status",
-                             auth=(self.username, self.password),
-                             timeout=self.timeout)
+            resp = self.session.get(self.url_prefix + "/21/users/mfa/status",
+                                    auth=(self.username, self.password),
+                                    timeout=self.timeout, follow_redirects=False)
             raise_errors(resp)
 
             mfa_status = resp.json()
@@ -236,17 +258,15 @@ class CogniacConnection(object):
                     sys.exit()
                 tenant_data['otp'] = totp
 
-            resp = httpx.get(self.url_prefix + "/1/token",
-                             params=tenant_data,
-                             auth=(self.username, self.password),
-                             timeout=self.timeout)
+            resp = self.session.get(self.url_prefix + "/1/token",
+                                    params=tenant_data,
+                                    auth=(self.username, self.password),
+                                    timeout=self.timeout, follow_redirects=False)
 
         raise_errors(resp)
 
         token = resp.json()
-        headers = {"Authorization": "Bearer %s" % token['access_token']}
-        transport = httpx.HTTPTransport(retries=5)
-        self.session = httpx.Client(transport=transport, headers=headers, follow_redirects=True)
+        self.session.headers["Authorization"] = "Bearer %s" % token['access_token']
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_or_credential_error))
     def _head(self, url, timeout=None, **kwargs):
