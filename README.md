@@ -228,7 +228,7 @@ The SDK equivalents are `app.evaluation_metrics()`, `app.create_evaluation_metri
 | `ocr` | `ocr_F1`, `ocr_recall`, `ocr_precision` | none: a prediction is correct when its text equals the label's after trimming whitespace |
 
 - `detection_thresholds` is a list of `{subject_uid: threshold}`, with a `default` entry for subjects not listed: `[{"default": 0.5}, {"<subject_uid>": 0.7}]`. `get` returns it expanded to every output subject.
-- The `*recall` and `*precision` metrics rank by F2 and F0.5, not plain recall and precision.
+- The `*_recall` and `*_precision` metrics rank by F2 and F0.5, not plain recall and precision. Of the classification metrics, `precision` ranks by F0.5 and `recall` by plain recall.
 - `*_any_*` metrics count each media (or focus) once per subject, rather than every box, point or pixel.
 - `GET /22/schemas/evaluation_metrics` returns the JSON Schema of each metric's configuration.
 
