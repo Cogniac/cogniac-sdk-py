@@ -152,6 +152,9 @@ def test_export_refresh_keeps_the_listed_entries():
     conn = _Conn()
     doc = descriptions.export(conn, doc=_doc(subjects={'S2': {'description': 'stale'}}))
     assert doc['applications'] == {} and doc['subjects'] == {'S2': {'name': 's2', 'description': ''}}
+    assert 'description' not in doc['tenant']     # not listed, so the refresh doesn't start managing it
+    listed = descriptions.export(conn, doc={'tenant': {'tenant_id': 'T1', 'description': 'stale'}})
+    assert listed['tenant']['description'] == 'Old tenant.'
 
 
 # -- CLI --------------------------------------------------------------------

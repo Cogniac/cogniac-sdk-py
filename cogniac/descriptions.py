@@ -147,7 +147,7 @@ def apply(cc, doc, result=None):
 def export(cc, application_ids=None, doc=None):
     """The live descriptions as a descriptions file dict: the tenant and, by default, every application
     and subject; with application_ids, only those applications and their input and output subjects; with
-    doc (an existing file), the entries it lists."""
+    doc (an existing file), the entries it lists, and the tenant's description only if it lists that."""
     tenant = cc.tenant
     if doc is not None:
         _check_tenant(cc, doc)
@@ -162,7 +162,10 @@ def export(cc, application_ids=None, doc=None):
         apps = {app.application_id: app for app in cc.get_all_applications()}
         subjects = {s.subject_uid: s for s in cc.get_all_subjects()}
     entry = lambda obj: {'name': getattr(obj, 'name', None), 'description': _norm(getattr(obj, 'description', None))}
-    return {'tenant': {'tenant_id': tenant.tenant_id, **entry(tenant)},
+    tenant_entry = {'tenant_id': tenant.tenant_id, **entry(tenant)}
+    if doc is not None and 'description' not in doc['tenant']:  # a refresh doesn't start managing the tenant
+        del tenant_entry['description']
+    return {'tenant': tenant_entry,
             'applications': {key: entry(apps[key]) for key in sorted(apps)},
             'subjects': {key: entry(subjects[key]) for key in sorted(subjects)}}
 
