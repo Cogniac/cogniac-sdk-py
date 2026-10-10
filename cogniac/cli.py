@@ -2019,7 +2019,7 @@ def cmd_tenant_import(args):
     cc = get_connection(args)
     from .tenant import CogniacTenant
     try:
-        output(CogniacTenant.get_cloudcore_import(cc, cc.tenant.tenant_id, args.cloudcore_import_key), args)
+        output(CogniacTenant.get_cloudcore_import(cc, cc._require_tenant_id(), args.cloudcore_import_key), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
