@@ -169,6 +169,38 @@ cogniac deployment deploy-status --deployment-group-id <id>               # roll
 cogniac deployment target workflow set ...         # records target_workflow_id only — does NOT deploy
 ```
 
+#### Descriptions under version control
+
+`cogniac descriptions` keeps a tenant's tenant, application and subject descriptions in a `descriptions-<tenant_id>.yaml` file, so description changes can be reviewed and versioned like code:
+
+```bash
+cogniac --tenant <tenant_id> descriptions export [--application-id <id> ...]   # write descriptions-<tenant_id>.yaml
+cogniac descriptions plan descriptions-<tenant_id>.yaml    # what differs from the live tenant; exit 2 if anything does
+cogniac descriptions apply descriptions-<tenant_id>.yaml   # write the descriptions that differ (asks first; --yes to skip)
+```
+
+```yaml
+tenant:
+  tenant_id: <tenant_id>
+  name: <tenant name>          # names are for readability only; never applied
+  description: <text>
+applications:
+  <application_id>:
+    name: <application name>
+    description: |
+      <text, may span lines>
+subjects:
+  <subject_uid>:
+    name: <subject name>
+    description: <text>
+```
+
+- The file names the tenant; `plan` and `apply` refuse a `--tenant` that differs.
+- Only descriptions are managed. Anything the file doesn't list is left alone, and a listed tenant only has its description managed if the file gives one.
+- A listed application or subject must have a `description` key, and `description: ""` clears that description. Descriptions are limited to 8,000 characters.
+- `export` writes the tenant and every application and subject by default. With `--application-id`, it writes only those applications and their input and output subjects. `--refresh --file FILE` updates the entries an existing file lists.
+- `apply` works from the file and the live values alone, so running it again is a no-op. Writing the tenant description needs the tenant admin role.
+
 Run `cogniac <noun> --help` to explore the tree interactively, or `cogniac commands` for the full machine-readable catalog. An unknown command suggests the closest match.
 
 ### `icogniac`

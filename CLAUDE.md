@@ -200,6 +200,10 @@ Write commands:
 cogniac subjects create <name>              # --description, --external-id
 cogniac subjects associate <uid> <media_id> # --consensus (True/False/Sidelined/None)
 cogniac media upload <filename>             # --subject-uid, --external-media-id, --domain-unit, --meta-tags
+cogniac descriptions export|plan|apply      # tenant/app/subject descriptions <-> descriptions-<tenant_id>.yaml
+                                            # (cogniac/descriptions.py): export writes the file, plan diffs it
+                                            # against the live tenant (exit 2 on changes), apply writes the
+                                            # differences (--yes, or a prompt on a terminal)
 ```
 
 Implementation is in `cogniac/cli.py`. Entry point registered in `pyproject.toml` via `[project.scripts]`.

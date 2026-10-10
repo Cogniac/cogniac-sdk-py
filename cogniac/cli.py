@@ -83,6 +83,7 @@ try:
 except PackageNotFoundError:
     __pkg_version__ = "unknown"
 from .common import CredentialError, ServerError, ClientError, raise_errors
+from . import descriptions as _descriptions
 
 # Attributes set by SDK internals, not from the API response
 _INTERNAL_ATTRS = frozenset([
@@ -138,6 +139,7 @@ _SYNONYM_GROUPS = [
     {'feedback', 'feedback'},
     {'embeddings', 'embeddings'},
     {'user', 'users'},
+    {'description', 'descriptions'},
     {'event', 'events'},
     {'detection', 'detections', 'assertion', 'assertions'},
     {'media', 'media'},  # uncountable: no plural variant
@@ -316,6 +318,71 @@ def get_connection(args=None):
         error_exit("CredentialError", str(e))
     except Exception as e:
         error_exit("ConnectionError", str(e))
+
+
+# -- descriptions (a descriptions-<tenant_id>.yaml file under version control) --
+
+def _load_descriptions(args):
+    try:
+        doc = _descriptions.load(args.file)
+    except (OSError, _descriptions.DescriptionsError) as e:
+        error_exit("BadRequest", "%s: %s" % (args.file, e))
+    tenant_id = doc['tenant']['tenant_id']
+    if args.tenant and args.tenant != tenant_id:
+        error_exit("BadRequest", "%s is for tenant %s, not %s" % (args.file, tenant_id, args.tenant))
+    args.tenant = tenant_id  # the file names the tenant
+    return doc
+
+
+def cmd_descriptions_export(args):
+    existing = None
+    if args.refresh:
+        if not args.file:
+            error_exit("BadRequest", "--refresh needs --file, the descriptions file to refresh")
+        existing = _load_descriptions(args)  # also takes the tenant from the file
+    cc = get_connection(args)
+    try:
+        doc = _descriptions.export(cc, application_ids=args.application_id, doc=existing)
+    except (ClientError, _descriptions.DescriptionsError) as e:
+        error_exit("ClientError", str(e))
+    path = args.file or "descriptions-%s.yaml" % cc.tenant.tenant_id
+    if os.path.exists(path) and not (args.force or args.refresh):
+        error_exit("BadRequest", "%s exists; pass --refresh to update the entries it lists, or --force to overwrite" % path)
+    with open(path, 'w') as f:
+        f.write(_descriptions.dump(doc))
+    output({'file': path, 'tenant_id': cc.tenant.tenant_id, 'applications': len(doc['applications']),
+            'subjects': len(doc['subjects'])}, args)
+
+
+def cmd_descriptions_plan(args):
+    doc = _load_descriptions(args)
+    cc = get_connection(args)
+    try:
+        result = _descriptions.plan(cc, doc)
+    except (ClientError, _descriptions.DescriptionsError) as e:
+        error_exit("ClientError", str(e))
+    output(result, args)
+    sys.exit(2 if result['changes'] else 0)
+
+
+def cmd_descriptions_apply(args):
+    doc = _load_descriptions(args)
+    cc = get_connection(args)
+    try:
+        result = _descriptions.plan(cc, doc)
+        if result['changes'] and not args.yes:
+            if not sys.stdin.isatty():
+                error_exit("BadRequest", "%d description(s) would change; pass --yes to apply without a prompt"
+                           % len(result['changes']))
+            sys.stderr.write(json.dumps(result, indent=1) + "\n")
+            if input("Apply %d change(s) to tenant %s? [y/N] " % (len(result['changes']), result['tenant_id'])) \
+                    .strip().lower() not in ('y', 'yes'):
+                error_exit("Error", "not applied")
+        written = _descriptions.apply(cc, doc, result)
+    except (ClientError, _descriptions.DescriptionsError) as e:
+        error_exit("ClientError", str(e))
+    output({'tenant_id': result['tenant_id'], 'written': written, 'name_changes': result['name_changes'],
+            'unchanged': result['unchanged']}, args)
 
 
 # -- Read command handlers --
@@ -3143,6 +3210,32 @@ def build_parser():
                (('--end',), {'type': _timestamp, 'metavar': 'EPOCH_OR_ISO8601', 'help': 'Filter timestamp < end (epoch seconds or ISO 8601)'}),
                (('--limit',), {'type': int, 'default': None, 'help': 'Max history points'})],
               help='Consensus-change history for the subject')
+
+
+    # ======================================================================
+    #  descriptions  (tenant/application/subject descriptions kept in a file)
+    # ======================================================================
+    desc_parser = _add_resource(subparsers, 'descriptions',
+                                help='Manage tenant, application and subject descriptions from a '
+                                     'descriptions-<tenant_id>.yaml file')
+    desc_sub = desc_parser.add_subparsers(dest='descriptions_command')
+    _add_verb(desc_sub, 'export', cmd_descriptions_export,
+              [(('--application-id',), {'dest': 'application_id', 'action': 'append', 'metavar': 'ID',
+                                        'help': 'Only this application and its input and output subjects '
+                                                '(repeat for more); default every application and subject'}),
+               (('-o', '--file'), {'dest': 'file', 'default': None,
+                                   'help': 'Output file (default descriptions-<tenant_id>.yaml)'}),
+               (('--refresh',), {'action': 'store_true',
+                                 'help': 'Update the entries an existing --file lists with their live values'}),
+               (('--force',), {'action': 'store_true', 'help': 'Overwrite an existing file'})],
+              help='Write the live descriptions to a descriptions file')
+    _add_verb(desc_sub, 'plan', cmd_descriptions_plan,
+              [(('file',), {'metavar': 'FILE', 'help': 'descriptions-<tenant_id>.yaml'})],
+              help='Show the descriptions that differ between FILE and the live tenant (exit 2 if any)')
+    _add_verb(desc_sub, 'apply', cmd_descriptions_apply,
+              [(('file',), {'metavar': 'FILE', 'help': 'descriptions-<tenant_id>.yaml'}),
+               (('--yes',), {'action': 'store_true', 'help': 'Apply without asking'})],
+              help="Write FILE's descriptions that differ from the live tenant")
 
     # ======================================================================
     #  media
