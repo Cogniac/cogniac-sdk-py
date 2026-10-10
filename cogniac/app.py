@@ -1069,7 +1069,8 @@ class CogniacApplication(object):
         predictions (list):            one dict per (media, focus, subject): `media_id`, `subject_uid`,
                                        and `focus` (echoed verbatim from the release label; omit for
                                        whole-image labels), plus `probability` (detection/classification),
-                                       `boxes` ([{x0, y0, x1, y1}], pixels) or `points` ([{x, y}], pixels).
+                                       `boxes` ([{x0, y0, x1, y1}], pixels), `points` ([{x, y}], pixels)
+                                       or `text` (ocr: the text read).
         consensus_release_id (str):    default: the app's latest consensus release
         evaluation_metric_hash (str):  default: the app's primary evaluation metric
         label (str):                   free text, echoed in the response
