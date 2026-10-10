@@ -201,6 +201,37 @@ subjects:
 - `export` writes the tenant and every application and subject by default. With `--application-id`, it writes only those applications and their input and output subjects. `--refresh --file FILE` updates the entries an existing file lists.
 - `apply` works from the file and the live values alone, so running it again is a no-op. Writing the tenant description needs the tenant admin role.
 
+#### Evaluation metrics
+
+Each application scores its models with up to five active evaluation metrics. One is primary: models are ranked and released by it, and `evaluate()` uses it unless given another `evaluation_metric_hash`.
+
+```bash
+cogniac application evaluation metrics get --application-id <id>       # active metrics, primary first, with hashes
+cogniac application evaluation metrics create --application-id <id> --body '{"name": "box_F1", "iou_threshold": 0.5, "active": 1}'
+cogniac application evaluation metrics set-primary --application-id <id> --evaluation-metric-hash <hash>
+cogniac application evaluation metrics delete --application-id <id> --evaluation-metric-hash <hash>   # not the primary
+```
+
+The SDK equivalents are `app.evaluation_metrics()`, `app.create_evaluation_metric(body)`, `app.set_primary_evaluation_metric(hash)` and `app.delete_evaluation_metric(hash)`. A metric is identified by its configuration, so the same configuration always has the same hash. `create` adds a non-primary metric; send `"primary": 1` with it to add and make it primary in one call.
+
+| App type | Metric names | Parameters (default) |
+|---|---|---|
+| `classification`, `detection_fullframe` | `F1`, `recall`, `precision` | `detection_thresholds` (0.5) |
+| `box_detection` | `box_F1`, `box_recall`, `box_precision`, `box_any_F1`, `box_any_recall`, `box_any_precision` | `iou_threshold` (0.25), `detection_thresholds` (0.5) |
+| | `box_precision_recall` | `iou_threshold` (0.25) |
+| | `box_probability_distance` (lower is better) | `iou_threshold` (0.25), `detection_thresholds` (0.5) |
+| `point_detection` | `point_F1`, `point_recall`, `point_precision`, `point_any_F1`, `point_any_recall`, `point_any_precision` | `pixel_distance_tolerance` (4), `detection_thresholds` (0.5) |
+| `point_count_detection` | `point_count_F1`, `point_count_recall`, `point_count_precision` | `pixel_distance_tolerance` (16), `count_tolerance` (0), `detection_thresholds` (0.5), `subject_weights` (1 per subject) |
+| `area_detection`, `area_detection_v2` | `area_F1`, `area_recall`, `area_precision`, `area_any_F1`, `area_any_recall`, `area_any_precision` | `detection_thresholds` (0.5) |
+| `segmentation` | `segmentation_IoU`, `segmentation_DiceScore` | `iou_threshold` / `dice_score_threshold` (0.25), `level` (`instance`, or `pixel`, `image`), `averaging_method` (`mean_over_subjects`, or `aggregated`), `detection_thresholds` (0.5) |
+| `static_count` | `count_euclidean`, `count_normalized_euclidean` (lower is better) | none |
+| `ocr` | `ocr_F1`, `ocr_recall`, `ocr_precision` | none: a prediction is correct when its text equals the label's after trimming whitespace |
+
+- `detection_thresholds` is a list of `{subject_uid: threshold}`, with a `default` entry for subjects not listed: `[{"default": 0.5}, {"<subject_uid>": 0.7}]`. `get` returns it expanded to every output subject.
+- The `*recall` and `*precision` metrics rank by F2 and F0.5, not plain recall and precision.
+- `*_any_*` metrics count each media (or focus) once per subject, rather than every box, point or pixel.
+- `GET /22/schemas/evaluation_metrics` returns the JSON Schema of each metric's configuration.
+
 Run `cogniac <noun> --help` to explore the tree interactively, or `cogniac commands` for the full machine-readable catalog. An unknown command suggests the closest match.
 
 ### `icogniac`

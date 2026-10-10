@@ -55,7 +55,7 @@ _APP_METHODS = [
     'feedback', 'feedback_request', 'submit_feedback', 'feedback_request_count',
     'pending_feedback_requests', 'purge_feedback', 'delete_feedback_requests',
     'create_evaluation_metric', 'register_default_evaluation_metric',
-    'copy_evaluation_metrics', 'evaluate',
+    'copy_evaluation_metrics', 'set_primary_evaluation_metric', 'delete_evaluation_metric', 'evaluate',
     'consensus_releases', 'consensus_release', 'consensus_release_items',
     'consensus_release_upstream_assertions', 'consensus_detection_release',
     'labeling_image_encoder', 'labeling_mask_decoder', 'download_model',
@@ -1230,3 +1230,26 @@ def test_cli_evaluate_400_unnests_unscorable_reasons(monkeypatch, tmp_path, caps
                                         '--predictions', str(preds)], _Rejecting(None))
     env = json.loads(capsys.readouterr().err)['error']
     assert env == {'type': 'client', 'status': 400, 'message': reasons}
+
+
+_METRICS = [{'evaluation_metric': {'name': 'F1', 'max_is_better': True, 'detection_thresholds': [{'S1': '0.5'}]},
+             'evaluation_metric_hash': 'H1', 'primary': 1, 'active': 1},
+            {'evaluation_metric': {'name': 'recall', 'max_is_better': True, 'detection_thresholds': [{'S1': '0.5'}]},
+             'evaluation_metric_hash': 'H2', 'primary': 0, 'active': 1}]
+
+
+@pytest.mark.parametrize('method, active, primary', [('set_primary_evaluation_metric', 1, 1),
+                                                     ('delete_evaluation_metric', 0, 0)])
+def test_evaluation_metric_by_hash_resends_its_config(method, active, primary):
+    app = _app_with([_METRICS, {'evaluation_metric_hash': 'H2'}])
+    getattr(app, method)('H2', user_tag='t')
+    url, body = app._cc.posted[0]
+    assert url == '/22/applications/A1/evaluation_metrics'
+    assert body == dict(_METRICS[1]['evaluation_metric'], active=active, primary=primary, user_tag='t')
+
+
+def test_evaluation_metric_by_unknown_hash_raises():
+    app = _app_with([_METRICS])
+    with pytest.raises(ValueError, match='no active evaluation metric NOPE'):
+        app.delete_evaluation_metric('NOPE')
+    assert app._cc.posted == []
