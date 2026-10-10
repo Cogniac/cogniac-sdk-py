@@ -1052,6 +1052,44 @@ def cmd_app_classify(args):
         error_exit("ClientError", str(e))
 
 
+def _read_predictions(path):
+    """Predictions from a file: a JSON array, or JSON Lines (one prediction per line)."""
+    try:
+        with open(path, 'r') as f:
+            text = f.read()
+    except OSError as e:
+        error_exit("BadRequest", "could not read --predictions %r: %s" % (path, e))
+    try:
+        if text.lstrip().startswith('['):
+            return json.loads(text)
+        return [json.loads(line) for line in text.splitlines() if line.strip()]
+    except ValueError as e:
+        error_exit("BadRequest", "Invalid --predictions JSON: %s" % e)
+
+
+def cmd_app_evaluate(args):
+    # flags win over the same fields in --body
+    body = _json_body(args) or {}
+    if args.predictions is not None:
+        body['predictions'] = _read_predictions(args.predictions)
+    for key in ('consensus_release_id', 'evaluation_metric_hash', 'label'):
+        if getattr(args, key) is not None:
+            body[key] = getattr(args, key)
+    if args.allow_unscorable:
+        body['allow_unscorable'] = True
+    if 'predictions' not in body:
+        error_exit("BadRequest", "predictions are required: --predictions FILE or a `predictions` list in --body")
+    unknown = set(body) - {'predictions', 'consensus_release_id', 'evaluation_metric_hash', 'label', 'allow_unscorable'}
+    if unknown:
+        error_exit("BadRequest", "unknown --body field(s): %s" % ', '.join(sorted(unknown)))
+    cc = get_connection(args)
+    try:
+        app = cc.get_application(args.application_id)
+        output(app.evaluate(body.pop('predictions'), timeout=args.timeout, **body), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
 def cmd_app_donate_model(args):
     cc = get_connection(args)
     try:
@@ -2707,6 +2745,19 @@ def build_parser():
                (('image_file',), {'help': 'Local image file path'})],
               help="Run the app's model on a local image")
     _add_verb(apps_sub, 'events', cmd_app_events, _EVENTS_ARGS, help="Stream the app's events")
+    _add_verb(apps_sub, 'evaluate', cmd_app_evaluate,
+              [_id('application_id', 'Application ID'),
+               (('--predictions',), {'metavar': 'FILE',
+                                     'help': 'Predictions file: a JSON array or JSON Lines (one per line)'}),
+               (('--consensus-release-id',), {'dest': 'consensus_release_id',
+                                              'help': "Consensus release to score against (default: the app's latest)"}),
+               (('--evaluation-metric-hash',), {'dest': 'evaluation_metric_hash',
+                                                'help': "Evaluation metric (default: the app's primary metric)"}),
+               (('--label',), {'help': 'Free text, echoed in the response'}),
+               (('--allow-unscorable',), {'action': 'store_true',
+                                          'help': "Score the scorable predictions instead of rejecting the request"}),
+               (('--timeout',), {'type': float, 'default': None, 'help': 'Request timeout in seconds'})] + _BODY,
+              help="Score predictions against a consensus release, as CloudCore scores the app's models")
     # hidden flat verb alias for the old plural 'eval-metrics' spelling lives below
 
     # application event types

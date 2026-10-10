@@ -78,6 +78,16 @@ def server_error(exception):
     return isinstance(exception, ClientError) and getattr(exception, 'status_code', None) == 429
 
 
+# Default request timeout for application evaluate(), the public evaluations route's gateway timeout.
+EVALUATE_TIMEOUT = 3600
+
+
+def server_error_not_gateway_timeout(exception):
+    """server_error, except a 504: the gateway gave up on a long request, and repeating
+    it would likely wait just as long again."""
+    return server_error(exception) and getattr(exception, 'status_code', None) != 504
+
+
 def parse_json_str(val):
     """Return val parsed as JSON if it's a string, otherwise return it unchanged.
 
@@ -100,7 +110,9 @@ def raise_errors(response):
     """
     if response.status_code >= 500:
         msg = "ServerError (%d): %s" % (response.status_code, response.text)
-        raise ServerError(msg)
+        exc = ServerError(msg)
+        exc.status_code = response.status_code
+        raise exc
 
     if response.status_code == 401:
         msg = "Invalid username password credentials (%d): %s" % (response.status_code, response.text)

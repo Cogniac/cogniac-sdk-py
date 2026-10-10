@@ -5,6 +5,7 @@ Copyright (C) 2016 Cogniac Corporation
 """
 
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error
+from .common import EVALUATE_TIMEOUT, server_error_not_gateway_timeout
 
 
 class AsyncCogniacApplication(object):
@@ -954,6 +955,47 @@ class AsyncCogniacApplication(object):
         data = dict(body) if body else {}
         data.setdefault('target_application_id', target_application_id)
         resp = await self._cc._post("/22/applications/%s/evaluation_metrics/copy" % self.application_id, json=data)
+        return resp.json()
+
+    ##
+    #  evaluations (versioned /22/)
+    ##
+    # Scoring is a pure computation, so a 5xx is safe to retry; a few attempts only, and not
+    # a 504, since a large request that timed out is likely to time out again. The request
+    # timeout defaults to EVALUATE_TIMEOUT: scoring time grows with the release, which has
+    # no size limit, so the connection's default would cut long evaluations off.
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=0.5),
+           retry=retry_if_exception(server_error_not_gateway_timeout))
+    async def evaluate(self, predictions, consensus_release_id=None, evaluation_metric_hash=None, label=None,
+                       allow_unscorable=False, timeout=None):
+        """
+        Score predictions against a consensus release with an evaluation metric, the way
+        CloudCore scores this application's models.
+
+        predictions (list):            one dict per (media, focus, subject): `media_id`, `subject_uid`,
+                                       and `focus` (echoed verbatim from the release label; omit for
+                                       whole-image labels), plus `probability` (detection/classification),
+                                       `boxes` ([{x0, y0, x1, y1}], pixels), `points` ([{x, y}], pixels)
+                                       or `text` (ocr: the text read).
+        consensus_release_id (str):    default: the app's latest consensus release
+        evaluation_metric_hash (str):  default: the app's primary evaluation metric
+        label (str):                   free text, echoed in the response
+        allow_unscorable (bool):       score the scorable predictions instead of rejecting the request
+                                       (400, with the reasons) when some can't be scored
+        timeout (float):               request timeout in seconds; default EVALUATE_TIMEOUT (3600,
+                                       the public evaluations route's gateway timeout)
+
+        Returns the scorer identity, coverage, per-set and combined summaries, and per-unit results.
+
+        See POST /22/applications/{application_id}/evaluations.
+        """
+        body = {'predictions': list(predictions), 'allow_unscorable': allow_unscorable}
+        for key, value in (('consensus_release_id', consensus_release_id),
+                           ('evaluation_metric_hash', evaluation_metric_hash), ('label', label)):
+            if value is not None:
+                body[key] = value
+        resp = await self._cc._post("/22/applications/%s/evaluations" % self.application_id, json=body,
+                                    timeout=EVALUATE_TIMEOUT if timeout is None else timeout)
         return resp.json()
 
     ##

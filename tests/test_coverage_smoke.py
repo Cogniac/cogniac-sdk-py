@@ -55,7 +55,7 @@ _APP_METHODS = [
     'feedback', 'feedback_request', 'submit_feedback', 'feedback_request_count',
     'pending_feedback_requests', 'purge_feedback', 'delete_feedback_requests',
     'create_evaluation_metric', 'register_default_evaluation_metric',
-    'copy_evaluation_metrics',
+    'copy_evaluation_metrics', 'evaluate',
     'consensus_releases', 'consensus_release', 'consensus_release_items',
     'consensus_release_upstream_assertions', 'consensus_detection_release',
     'labeling_image_encoder', 'labeling_mask_decoder', 'download_model',
@@ -1087,3 +1087,146 @@ def test_subject_media_full_media_flag():
     assert ns.full_media is True
     ns = p.parse_args(['subject', 'media', 'S1']); _resolve_positional_ids(p, ns)
     assert ns.full_media is False and ns.limit == 100
+
+
+# ---------------------------------------------------------------------------
+# Evaluations (POST /22/applications/{id}/evaluations): request shape, response
+# passthrough, CLI flag/file merging, and the structured 400 envelope.
+# ---------------------------------------------------------------------------
+
+_PREDICTIONS = [{'media_id': 'M1', 'subject_uid': 'S1', 'probability': 0.9},
+                {'media_id': 'M2', 'subject_uid': 'S1', 'probability': 0.1}]
+_EVALUATION = {'scorer': {'family': 'fullframe-f1', 'version': 'd6ce8a1'}, 'coverage': 1.0,
+               'summary': {'combined': {'f1': 1.0}}}
+
+
+class _EvalConn:
+    def __init__(self, payload):
+        self.payload = payload
+        self.calls = []
+
+    def _post(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        return _Resp(self.payload)
+
+
+class _AsyncEvalConn(_EvalConn):
+    async def _post(self, url, **kwargs):
+        return _EvalConn._post(self, url, **kwargs)
+
+
+def _eval_app(cls, conn):
+    app = object.__new__(cls)
+    object.__setattr__(app, '_cc', conn)
+    object.__setattr__(app, 'application_id', 'A1')
+    return app
+
+
+def test_evaluate_posts_v22_body_and_returns_response():
+    conn = _EvalConn(_EVALUATION)
+    got = _eval_app(cogniac.CogniacApplication, conn).evaluate(
+        iter(_PREDICTIONS), consensus_release_id='R1', label='run 1', timeout=300)
+    assert got == _EVALUATION
+    [(url, kwargs)] = conn.calls
+    assert url == '/22/applications/A1/evaluations'
+    assert kwargs['timeout'] == 300
+    # unset optional fields are omitted, so the server applies its defaults
+    assert kwargs['json'] == {'predictions': _PREDICTIONS, 'allow_unscorable': False,
+                              'consensus_release_id': 'R1', 'label': 'run 1'}
+
+
+def test_async_evaluate_matches_sync():
+    import asyncio
+    conn = _AsyncEvalConn(_EVALUATION)
+    got = asyncio.run(_eval_app(cogniac.AsyncCogniacApplication, conn).evaluate(
+        _PREDICTIONS, evaluation_metric_hash='H1', allow_unscorable=True))
+    assert got == _EVALUATION
+    [(url, kwargs)] = conn.calls
+    assert url == '/22/applications/A1/evaluations'
+    assert kwargs['json'] == {'predictions': _PREDICTIONS, 'allow_unscorable': True,
+                              'evaluation_metric_hash': 'H1'}
+
+
+
+def test_evaluate_defaults_to_long_timeout():
+    # scoring time grows with the release; the connection's 60 s default would cut it off
+    conn = _EvalConn(_EVALUATION)
+    _eval_app(cogniac.CogniacApplication, conn).evaluate(_PREDICTIONS)
+    assert conn.calls[0][1]['timeout'] == 3600
+
+
+@pytest.mark.parametrize('status, attempts', [(502, 3), (504, 1)])
+def test_evaluate_retries_5xx_but_not_504(monkeypatch, status, attempts):
+    from cogniac.common import raise_errors
+
+    class _Failing(_EvalConn):
+        def _post(self, url, **kwargs):
+            self.calls.append((url, kwargs))
+            raise_errors(type('R', (), {'status_code': status, 'text': 'gateway', 'headers': {}})())
+
+    monkeypatch.setattr('time.sleep', lambda s: None)
+    conn = _Failing(_EVALUATION)
+    with pytest.raises(Exception):
+        _eval_app(cogniac.CogniacApplication, conn).evaluate(_PREDICTIONS)
+    assert len(conn.calls) == attempts
+
+def _run_evaluate_cli(monkeypatch, argv, conn):
+    class _CC:
+        def get_application(self, application_id):
+            assert application_id == 'A1'
+            return _eval_app(cogniac.CogniacApplication, conn)
+    monkeypatch.setattr(cli, 'get_connection', lambda args=None: _CC())
+    p = build_parser()
+    ns = p.parse_args(argv)
+    _resolve_positional_ids(p, ns)
+    ns.func(ns)
+
+
+def test_cli_evaluate_jsonl_predictions_and_flags_over_body(monkeypatch, tmp_path, capsys):
+    preds = tmp_path / 'preds.jsonl'
+    preds.write_text(''.join(json.dumps(p) + '\n' for p in _PREDICTIONS) + '\n')
+    conn = _EvalConn(_EVALUATION)
+    _run_evaluate_cli(monkeypatch, [
+        'application', 'evaluate', '--application-id', 'A1', '--predictions', str(preds),
+        '--body', '{"label": "from body", "consensus_release_id": "R0"}',
+        '--consensus-release-id', 'R1', '--allow-unscorable', '--timeout', '600'], conn)
+    assert json.loads(capsys.readouterr().out) == _EVALUATION
+    [(url, kwargs)] = conn.calls
+    assert url == '/22/applications/A1/evaluations' and kwargs['timeout'] == 600
+    assert kwargs['json'] == {'predictions': _PREDICTIONS, 'allow_unscorable': True,
+                              'consensus_release_id': 'R1', 'label': 'from body'}
+
+
+def test_cli_evaluate_predictions_in_body(monkeypatch, tmp_path, capsys):
+    body = tmp_path / 'body.json'
+    body.write_text(json.dumps({'predictions': _PREDICTIONS}))
+    conn = _EvalConn(_EVALUATION)
+    _run_evaluate_cli(monkeypatch, ['application', 'evaluate', '--application-id', 'A1',
+                                    '--body', '@' + str(body)], conn)
+    assert conn.calls[0][1]['json'] == {'predictions': _PREDICTIONS, 'allow_unscorable': False}
+
+
+@pytest.mark.parametrize('body', [None, '{"predictions": [], "bogus": 1}'])
+def test_cli_evaluate_rejects_missing_predictions_and_unknown_fields(monkeypatch, capsys, body):
+    argv = ['application', 'evaluate', '--application-id', 'A1'] + (['--body', body] if body else [])
+    conn = _EvalConn(_EVALUATION)
+    with pytest.raises(SystemExit) as exc:
+        _run_evaluate_cli(monkeypatch, argv, conn)
+    assert exc.value.code == 1 and conn.calls == []
+    assert json.loads(capsys.readouterr().err)['error']['type'] == 'client'
+
+
+def test_cli_evaluate_400_unnests_unscorable_reasons(monkeypatch, tmp_path, capsys):
+    # the API rejects unscorable predictions with {"message": {...}}; the envelope keeps the object
+    reasons = {'error': '1 of 2 predictions cannot be scored', 'unscorable': {'media_not_in_release': 1}}
+
+    class _Rejecting(_EvalConn):
+        def _post(self, url, **kwargs):
+            raise ClientError('ClientError (400): ' + json.dumps({'message': reasons}))
+    preds = tmp_path / 'preds.json'
+    preds.write_text(json.dumps(_PREDICTIONS))
+    with pytest.raises(SystemExit):
+        _run_evaluate_cli(monkeypatch, ['application', 'evaluate', '--application-id', 'A1',
+                                        '--predictions', str(preds)], _Rejecting(None))
+    env = json.loads(capsys.readouterr().err)['error']
+    assert env == {'type': 'client', 'status': 400, 'message': reasons}
