@@ -201,6 +201,20 @@ subjects:
 - `export` writes the tenant and every application and subject by default. With `--application-id`, it writes only those applications and their input and output subjects. `--refresh --file FILE` updates the entries an existing file lists.
 - `apply` works from the file and the live values alone, so running it again is a no-op. Writing the tenant description needs the tenant admin role.
 
+#### Evaluation metrics
+
+Each application scores its models with up to five active evaluation metrics. One is primary: models are ranked and released by it, and `evaluate()` uses it unless given another `evaluation_metric_hash`.
+
+```bash
+cogniac application evaluation metrics schema [--name box_F1]                # what each metric scores; its parameters, defaults and ranges
+cogniac application evaluation metrics get --application-id <id>             # the app's active metrics, primary first, with hashes
+cogniac application evaluation metrics create --application-id <id> --body '{"name": "box_F1", "iou_threshold": 0.5, "active": 1}'
+cogniac application evaluation metrics set-primary --application-id <id> --evaluation-metric-hash <hash>
+cogniac application evaluation metrics delete --application-id <id> --evaluation-metric-hash <hash>   # not the primary
+```
+
+In the SDK: `CogniacApplication.evaluation_metric_schemas(cc, name=None)`, and on an application `evaluation_metrics()`, `create_evaluation_metric(body)`, `set_primary_evaluation_metric(hash)` and `delete_evaluation_metric(hash)`. A metric is identified by its configuration, so the same configuration always has the same hash. `create` adds a non-primary metric; add `"primary": 1` to make it primary in the same call.
+
 Run `cogniac <noun> --help` to explore the tree interactively, or `cogniac commands` for the full machine-readable catalog. An unknown command suggests the closest match.
 
 ### `icogniac`

@@ -1362,6 +1362,33 @@ def cmd_app_eval_metrics_register_default(args):
         error_exit("ClientError", str(e))
 
 
+def cmd_app_eval_metrics_schema(args):
+    cc = get_connection(args)
+    from .app import CogniacApplication
+    try:
+        output(CogniacApplication.evaluation_metric_schemas(cc, name=args.name), args)
+    except ClientError as e:
+        error_exit("ClientError", str(e))
+
+
+def cmd_app_eval_metrics_set_primary(args):
+    cc = get_connection(args)
+    try:
+        app = cc.get_application(args.application_id)
+        output(app.set_primary_evaluation_metric(args.evaluation_metric_hash), args)
+    except (ValueError, ClientError) as e:  # ValueError: no active metric with that hash
+        error_exit("ClientError", str(e))
+
+
+def cmd_app_eval_metrics_delete(args):
+    cc = get_connection(args)
+    try:
+        app = cc.get_application(args.application_id)
+        output(app.delete_evaluation_metric(args.evaluation_metric_hash), args)
+    except (ValueError, ClientError) as e:  # ValueError: no active metric with that hash
+        error_exit("ClientError", str(e))
+
+
 def cmd_app_eval_metrics_copy(args):
     cc = get_connection(args)
     try:
@@ -3073,6 +3100,17 @@ def build_parser():
         _add_verb(sub, 'register-default', cmd_app_eval_metrics_register_default,
                   [_id('application_id', 'Application ID')] + _BODY,
                   help='Register the default evaluation metric', hidden=hidden)
+        _hash = [(('--evaluation-metric-hash',), {'dest': 'evaluation_metric_hash', 'required': True,
+                                                  'help': 'Evaluation metric hash (from get)'})]
+        _add_verb(sub, 'schema', cmd_app_eval_metrics_schema,
+                  [(('--name',), {'dest': 'name', 'help': 'One metric name (default: all)'})],
+                  help='What each metric scores, and its parameters with defaults', hidden=hidden)
+        _add_verb(sub, 'set-primary', cmd_app_eval_metrics_set_primary,
+                  [_id('application_id', 'Application ID')] + _hash,
+                  help='Make an active evaluation metric primary', hidden=hidden)
+        _add_verb(sub, 'delete', cmd_app_eval_metrics_delete,
+                  [_id('application_id', 'Application ID')] + _hash,
+                  help='Deactivate an evaluation metric (not the primary)', hidden=hidden)
         _add_verb(sub, 'copy', cmd_app_eval_metrics_copy,
                   [(('--source-application-id',), {'dest': 'source_application_id', 'required': True, 'help': 'Source application ID'}),
                    (('--target-application-id',), {'dest': 'target_application_id', 'required': True, 'help': 'Target application ID'})],

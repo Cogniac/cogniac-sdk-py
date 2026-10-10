@@ -147,6 +147,20 @@ class AsyncCogniacApplication(object):
         resp = await connection._get("/1/applications/all/types/%s" % application_type)
         return resp.json()
 
+    @classmethod
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def evaluation_metric_schemas(cls, connection, name=None):
+        """
+        Return {metric name: JSON Schema} for every evaluation metric, or only `name`. Each schema
+        gives the metric's parameters with their defaults and ranges; its `description`, and each
+        parameter's, say what the metric scores and what the parameter means. `x-scorer` is null
+        for a name that is accepted but not scored.
+
+        See GET /22/schemas/evaluation_metrics.
+        """
+        resp = await connection._get("/22/schemas/evaluation_metrics", params={'name': name} if name else None)
+        return resp.json()
+
     ##
     #  __init__
     ##
@@ -956,6 +970,35 @@ class AsyncCogniacApplication(object):
         data.setdefault('target_application_id', target_application_id)
         resp = await self._cc._post("/22/applications/%s/evaluation_metrics/copy" % self.application_id, json=data)
         return resp.json()
+
+    async def _evaluation_metric_body(self, evaluation_metric_hash, active, primary, user_tag):
+        # The API names a metric by its config (it recomputes the hash), so resend the config of the
+        # active metric with this hash.
+        for m in await self.evaluation_metrics():
+            if m.get('evaluation_metric_hash') == evaluation_metric_hash:
+                body = dict(m['evaluation_metric'], active=active, primary=primary)
+                if user_tag is not None:
+                    body['user_tag'] = user_tag
+                return body
+        raise ValueError("no active evaluation metric %s on application %s" % (evaluation_metric_hash, self.application_id))
+
+    async def set_primary_evaluation_metric(self, evaluation_metric_hash, user_tag=None):
+        """
+        Make an active evaluation metric this application's primary metric, the one its models are
+        ranked and released by. The previous primary metric stays active.
+
+        evaluation_metric_hash (str):  from evaluation_metrics()
+        """
+        return await self.create_evaluation_metric(await self._evaluation_metric_body(evaluation_metric_hash, 1, 1, user_tag))
+
+    async def delete_evaluation_metric(self, evaluation_metric_hash, user_tag=None):
+        """
+        Deactivate an evaluation metric. The primary metric can't be deleted (400): make another
+        metric primary first.
+
+        evaluation_metric_hash (str):  from evaluation_metrics()
+        """
+        return await self.create_evaluation_metric(await self._evaluation_metric_body(evaluation_metric_hash, 0, 0, user_tag))
 
     ##
     #  evaluations (versioned /22/)
