@@ -11,6 +11,7 @@ import os
 import re
 import httpx
 import sys
+import threading
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception
 from .common import server_error, raise_errors, CredentialError, credential_error, server_or_credential_error, rate_limit_or_credential_error
 from .credentials import stored_api_key, stored_url_prefix
@@ -131,6 +132,8 @@ class CogniacConnection(object):
             raise Exception("No Cogniac Credentials. Specify username and password, set COG_USER, COG_PASS or COG_API_KEY environment variables, or run `cogniac auth login`.")
 
         self.url_prefix = None
+        # an explicit prefix (argument or COG_URL_PREFIX) is never redirected to the tenant's region
+        prefix_explicit = url_prefix is not None or 'COG_URL_PREFIX' in os.environ
         if url_prefix is not None:
             self.url_prefix = url_prefix
         elif 'COG_URL_PREFIX' in os.environ:
@@ -152,36 +155,49 @@ class CogniacConnection(object):
             except KeyError:
                 if not self.api_key:
                     # For username/password: try to auto-select if only one tenant
-                    tenants = CogniacConnection.get_all_authorized_tenants(username, password, url_prefix)['tenants']
+                    tenants = CogniacConnection.get_all_authorized_tenants(username, password, self.url_prefix)['tenants']
                     if len(tenants) == 1:
                         tenant_id = tenants[0]['tenant_id']
                     # else: proceed without tenant; HTTP responses will signal if one is required
 
+        if isinstance(tenant_id, str):
+            tenant_id = tenant_id.strip()
         self.tenant_id = tenant_id
+
+        # Re-authentication and the lazy tenant/user reads can be reached from many threads on
+        # one connection (cogupload), so each runs under its own lock.
+        self._auth_lock = threading.Lock()
+        self._lazy_lock = threading.Lock()
+        self._tenant = None
+        self._user = None
 
         # one client for the token call and everything after it: one TLS handshake, not two
         self.session = httpx.Client(transport=httpx.HTTPTransport(retries=5), follow_redirects=True)
+        try:
+            # get and store auth headers
+            self.__authenticate()
 
-        # get and store auth headers
-        self.__authenticate()
-
-        # The tenant and user are read on first use, so a command pays only for the requests it
-        # needs. The exception: with no explicit url_prefix the tenant's region may redirect this
-        # connection, which must happen before the first request, so the tenant is read now.
-        self._tenant = None
-        self._user = None
-        if self.tenant_id is not None and url_prefix is None and 'COG_URL_PREFIX' not in os.environ:
-            self._tenant = CogniacTenant.get(self)
-            if self._tenant.region is not None:
-                # use tenant object's specified region preference unless explicitly overridden
-                self.url_prefix = 'https://' + self._tenant.region
+            # The tenant and user are read on first use, so a command pays only for the requests
+            # it needs. The exception: with no explicit url_prefix the tenant's region may
+            # redirect this connection, which must happen before the first request, so the
+            # tenant is read now.
+            if self.tenant_id is not None and not prefix_explicit:
+                self._tenant = CogniacTenant.get(self)
+                if self._tenant.region is not None:
+                    # use tenant object's specified region preference unless explicitly overridden
+                    self.url_prefix = 'https://' + self._tenant.region
+        except BaseException:
+            # BaseException: the MFA prompt exits with SystemExit
+            self.session.close()
+            raise
 
     @property
     def tenant(self):
         if self._tenant is None:
-            if self.tenant_id is None:
-                self._require_tenant()
-            self._tenant = CogniacTenant.get(self)
+            self._require_tenant_id()
+            with self._lazy_lock:
+                if self._tenant is None:
+                    self._tenant = CogniacTenant.get(self)
         return self._tenant
 
     @tenant.setter
@@ -191,7 +207,9 @@ class CogniacConnection(object):
     @property
     def user(self):
         if self._user is None:
-            self._user = CogniacUser.get(self)
+            with self._lazy_lock:
+                if self._user is None:
+                    self._user = CogniacUser.get(self)
         return self._user
 
     @user.setter
@@ -199,7 +217,12 @@ class CogniacConnection(object):
         self._user = value
 
     def _require_tenant_id(self):
-        """The tenant id for tenant-scoped URLs, without reading the tenant object."""
+        """The tenant id for tenant-scoped URLs, without reading the tenant object.
+
+        Once the tenant has been read, its server-canonical id is used instead of the
+        configured one."""
+        if self._tenant is not None:
+            return self._tenant.tenant_id
         if self.tenant_id is None:
             self._require_tenant()
         return self.tenant_id
@@ -234,6 +257,13 @@ class CogniacConnection(object):
     def __authenticate(self):
         #  Authenticate to the cogniac system using a username and password or an API KEY
         #  Save the http Authorization headers that can be used for subsequent http requests to the cogniac API.
+        with self._auth_lock:
+            self.__authenticate_locked()
+
+    def __authenticate_locked(self):
+        # The token calls share the session's connection pool, but not its cookies: each
+        # (re-)authentication starts the session with an empty jar, as a fresh client did.
+        self.session.cookies.clear()
         tenant_data = {"tenant_id": self.tenant_id}
         if self.api_key:
             # trade API KEY for user+tenant token
@@ -266,7 +296,12 @@ class CogniacConnection(object):
         raise_errors(resp)
 
         token = resp.json()
-        self.session.headers["Authorization"] = "Bearer %s" % token['access_token']
+        self.session.cookies.clear()
+        # Swap in a new header set rather than editing the live one, which other threads may be
+        # copying into a request at this moment.
+        headers = httpx.Headers(self.session.headers)
+        headers["Authorization"] = "Bearer %s" % token['access_token']
+        self.session.headers = headers
 
     @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_or_credential_error))
     def _head(self, url, timeout=None, **kwargs):
