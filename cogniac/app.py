@@ -307,6 +307,7 @@ class CogniacApplication(object):
             result (str):              One of 'True', 'False', 'Sidelined'
             app_data_type (String):    (Optional) Type of extra app-specific data for certain app types
             app_data (Object):         (Optional) Additional, app-specific, subject-media association data
+            comment (str):             (Optional) Free-text note stored with the assertion, at most 4096 characters
 
         focus (dict, optional):        Focus within the media this feedback applies to. Required when
                                        the output subject's labels carry per-ROI focus (e.g. box_detection
