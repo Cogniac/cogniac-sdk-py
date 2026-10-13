@@ -389,6 +389,7 @@ class CogniacMedia(object):
         probability:      the resulting probability after this detection
         app_data_type     Optional type of extra app-specific data
         app_data          Optional extra app-specific data
+        comment           Optional free-text note stored with the assertion
         """
 
         url = "/1/media/%s/detections" % (self.media_id)

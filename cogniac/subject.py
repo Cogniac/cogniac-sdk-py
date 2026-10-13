@@ -380,7 +380,8 @@ class CogniacSubject(object):
                         force_random_feedback=False,
                         app_data=None,
                         app_data_type=None,
-                        enable_wait_result=False):
+                        enable_wait_result=False,
+                        comment=None):
         """
         Associate the media (with an optional focus within the media) with this subject.
 
@@ -402,6 +403,7 @@ class CogniacSubject(object):
         enable_wait_result(bool)         When True: enable 'synchronous' result interfaces whereby subsequent
                                          GET /media/<media_id>/detections?wait_capture_id=<capture_id> endpoints block until
                                          the full results of the application pipeline resulting from this input association are available
+        comment (str)                    Optional free-text note stored with the assertion, at most 4096 characters
 
         returns the unique capture_id
         """
@@ -431,6 +433,9 @@ class CogniacSubject(object):
         data['force_random_feedback'] = force_random_feedback
         data['app_data_type'] = app_data_type
         data['app_data'] = app_data
+
+        if comment is not None:
+            data['comment'] = comment
 
         resp = self._cc._post("/1/subjects/%s/media" % self.subject_uid, json=data)
         return resp.json()['capture_id']

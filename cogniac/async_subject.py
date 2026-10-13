@@ -245,7 +245,8 @@ class AsyncCogniacSubject(object):
                               force_random_feedback=False,
                               app_data=None,
                               app_data_type=None,
-                              enable_wait_result=False):
+                              enable_wait_result=False,
+                              comment=None):
         """
         Associate the media (with an optional focus within the media) with this subject.
 
@@ -258,6 +259,7 @@ class AsyncCogniacSubject(object):
         app_data                         specific app data
         app_data_type                    type of app data
         enable_wait_result(bool)         enable synchronous result interface
+        comment (str)                    optional free-text note stored with the assertion, at most 4096 characters
 
         returns the unique capture_id
         """
@@ -286,6 +288,9 @@ class AsyncCogniacSubject(object):
         data['force_random_feedback'] = force_random_feedback
         data['app_data_type'] = app_data_type
         data['app_data'] = app_data
+
+        if comment is not None:
+            data['comment'] = comment
 
         resp = await self._cc._post("/1/subjects/%s/media" % self.subject_uid, json=data)
         return resp.json()['capture_id']
