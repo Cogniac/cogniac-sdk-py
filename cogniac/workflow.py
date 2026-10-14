@@ -338,7 +338,7 @@ class CogniacWorkflow(object):
 
         See GET /1/tenants/{tenant_id}/workflows.
         """
-        resp = connection._get("/1/tenants/%s/workflows" % connection.tenant.tenant_id)
+        resp = connection._get("/1/tenants/%s/workflows" % connection._require_tenant_id())
         data = resp.json()
         items = data.get('data', data) if isinstance(data, dict) else data
         return [CogniacWorkflow(connection, w) for w in items]

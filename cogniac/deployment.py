@@ -40,7 +40,7 @@ class CogniacDeployment(object):
 
         See GET /1/tenants/{tenant_id}/deploymentGroups.
         """
-        resp = connection._get("/1/tenants/%s/deploymentGroups" % connection.tenant.tenant_id)
+        resp = connection._get("/1/tenants/%s/deploymentGroups" % connection._require_tenant_id())
         groups = resp.json()['data']
         return [CogniacDeployment(connection, g) for g in groups]
 

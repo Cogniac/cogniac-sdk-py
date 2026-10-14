@@ -157,7 +157,7 @@ class CogniacNetworkCamera(object):
 
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         """
-        resp = connection._get('/1/tenants/%s/networkCameras' % connection.tenant.tenant_id)
+        resp = connection._get('/1/tenants/%s/networkCameras' % connection._require_tenant_id())
         netcams = resp.json()['data']
         return [CogniacNetworkCamera(connection, netcam) for netcam in netcams]
 
