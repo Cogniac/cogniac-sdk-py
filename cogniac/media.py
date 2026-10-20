@@ -369,13 +369,14 @@ class CogniacMedia(object):
     ##
     #  detections
     ##
-    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     def detections(self, wait_capture_id=None):
         """
         return a list of detection dictionaries as follows for the specified media_id and this subject
         wait_capture_id (str):    capture_id from previous subject associate_media call that had enable_wait_result=True
                                   This operation with block and return all applications detections resulting from capture_id
-                                  when available.
+                                  when available. The capture is re-polled while it is younger than about
+                                  CAPTURE_WAIT_MAX_AGE seconds; raises CaptureConsumedError when re-polling it
+                                  cannot succeed (start a new capture), and ServerError otherwise.
 
         Returns:
 
@@ -395,14 +396,30 @@ class CogniacMedia(object):
         url = "/1/media/%s/detections" % (self.media_id)
 
         if wait_capture_id is not None:
-            url += "?wait_capture_id=%s" % wait_capture_id
-
-        resp = self._cc._get(url)
+            resp = self._wait_capture(url + "?wait_capture_id=%s" % wait_capture_id, wait_capture_id)
+        else:
+            resp = self._get_detections(url)
         detections = resp.json()['detections']
         for d in detections:
             if 'app_data' in d:
                 d['app_data'] = parse_json_str(d['app_data'])
         return detections
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    def _get_detections(self, url):
+        return self._cc._get(url)
+
+    # A wait_capture_id poll ends at the API's 60s capture deadline. Re-poll the same capture
+    # while it is young; a 500 or a consumed capture is raised at once. _get_once leaves each 5xx
+    # to this policy (_get would re-poll it), and re-authenticates on a 401 that is retried here.
+    @retry(stop=stop_after_attempt(8) | stop_after_delay(CAPTURE_WAIT_MAX_AGE), wait=wait_exponential(multiplier=0.5),
+           retry=retry_if_exception(capture_poll_error) | retry_if_exception(credential_error), reraise=True)
+    def _wait_capture(self, url, capture_id):
+        try:
+            return self._cc._get_once(url, timeout=CAPTURE_WAIT_TIMEOUT)
+        except ServerError as exc:
+            raise_capture_error(exc, capture_id)
+            raise
 
     ##
     #  subjects
