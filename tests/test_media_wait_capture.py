@@ -41,7 +41,8 @@ def _poll(kind, responses, monkeypatch, wait_capture_id=CAPTURE_ID):
 
     Each request returns the next scripted response (the last one repeats) and
     advances a fake clock by 61s, as a poll that runs into the API's deadline does.
-    Returns (result, exception, calls) where calls is a list of (url, timeout).
+    Returns (result, exception, calls) where calls is a list of (url, timeout);
+    re-authentications are appended to calls as ('reauth', None).
     """
     clock = [0.0]
     calls = []
@@ -53,10 +54,13 @@ def _poll(kind, responses, monkeypatch, wait_capture_id=CAPTURE_ID):
         await real_sleep(0)
     monkeypatch.setattr(asyncio, 'sleep', no_sleep)
 
+    requests = []
+
     def respond(url, kw):
         calls.append((str(url), kw.get('timeout')))
+        requests.append(1)
         clock[0] += 61
-        return responses[min(len(calls), len(responses)) - 1]
+        return responses[min(len(requests), len(responses)) - 1]
 
     class _Session:
         def request(self, method, url, **kw):
@@ -66,13 +70,18 @@ def _poll(kind, responses, monkeypatch, wait_capture_id=CAPTURE_ID):
         async def request(self, method, url, **kw):
             return respond(url, kw)
 
+    async def async_reauth():
+        calls.append(('reauth', None))
+
     if kind == 'sync':
         conn = object.__new__(CogniacConnection)
         conn.session = _Session()
+        conn._CogniacConnection__authenticate = lambda: calls.append(('reauth', None))
         media_cls = cogniac.CogniacMedia
     else:
         conn = object.__new__(AsyncCogniacConnection)
         conn.session = _AsyncSession()
+        conn._AsyncCogniacConnection__authenticate = async_reauth
         media_cls = cogniac.AsyncCogniacMedia
     conn.url_prefix = 'https://example.invalid'
     conn.timeout = 60
@@ -154,3 +163,12 @@ def test_repolling_stops_once_the_capture_is_about_180s_old(kind, monkeypatch):
     assert len(calls) == 3, "polled %d times" % len(calls)
     assert type(exc) is cogniac.ServerError, "got %r" % exc
     assert exc.status_code == 504
+
+
+@pytest.mark.parametrize('kind', KINDS)
+def test_expired_credentials_reauthenticate_and_repoll(kind, monkeypatch):
+    result, exc, calls = _poll(kind, [httpx.Response(401, text='expired'), httpx.Response(200, json=DETECTIONS)],
+                               monkeypatch)
+    assert exc is None, "got %r" % exc
+    assert result[0]['detection_id'] == 'd1'
+    assert [c[0] == 'reauth' for c in calls] == [False, True, False]
