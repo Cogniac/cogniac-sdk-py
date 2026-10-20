@@ -6,7 +6,7 @@ Copyright (C) 2016 Cogniac Corporation
 
 import json
 
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
+from tenacity import retry, stop_after_attempt, stop_after_delay, wait_exponential, retry_if_exception
 from httpx import ConnectError
 
 
@@ -32,6 +32,19 @@ class ClientError(Exception):
 
     def __str__(self):
         return self.message
+
+
+class CaptureConsumedError(ServerError):
+    """detections(wait_capture_id=...) cannot return this capture's detections any more:
+    the API already consumed its completion message (504 capture_timeout with
+    capture_consumed true), or its result queue is gone (503). Re-polling the same
+    capture_id will not help; start a new capture."""
+
+    def __init__(self, capture_id, error):
+        ServerError.__init__(self, "Capture %s cannot be polled again, start a new capture: %s" % (capture_id, error))
+        self.capture_id = capture_id
+        self.status_code = error.status_code
+        self.response = getattr(error, 'response', None)
 
 
 def credential_error(exception):
@@ -88,6 +101,42 @@ def server_error_not_gateway_timeout(exception):
     return server_error(exception) and getattr(exception, 'status_code', None) != 504
 
 
+# Request timeout for detections(wait_capture_id=...): above the API's 60s capture deadline
+# and the 70s proxy timeout in front of it, so the client sees the API's 504 instead of
+# hanging up first.
+CAPTURE_WAIT_TIMEOUT = 75
+
+# Re-poll the same capture_id only while the capture is younger than this (seconds,
+# counted from the first poll).
+CAPTURE_WAIT_MAX_AGE = 180
+
+
+def capture_poll_error(exception):
+    """server_error for a wait_capture_id poll: re-poll the same capture_id, except on a
+    500 (report it) or a CaptureConsumedError (the caller must start a new capture)."""
+    if isinstance(exception, CaptureConsumedError) or getattr(exception, 'status_code', None) == 500:
+        return False
+    return server_error(exception)
+
+
+def raise_capture_error(exception, capture_id):
+    """Raise CaptureConsumedError when a wait_capture_id poll failed in a way re-polling
+    cannot fix: a 503, or a 504 capture_timeout whose capture_consumed is true. Return for
+    anything else, including a 504 whose capture_consumed is false, null or absent (a
+    proxy's HTML 504 has no JSON body)."""
+    status = getattr(exception, 'status_code', None)
+    consumed = None
+    if status == 504:
+        try:
+            body = exception.response.json()
+            if body.get('error') == 'capture_timeout':
+                consumed = body.get('capture_consumed')
+        except (AttributeError, ValueError):
+            pass
+    if status == 503 or consumed is True:
+        raise CaptureConsumedError(capture_id, exception) from exception
+
+
 def parse_json_str(val):
     """Return val parsed as JSON if it's a string, otherwise return it unchanged.
 
@@ -112,6 +161,7 @@ def raise_errors(response):
         msg = "ServerError (%d): %s" % (response.status_code, response.text)
         exc = ServerError(msg)
         exc.status_code = response.status_code
+        exc.response = response
         raise exc
 
     if response.status_code == 401:

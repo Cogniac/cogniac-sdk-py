@@ -106,6 +106,8 @@ For CLI usage, prefer `cogniac media download <media_id> -o out.jpg`.
 - `ServerError` (5xx) — exponential backoff retry (500ms multiplier, 8 attempts)
 - `ClientError` (4xx) — not retried, **except 429** (rate-limited): the shared `server_error` retry predicate treats a `ClientError` with `status_code == 429` as transient, so it backs off and retries like a 5xx. `raise_errors` records the server's `Retry-After` (when sent) on the exception as `retry_after`.
 
+`detections(wait_capture_id=...)` (sync + async) has its own policy for the API's 60s capture deadline: a `CAPTURE_WAIT_TIMEOUT` (75s) request timeout, above the 70s proxy; re-poll the same capture_id on a 504 whose `capture_consumed` is false, null or unknown (a proxy's HTML 504) while the capture is younger than `CAPTURE_WAIT_MAX_AGE` (180s); raise `CaptureConsumedError` (a `ServerError`: start a new capture) on a 503 or a 504 with `capture_consumed` true; raise a 500 at once. The sync path polls via the connection's `_get_once`, because `_get` would retry each 5xx itself.
+
 The `@retry` decorator from `tenacity` is used on connection and entity methods. It works transparently on both sync and async functions. Connection errors (`httpx.ConnectError`) are treated as retryable (same as server errors).
 
 `common.py` also exposes `parse_json_str(value)`: some API fields (`app_data`, `custom_data`) are occasionally returned as serialized JSON strings, so it is applied at every yield/return point that surfaces them — `media_associations()` (sync + async), `CogniacMedia.detections()`, and `CogniacMedia.subjects()` — so callers always see dicts/lists.

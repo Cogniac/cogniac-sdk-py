@@ -6,6 +6,8 @@ Copyright (C) 2016-2022 Cogniac Corporation
 
 import asyncio
 from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors, parse_json_str
+from .common import (stop_after_delay, ServerError, CAPTURE_WAIT_TIMEOUT, CAPTURE_WAIT_MAX_AGE, capture_poll_error,
+                     raise_capture_error)
 from .media import file_creation_time
 from hashlib import md5
 from os import stat, fstat, path, SEEK_END
@@ -396,25 +398,42 @@ class AsyncCogniacMedia(object):
     ##
     #  detections
     ##
-    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
     async def detections(self, wait_capture_id=None):
         """
         Return a list of detection dictionaries for this media.
 
         wait_capture_id (str):  capture_id from previous associate_media call with enable_wait_result=True
                                 This will block until all application detections are available.
+                                The capture is re-polled while it is younger than about
+                                CAPTURE_WAIT_MAX_AGE seconds; raises CaptureConsumedError when re-polling
+                                it cannot succeed (start a new capture), and ServerError otherwise.
         """
         url = "/1/media/%s/detections" % (self.media_id)
 
         if wait_capture_id is not None:
-            url += "?wait_capture_id=%s" % wait_capture_id
-
-        resp = await self._cc._get(url)
+            resp = await self._wait_capture(url + "?wait_capture_id=%s" % wait_capture_id, wait_capture_id)
+        else:
+            resp = await self._get_detections(url)
         detections = resp.json()['detections']
         for d in detections:
             if 'app_data' in d:
                 d['app_data'] = parse_json_str(d['app_data'])
         return detections
+
+    @retry(stop=stop_after_attempt(8), wait=wait_exponential(multiplier=0.5), retry=retry_if_exception(server_error))
+    async def _get_detections(self, url):
+        return await self._cc._get(url)
+
+    # A wait_capture_id poll ends at the API's 60s capture deadline. Re-poll the same capture
+    # while it is young; a 500 or a consumed capture is raised at once.
+    @retry(stop=stop_after_attempt(8) | stop_after_delay(CAPTURE_WAIT_MAX_AGE), wait=wait_exponential(multiplier=0.5),
+           retry=retry_if_exception(capture_poll_error), reraise=True)
+    async def _wait_capture(self, url, capture_id):
+        try:
+            return await self._cc._get(url, timeout=CAPTURE_WAIT_TIMEOUT)
+        except ServerError as exc:
+            raise_capture_error(exc, capture_id)
+            raise
 
     ##
     #  subjects

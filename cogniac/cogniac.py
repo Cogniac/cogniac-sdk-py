@@ -276,6 +276,13 @@ class CogniacConnection(object):
         """
         wrap httpx client to re-authenticate on credential expiration
         """
+        return self._get_once(url, timeout=timeout, **kwargs)
+
+    def _get_once(self, url, timeout=None, **kwargs):
+        """
+        one GET attempt: re-authenticate on credential expiration and raise, with no retry.
+        For a caller that must see each 5xx itself (detections with wait_capture_id).
+        """
         if not url.startswith("http"):
             # Prepend /1/ version if no version is specified in the URL (backward compatibility).
             m = re.search(r'^/\d+(/)?', url)
