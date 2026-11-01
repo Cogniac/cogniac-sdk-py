@@ -119,24 +119,27 @@ class CogniacSubject(object):
     @classmethod
     def search(cls, connection, ids=[], prefix=None, similar=None, name=None, tenant_owned=True, public_read=False, public_write=False, limit=10):
         """
-        search CogniacSubjects for either batch subject ID's, based on prefix, or semantic simlarity
+        search CogniacSubjects for either batch subject ID's, based on prefix, or exact name
 
         connnection (CogniacConnection):     Authenticated CogniacConnection object
 
         ids (list of strings):               return list of subjects with the given subject_uid's
         prefix (string):                     return subjects that have a name containing the given string;
                                              direct prefix matching results in a higher search score
-        similar (string):                    return subjects with a name that is related to the given search term;
-                                             i.e. similar='cat' will return a set containing the subject 'dog'
+        similar:                             REMOVED. The API no longer supports similarity search; any
+                                             value other than None raises ValueError before a request
+                                             is sent. Use prefix or name instead.
         name (string):                       returns list of subjects with the exact name specified.
 
-        Exactly one ids, prefix, similar, or name must be specified.
+        Exactly one ids, prefix, or name must be specified.
 
         tenant_owned (bool):                 return subjects belonging to this tenant.
         public_read (bool):                  return subjects that are publicly readable (other tenants can use associated media)
         public_write (bool):                 return subjects that are publicly writeable (others tenants associate new media)
         limit (int):                         max number of results to return
         """
+
+        reject_subject_search_similar(similar)
 
         args = []
 
@@ -150,13 +153,11 @@ class CogniacSubject(object):
             args.append("public_read_write=True")
 
         # perform only one search at a time
-        # id search, prefix search, similarity or name search
+        # id search, prefix search or name search
         if len(ids):
             args.append('ids=%s' % (',').join(ids))
         elif prefix:
             args.append('prefix=%s' % prefix)
-        elif similar:
-            args.append('similar=%s' % similar)
         elif name:
             args.append('name=%s' % name)
 

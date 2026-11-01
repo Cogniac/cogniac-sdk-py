@@ -22,7 +22,7 @@ Representative read commands (run `cogniac <noun> --help` to discover the rest):
     cogniac application leaderboard --application-id ID [--set-assignment ...] [--top N] [--full]
     cogniac subject list
     cogniac subject get --subject-uid UID
-    cogniac subject search [--prefix P] [--name N] [--similar S] [--ids ID ...] [--limit L]
+    cogniac subject search [--prefix P] [--name N] [--ids ID ...] [--limit L]
     cogniac subject media --subject-uid UID [--limit L] [--consensus C] [--probability-lower P] [--probability-upper P]
     cogniac media get --media-id ID [--download [FILE]]
     cogniac media download --media-id ID [-o OUTPUT]
@@ -557,13 +557,21 @@ def cmd_subjects_get(args):
         error_exit("ClientError", str(e))
 
 
+_SUBJECT_SEARCH_SIMILAR_REMOVED = (
+    "--similar is no longer supported: the Cogniac API rejects similarity search "
+    "with HTTP 400. Use --prefix (name contains the term) or --name (exact name) instead.")
+
+
 def cmd_subjects_search(args):
+    # --similar is still parsed (hidden) so a script that passes it gets this
+    # clear error and a non-zero exit, before any credential or API call.
+    if args.similar is not None:
+        error_exit("UsageError", _SUBJECT_SEARCH_SIMILAR_REMOVED)
     cc = get_connection(args)
     ids = args.ids if args.ids else []
     subjects = cc.search_subjects(
         ids=ids,
         prefix=args.prefix,
-        similar=args.similar,
         name=args.name,
         limit=args.limit,
     )
@@ -3206,11 +3214,12 @@ def build_parser():
               [_id('subject_uid', 'Subject UID')], help='Delete a subject')
     _add_verb(subjects_sub, 'search', cmd_subjects_search,
               [(('--prefix',), {'help': 'Subject name prefix'}),
-               (('--similar',), {'help': 'Semantically similar text'}),
+               # removed: hidden, and rejected by the handler with a clear error
+               (('--similar',), {'help': argparse.SUPPRESS}),
                (('--name',), {'help': 'Exact subject name'}),
                (('--ids',), {'nargs': '+', 'help': 'Subject UIDs to retrieve'}),
                (('--limit',), {'type': int, 'default': 10, 'help': 'Max results (default: 10)'})],
-              help='Search subjects by prefix/similarity/name/ids')
+              help='Search subjects by prefix/name/ids')
     _add_verb(subjects_sub, 'media', cmd_subjects_media,
               [_id('subject_uid', 'Subject UID'),
                (('--limit',), {'type': int, 'default': 100,
