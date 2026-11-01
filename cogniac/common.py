@@ -34,6 +34,22 @@ class ClientError(Exception):
         return self.message
 
 
+SUBJECT_SEARCH_SIMILAR_REMOVED = (
+    "The 'similar' subject search option is no longer supported: the Cogniac API "
+    "rejects it with HTTP 400. Search by name with prefix= (name contains the term) "
+    "or name= (exact name) instead.")
+
+
+def reject_subject_search_similar(similar):
+    """Raise ValueError when a caller still passes `similar` to a subject search.
+
+    The API no longer serves similarity search on the subjects listing, so the
+    request is refused here, before anything is sent, with a pointer to the
+    name-based options that remain."""
+    if similar is not None:
+        raise ValueError(SUBJECT_SEARCH_SIMILAR_REMOVED)
+
+
 def credential_error(exception):
     return isinstance(exception, CredentialError)
 

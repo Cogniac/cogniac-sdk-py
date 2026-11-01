@@ -168,7 +168,7 @@ cogniac apps evaluate <id>      # score predictions (--predictions FILE: JSON ar
                                 # --evaluation-metric-hash, --allow-unscorable, --label, --timeout. Not a write: nothing is stored
 cogniac subjects list           # list all subjects
 cogniac subjects get <uid>      # get specific subject
-cogniac subjects search         # search: --prefix, --similar, --name, --ids, --limit
+cogniac subjects search         # search: --prefix, --name, --ids, --limit (--similar was removed: the API answers 400; it now fails client-side)
 cogniac subjects media <uid>    # list media associations: --limit, --consensus, --probability-lower/upper
 cogniac media get <id>          # get specific media metadata
 cogniac media download <id>     # download media file to <id>.<ext>; use -o for custom path

@@ -4,7 +4,8 @@ Async CogniacSubject Object Client
 Copyright (C) 2016 Cogniac Corporation
 """
 
-from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors, parse_json_str
+from .common import retry, stop_after_attempt, wait_exponential, retry_if_exception, server_error, raise_errors, parse_json_str, \
+    reject_subject_search_similar
 
 
 class AsyncCogniacSubject(object):
@@ -108,21 +109,25 @@ class AsyncCogniacSubject(object):
     async def search(cls, connection, ids=None, prefix=None, similar=None, name=None,
                      tenant_owned=True, public_read=False, public_write=False, limit=10):
         """
-        Search AsyncCogniacSubjects by batch subject IDs, prefix, or semantic similarity
+        Search AsyncCogniacSubjects by batch subject IDs, prefix, or exact name
 
         connection (AsyncCogniacConnection): Authenticated AsyncCogniacConnection object
         ids (list of strings):               return subjects with the given subject_uid's
         prefix (string):                     return subjects with name containing the given string
-        similar (string):                    return subjects with a name related to the given search term
+        similar:                             REMOVED. The API no longer supports similarity search; any
+                                             value other than None raises ValueError before a request
+                                             is sent. Use prefix or name instead.
         name (string):                       returns subjects with the exact name specified
 
-        Exactly one of ids, prefix, similar, or name must be specified.
+        Exactly one of ids, prefix, or name must be specified.
 
         tenant_owned (bool):                 return subjects belonging to this tenant
         public_read (bool):                  return publicly readable subjects
         public_write (bool):                 return publicly writeable subjects
         limit (int):                         max number of results to return
         """
+        reject_subject_search_similar(similar)
+
         args = []
         args.append('limit=%d' % limit)
         args.append('tenant_read_write=%s' % str(tenant_owned))
@@ -135,8 +140,6 @@ class AsyncCogniacSubject(object):
             args.append('ids=%s' % (',').join(ids))
         elif prefix:
             args.append('prefix=%s' % prefix)
-        elif similar:
-            args.append('similar=%s' % similar)
         elif name:
             args.append('name=%s' % name)
 

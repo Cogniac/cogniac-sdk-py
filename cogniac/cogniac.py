@@ -421,6 +421,9 @@ class CogniacConnection(object):
     def search_subjects(self, ids=[], prefix=None, similar=None, name=None, tenant_owned=True, public_read=False, public_write=False, limit=10):
         """
         return CogniacSubjects based on given search filters
+
+        similar is REMOVED: the API no longer supports similarity search, so any value
+        other than None raises ValueError before a request is sent. Use prefix or name.
         """
         return CogniacSubject.search(self,
                                      ids=ids,
