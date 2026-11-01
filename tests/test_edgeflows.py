@@ -487,13 +487,15 @@ class _HealthConn:
     reverse=True&limit=1). A per-gateway value that is an Exception is raised
     from that device's status GET.
 
-    Exposes the tenant id only via the `tenant` property path
-    (connection.tenant.tenant_id), like the real CogniacConnection whose
-    `tenant` property raises the helpful "must specify tenant" error on a
-    tenant-less connection — get_all_health must use that path, matching
-    get_all, not the raw connection.tenant_id attribute."""
+    Exposes the tenant id only via `_require_tenant_id()`, like the real
+    CogniacConnection, whose helper raises the helpful "must specify tenant"
+    error on a tenant-less connection — get_all_health must use that path,
+    matching get_all, not the raw connection.tenant_id attribute."""
 
     tenant = _FakeTenant()
+
+    def _require_tenant_id(self):
+        return self.tenant.tenant_id
 
     def __init__(self, gateways, status_by_gateway):
         self._gateways = gateways

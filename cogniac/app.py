@@ -108,7 +108,7 @@ class CogniacApplication(object):
 
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         """
-        resp = connection._get('/1/tenants/%s/applications' % connection.tenant.tenant_id)
+        resp = connection._get('/1/tenants/%s/applications' % connection._require_tenant_id())
         apps = resp.json()['data']
         return [CogniacApplication(connection, appd) for appd in apps]
 
