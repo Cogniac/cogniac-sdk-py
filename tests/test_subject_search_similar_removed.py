@@ -28,6 +28,11 @@ class _Tenant:
 class _SyncConn:
     tenant = _Tenant()
 
+    def _require_tenant_id(self):
+        # Tenant-scoped URLs read the id through this helper, like the real
+        # CogniacConnection, so they need not fetch the tenant object.
+        return self.tenant.tenant_id
+
     def __init__(self):
         self.gets = []
 
