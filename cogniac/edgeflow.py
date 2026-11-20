@@ -131,7 +131,7 @@ class CogniacEdgeFlow(object):
 
         connnection (CogniacConnection):     Authenticated CogniacConnection object
         """
-        resp = connection._get('/1/tenants/%s/gateways' % connection.tenant.tenant_id)
+        resp = connection._get('/1/tenants/%s/gateways' % connection._require_tenant_id())
         edgeflows = resp.json()['data']
         return [CogniacEdgeFlow(connection, edgeflow) for edgeflow in edgeflows]
 
@@ -208,7 +208,7 @@ class CogniacEdgeFlow(object):
         uploading a backlog of status records can briefly look "online"; a
         device with no status records has last_seen None and online False.
         """
-        resp = connection._get('/1/tenants/%s/gateways' % connection.tenant.tenant_id)
+        resp = connection._get('/1/tenants/%s/gateways' % connection._require_tenant_id())
         gateways = resp.json()['data']
         if not gateways:
             return []

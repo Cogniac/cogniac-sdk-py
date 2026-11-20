@@ -70,6 +70,7 @@ from datetime import datetime
 from importlib.metadata import version as _pkg_version, PackageNotFoundError
 
 import httpx
+import tenacity
 from tabulate import tabulate
 
 from .cogniac import CogniacConnection, DEFAULT_COG_URL_PREFIX
@@ -265,6 +266,21 @@ _ERROR_HINTS = {
     'connection': "check network connectivity and COG_URL_PREFIX",
     'server': "transient server error; retry shortly",
 }
+
+
+def _error_kind(exc):
+    """(error_type, detail) for `error_exit`, named for the cause rather than the wrapper.
+
+    The SDK's retrying calls raise tenacity's RetryError once they give up, so the error a
+    command failed on is the last attempt's. Handlers read the tenant and user lazily, so a
+    failed read reaches `main()` rather than `get_connection`."""
+    if isinstance(exc, tenacity.RetryError) and exc.last_attempt.failed:
+        exc = exc.last_attempt.exception()
+    if isinstance(exc, (CredentialError, ServerError, ClientError)):
+        return type(exc).__name__, str(exc)
+    if isinstance(exc, httpx.TransportError):
+        return "ConnectionError", str(exc)
+    return "Error", str(exc)
 
 
 def error_exit(error_type, detail, exit_code=1):
@@ -871,7 +887,10 @@ def cmd_auth(args):
 
     if effective_tenant:
         try:
-            CogniacConnection(tenant_id=effective_tenant, url_prefix=url_prefix)
+            cc = CogniacConnection(tenant_id=effective_tenant, url_prefix=url_prefix)
+            # construction only mints a token; these are the authenticated requests that
+            # prove the token works for this tenant
+            cc.tenant, cc.user
             result["valid"] = True
         except Exception as e:
             result["valid"] = False
@@ -2054,7 +2073,7 @@ def cmd_tenant_import(args):
     cc = get_connection(args)
     from .tenant import CogniacTenant
     try:
-        output(CogniacTenant.get_cloudcore_import(cc, cc.tenant.tenant_id, args.cloudcore_import_key), args)
+        output(CogniacTenant.get_cloudcore_import(cc, cc._require_tenant_id(), args.cloudcore_import_key), args)
     except ClientError as e:
         error_exit("ClientError", str(e))
 
@@ -3681,10 +3700,8 @@ def main():
 
     try:
         args.func(args)
-    except (CredentialError, ServerError, ClientError) as e:
-        error_exit(type(e).__name__, str(e))
     except Exception as e:
-        error_exit("Error", str(e))
+        error_exit(*_error_kind(e))
 
 
 if __name__ == '__main__':
